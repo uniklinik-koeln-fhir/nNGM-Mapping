@@ -1,0 +1,93 @@
+group TransformObservationHistologie(source src: CTS_Transport, source patient:Patient, target tgt: Observation)
+{
+       src -> tgt.id = uuid();
+       src -> tgt.meta as meta collate, meta.profile = '?';
+       src -> tgt.status = 'active';
+
+       src.operations as operations, operations.data as data then
+       {
+              //Fall-ID
+              data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1600'" then
+              {
+                  values.value as fallID -> tgt.identifier = id('http://uk-koeln.de/fhir/NamingSystem/nNGM/fallnummer', fallID);
+              };
+              //Biopsy-ID
+              data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+              {
+                  values.value as biopsyID -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', biopsyID);
+              };
+
+              //Tumormaterial -> string;
+              data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1566'" then
+              {
+                  values.value as tumormaterial -> tgt.identifier = tumormaterial;
+              };
+              
+              //Eingangsnummer -> string;     
+              data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1528'" then
+              {
+                  values.value as eingangsnummer -> tgt.identifier = eingangsnummer;
+              };
+                
+
+               //Klassifikation     
+               data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_5'" then
+               {
+                   values.value as klassifikation -> tgt.component = cc();
+               };
+               
+              //Lokalisation     
+              data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2324'" then
+              {
+                  values.value as lokalisation -> tgt.identifier = cc();
+              };
+
+              //ICD0CodeFreitext only if above not available;     
+               data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_6' and itemid = 'id_2324'.exists().not()" then
+               {
+                   values.value as ICD0CodeFreitext -> tgt.identifier = ICD0CodeFreitext;
+               };         
+
+               //KlassifikationFreitext only if above not available;     
+               data.values as va lues where "blockindex = 0 and groupindex = 0 and itemid = 'id_7' and itemid = 'id_5'.exists().not()" then
+               {
+                   values.value as KlassifikationFreitext -> tgt.identifier = KlassifikationFreitext;
+               };
+
+               //Grading;     
+               data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2404'" then
+               {
+                   values.value as grading -> tgt.identifier = cc();
+               }; 
+
+               //WachtumsmusterLepidisch valueRatio cast to fhir string then cast fhir string to valueratio using fhirpath;     
+               data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1286'" then
+               {
+                   values.value as WachtumsmusterLepidisch -> tgt.identifier = cast(WachtumsmusterLepidisch, 'FHIR.string') then "cast(string, Ratio)";
+               }; 
+
+               //WachtumsmusterAzinaer valueRatio;     
+               data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1296'" then
+               {
+                   values.value as WachtumsmusterAzinaer -> tgt.identifier = cast(WachtumsmusterAzinaer, 'FHIR.string') then "cast(string, Ratio)";
+               };  
+               
+               //WachtumsmusterPapilaer valueRatio;     
+               data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1294'" then
+               {
+                   values.value as WachtumsmusterPapilaer -> tgt.identifier = cast(WachtumsmusterPapilaer, 'FHIR.string') then "cast(string, Ratio)";
+               };  
+               
+               //WachtumsmusterMikropapilaer valueRatio;     
+               data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1288'" then
+               {
+                   values.value as WachtumsmusterMikropapilaer -> tgt.identifier = cast(WachtumsmusterMikropapilaer, 'FHIR.string') then "cast(string, Ratio)";
+               };  
+               
+               //WachtumsmusterSolide valueRatio;     
+               data.values as values where "blockindex = 1 and groupindex = 0 and itemid = '1292'" then
+               {
+                   values.value as WachtumsmusterSolide -> tgt.identifier = cast(WachtumsmusterSolide, 'FHIR.string') then "cast(string, Ratio)";
+               };                        
+       }      
+}

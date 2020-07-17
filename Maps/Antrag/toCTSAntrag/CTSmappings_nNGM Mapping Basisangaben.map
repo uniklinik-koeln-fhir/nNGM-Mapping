@@ -1,0 +1,900 @@
+/// version = 0.1
+/// title = "nNGM: nNGM_Mapping_BasisangabenCTS - FHIR to CTS"
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCTS" = nNGM_Mapping_BasisangabenCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+/*
+TODO:
+- TEST ReverseTransform line 164, 185, 234, 310, 328
+*/
+
+group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
+{
+	src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    src -> tgt.operations as operations collate, operations.crfid = '1-BA';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+    
+
+/* ------------------------------ Organization ---------------------------- */
+
+    src.entry as entry then
+    {
+        entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://fhir.de/StructureDefinition/organization-de-basis/0.2'" then 
+        {
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then 
+                {
+                    organization.identifier as identifier then
+                    {
+                        identifier.value as ival then
+                        {
+                            organization -> data.blockindex = 1;
+                            organization -> data.groupindex = 0;
+                            organization -> data.itemid = 'id_2326';
+                            ival -> data.values as values, values.value = ival;
+                        };
+                    };
+                };
+            };
+            
+            //Referenzen Kontakt
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then 
+                {
+                    organization.address as address then
+                    {
+                        address.text as text then
+                        {
+                            organization -> data.blockindex = 1;
+                            organization -> data.groupindex = 0;
+                            organization -> data.itemid = 'id_2485';
+                            text -> data.values as values, values.value = text;
+                        };
+                    };
+                };
+            };
+        };
+
+
+        entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site'" then 
+        {
+             //Netzwerkzentrum Standort
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then 
+                {
+                    organization.name as name then
+                    {
+                        organization -> data.blockindex = 2;
+                        organization -> data.groupindex = 0;
+                        organization -> data.itemid = 'id_2435';
+                        name -> data.values as values, values.value = name;
+
+                    };
+                };
+            };
+
+            //Netzwerkzentrum Kontakt
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then 
+                {
+                    organization.contact as contact then
+                    {
+                        contact.address as address then
+                        {
+                            organization -> data.blockindex = 2;
+                            organization -> data.groupindex = 0;
+                            organization -> data.itemid = 'id_2458';
+                            address.text as txt -> data.values as values, values.value = txt; 
+                        };
+                    };
+                };
+            };
+        };
+
+/* ------------------------------ ServiceRequest ---------------------------- */
+
+    entry.resource as servicerequest where "resource is ServiceRequest" then
+        {   
+            //Patient ID -> cts.patid
+             servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.subject as subject then
+                    {   
+                        subject.reference as patient then
+                        {
+                            patient -> tgt.patid = evaluate(patient, '$this.split(\'\/\').last()');
+                        };
+                    };
+                };
+            };
+
+            //Anforderungsdatum
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then 
+                {
+                    servicerequest.authoredOn as authoredon then
+                    {
+                        servicerequest -> data.blockindex = 3;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_1571';
+                        authoredon -> data.values as values, values.value = authoredon;
+                    };
+                };
+            };
+
+            //Patient ist zum zeitpunkt der Anforderung 
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then 
+                {
+                    servicerequest.extension as aufenthaltsart then
+                    {
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then 
+                        {
+                            servicerequest -> data.blockindex = 3;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_1576';
+                            code -> data.values as values, values.value = code; //translate(code, 'http://uk-koeln.de/fhir/ConceptMap/nngm/aufenthaltsartR', 'string');
+                        };
+                    };                     
+                };
+            };
+        };
+
+/* ------------------------------ Patient (No IDAT) ---------------------------- */
+
+
+     entry.resource as patient where "resource is Patient" then
+        {   
+            patient -> tgt.operations as operations collate then
+            {
+                patient -> operations.data as data then 
+                {
+                    patient.gender as gender then
+                    {
+                        patient -> data.blockindex = 4;
+                        patient -> data.groupindex = 0;
+                        patient -> data.itemid = 'id_1131';
+                        gender -> data.values as values, values.value = gender; //translate(gender, 'http://uk-koeln.de/fhir/ConceptMap/nngm/GeschlechtR', 'string');
+                    };
+                };
+            };
+
+            //Country
+            patient -> tgt.operations as operations collate then
+            {
+                patient -> operations.data as data then 
+                {
+                    patient.address as address, address.country as country then
+                    {
+                        patient -> data.blockindex = 4;
+                        patient -> data.groupindex = 0;
+                        patient -> data.itemid = 'id_1280';
+                        country -> data.values as values, values.value = country;
+                    };
+                };
+            };
+        };
+
+    entry.resource as coverage where "resource is Coverage" then
+        {   
+            //Type.text
+            coverage -> tgt.operations as operations collate then
+            {
+                coverage -> operations.data as data then 
+                {
+                    coverage.type as type, type.text as text then
+                    {
+                        coverage -> data.blockindex = 5;
+                        coverage -> data.groupindex = 0;
+                        coverage -> data.itemid = 'id_2459';
+                        text -> data.values as values, values.value = text;
+                    };
+                };
+            };
+
+
+            //valueCodeableConcept.coding.code
+            coverage -> tgt.operations as operations collate then
+            {
+                coverage -> operations.data as data then 
+                {
+                    coverage.extension as ext, ext.valueCodeableConcept as vcc, vcc.coding as coding then
+                    {
+                        coverage -> data.blockindex = 5;
+                        coverage -> data.groupindex = 0;
+                        coverage -> data.itemid = 'id_1270';
+                        coding.code as code -> data.values as values, values.value = code; //translate(d, 'http://uk-koeln.de/fhir/ConceptMap/nngm/pkv-tarifformR', 'string');
+                    };
+                };
+            };
+
+            //payor.extension.valueCodeableConcept.coding.code -> abrechnungsinformationen
+            coverage -> tgt.operations as operations collate then
+            {
+                coverage -> operations.data as data then 
+                {
+                    coverage.payor as payor, payor.extension as extension, extension.valueCodeableConcept as vcc, vcc.coding as coding then
+                    {
+                        coverage -> data.blockindex = 5;
+                        coverage -> data.groupindex = 0;
+                        coverage -> data.itemid = 'id_1333';
+                        coding.code as info -> data.values as values, values.value = info;
+                    };
+                };
+            };
+        };
+
+/* ------------------------------ Observation ---------------------------- */
+     
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergroesse'" then 
+    {   
+
+            //Height
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then 
+                {
+                    observation.valueQuantity as quantity then
+                    {
+                        observation -> data.blockindex = 6;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1133';
+                        quantity.code as unit -> data.values as values, values.unit = unit;
+                        quantity.value as height -> data.values as values collate, values.value = height;
+                    };
+                };
+            };
+    };
+
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergewicht'" then 
+    {   
+
+            //Weight
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then 
+                {
+                    observation.valueQuantity as quantity then
+                    {
+                        observation -> data.blockindex = 6;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1132';
+                        quantity.code as unit -> data.values as values, values.unit = unit;
+                        quantity.value as weight -> data.values as values collate, values.value = weight;
+                    };
+                };
+            };
+    };
+
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog'" then 
+    {   
+
+            //Ecog
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then 
+                {
+                    observation.valueCodeableConcept as vcc, vcc.coding as coding then
+                    {
+                        observation -> data.blockindex = 6;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2290';
+                        coding.code as ecog -> data.values as values, values.value = ecog; //translate(ecog, 'http://uk-koeln.de/fhir/ConceptMap/nngm/ecogR', 'string');
+                    };
+                };
+            };
+    };
+
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/raucherstatus'" then 
+        {   
+            //Raucherstatus
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then 
+                {
+                    observation.valueCodeableConcept as vcc, vcc.coding as coding then
+                    {
+                        observation -> data.blockindex = 7;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2292';
+                        coding.code as raucherstatus -> data.values as values, values.value = raucherstatus; //translate(raucherstatus, 'http://uk-koeln.de/fhir/ConceptMap/nngm/raucherstatusR', 'string');
+                    };
+                };
+            };
+
+            //Nichtraucher seit  cast to dateTime
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then 
+                {
+                    observation.component as component then
+                    {
+                        observation -> data.blockindex = 7;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2293';
+                        component.valueDateTime as seit -> data.values as values, values.value = seit; 
+                    };
+                };
+            };
+            
+            //Pack years
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then 
+                {
+                    observation.component as component, component.valueQuantity as vq then
+                    {
+                        observation -> data.blockindex = 7;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2294';
+                        vq.value as py -> data.values as values, values.value = py;
+                    };
+                };
+            };
+        };
+
+        entry.resource as practitioner where "resource is Practitioner" then 
+        {   
+            //Email addresse behandler
+            practitioner -> tgt.operations as operations collate then
+            {
+                practitioner -> operations.data as data then 
+                {
+                    practitioner.telecom as telecom then
+                    {
+                        practitioner -> data.blockindex = 10;
+                        practitioner -> data.groupindex = 0;
+                        practitioner -> data.itemid = 'id_2298';
+                        telecom.value as email -> data.values as values, values.value = email;
+                    };
+                };
+            };
+        };
+        
+        
+        entry.resource as consent where "resource is Consent" then 
+        {   
+            //1a Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2240';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2240';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //1a Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2241';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //1b Signed
+             consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2246';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2246';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //1b Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2247';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //2 Signed
+             consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2249';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2249';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //2 Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2250';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //tumorboard Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 10;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2296';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 10;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2296';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //tumorboard Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 10;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2297';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //molpatho diagnostik Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2351';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2351';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //molpatho diagnostik Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2352';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //uberregional Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2357';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2357';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //uberregional Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2358';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2361';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2361';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2362';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+            
+            //Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2364';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2364';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2364';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+            //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2367';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2367';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2368';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+            //Weitergabe von MDAT und Resttumorproben in ein Drittland Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2370';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2370';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Weitergabe von MDAT und Resttumorproben in ein Drittland Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2371';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+            //Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2373';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2373';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2374';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+           
+            //Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2376';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2376';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2377';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeitpunkt zur gewinning weiterer informationen uber den behandlungsverlauf Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2382';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2382';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeitpunkt zur gewinning weiterer informationen uber den behandlungsverlauf Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2383';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //Kontaktaufnahme des nNGM-Zentrums zum zweck des einschlusses in eine mogliche infrage kommende neue Studie Signed
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2379';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2379';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            //Kontaktaufnahme des nNGM-Zentrums zum zweck des einschlusses in eine mogliche infrage kommende neue Studie Date cast to date
+            consent -> tgt.operations as operations collate then
+            {
+                consent -> operations.data as data then 
+                {
+                    consent.provision as provision, provision.period as period then
+                    {
+                        consent -> data.blockindex = 11;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2380';
+                        period.start as dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+        };
+    };
+}
