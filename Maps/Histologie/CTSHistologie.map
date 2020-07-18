@@ -1,0 +1,272 @@
+/// version = 0.1
+/// title = "nNGM: Mapping Histologie CTS"
+
+/*
+TODO
+
+TUMORSTATUS IS NOT MAAPED BECAUSE TODOS IN TOFHIR MAPPING
+COMPLETE EPISODEOFCARE IS NOT MAPPED BECAUSE OF TODOS IN THE TOFHIR MAP
+
+COMPLETE SERVICEREQUEST IS NOT MAPPED BECAUSE OF TODOS INT HE TOFHIR MAP
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS" = nNGM_Mapping_HistologieCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
+{
+    src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    src -> tgt.operations as operations collate, operations.crfid = '*-HL1';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+
+    src.entry as entry then
+    {
+        //Specimen
+        entry.resource as specimen where "resource is Specimen" then
+        {
+
+            //Eingang des Tumormaterials in der Pathologie
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.collection as collection, collection.collectedDateTime as eingangsdatum then
+                    {   
+                        specimen -> data.blockindex = 0;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'id_2515';
+                        eingangsdatum -> data.values as values, values.value = eingangsdatum;
+                    };
+                };
+            };
+
+            //Eingangsnummer des Tumormaterials in der Pathologie
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.accessionIdentifier as identifier, identifier.value as identValue then
+                    {   
+                        specimen -> data.blockindex = 0;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'id_2516';
+                        identValue -> data.values as values, values.value = identValue;
+                    };
+                };
+            };
+
+            //Tumormaterial 
+            //THIS GROUP MAPS NOTHING BECAUSE TODOS IN TO FHIR MAPPING. LOOK TODO IN THE TOFHIR MAP!
+            /*specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.accessionIdentifier as identifier, identifier.value as identValue then
+                    {   
+                        specimen -> data.blockindex = 0;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'id_2516';
+                        identValue -> data.values as values, values.value = identValue;
+                    };
+                };
+            };*/
+        };
+
+        //THIS WHOLE RESOURCE IS COMMENT OUT BECAUSE OF TOTO IN THE TOFHIR MAP
+        /*entry.resource as episodeofcare where "resource is EpisodeOfCare" then
+        {
+            //Untersuchungs-ID 
+            //THIS GROUP MAPS NOTHING BECAUSE TODOS IN TO FHIR MAPPING. LOOK TODO IN THE TOFHIR MAP!
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then
+                {
+                    episodeofcare.identifier as identifier, identifier.value as value then
+                    {   
+                        episodeofcare -> data.blockindex = 0;
+                        episodeofcare -> data.groupindex = 0;
+                        episodeofcare -> data.itemid = 'extern_patho_case_id';
+                        value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+
+            //Pathologie-Fall-ID
+            //Untersuchungs-ID //THIS GROUP MAPS NOTHING BECAUSE TODOS IN TO FHIR MAPPING. LOOK TODO IN THE TOFHIR MAP!
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then
+                {
+                    episodeofcare.identifier as identifier, identifier.collectedDateTime as value then
+                    {   
+                        episodeofcare -> data.blockindex = 5;
+                        episodeofcare -> data.groupindex = 0;
+                        episodeofcare -> data.itemid = 'assessment_id';
+                        value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+        };*/
+
+        entry.resource as observation where "resource is Observation" then
+        {
+            //Klassifikation
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.code as code, code.coding as coding then
+                    {   
+                        observation -> data.blockindex = 2;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1658';
+                        coding -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' +  $this.display');
+                    };
+                };
+            };
+
+            //Lokalisation
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.bodySite as code, code.coding as coding then
+                    {   
+                        observation -> data.blockindex = 2;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2469';
+                        coding -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' +  $this.display');
+                    };
+                };
+            };
+
+            //Grading
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {   
+                        observation -> data.blockindex = 2;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2403';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Wachstumsmuster bei Adenokarzinom lepidisch
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                   observation.component as component then
+                    {   
+                        component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8250/3'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1286';
+                            valuequantity.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Wachstumsmuster bei Adenokarzinom azinär
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                   observation.component as component then
+                    {   
+                        component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8551/3'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1296';
+                            valuequantity.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Wachstumsmuster bei Adenokarzinom papillär
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                   observation.component as component then
+                    {   
+                        component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8260/3'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1294';
+                            valuequantity.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Wachstumsmuster bei Adenokarzinom mikropapillär
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                   observation.component as component then
+                    {   
+                        component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8265/3'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1288';
+                            valuequantity.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Wachstumsmuster bei Adenokarzinom solide
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                   observation.component as component then
+                    {   
+                        component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8230/3'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1292';
+                            valuequantity.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //THIS BLOCK WILL NOT WORK BEACUSE OF A MISSING CODE IN THE COMPONENT. PLEASE CHECK TOFHIR MAP TODO!
+            //Anteil an Siegelringzellkarzinomen 
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                   observation.component as component then
+                    {   
+                        component.valueQuantity as valuequantity where "code.coding.system = '?' and code.coding.code = '?'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2519';
+                            valuequantity.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+        };
+    };
+}
