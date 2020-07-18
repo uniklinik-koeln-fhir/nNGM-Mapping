@@ -1,0 +1,910 @@
+/// version = 0.1
+/// title = "nNGM: Mapping Molpathologie CTS"
+
+/*
+TODO
+
+ORGANIZATION -> SOP-Versionsnummer des Standorts -> NOT MAPPED BECAUSE OF TODOS IN TOFHIR MAP
+
+SERVICEREQUEST -> COMPLETE NOT MAPOPED BECAUSE OF TODOS IN TOFHIR MAP
+
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolpathologieCTS" = nNGM_Mapping_MolpathologieCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
+{
+    src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    src -> tgt.operations as operations collate, operations.crfid = '*-MP1';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+
+    src.entry as entry then
+    {
+        /*---------------EpisodeOfCare----------------*/
+        entry.resource as episodeofcare where "resource is EpisodeOfCare" then
+        {
+            //Untersuchung-ID
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then
+                {
+                    episodeofcare.identifier as identifier, identifier.value as value then
+                    {   
+                        episodeofcare -> data.blockindex = 8;
+                        episodeofcare -> data.groupindex = 0;
+                        episodeofcare -> data.itemid = 'assessment_id';
+                        value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+        };
+
+        /*---------------Organization----------------*/
+         entry.resource as organization where "resource is Organization" then
+        {
+            //Standort
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then
+                {
+                    organization.name as name then
+                    {   
+                        organization -> data.blockindex = 0;
+                        organization -> data.groupindex = 0;
+                        organization -> data.itemid = 'id_2435';
+                        name -> data.values as values, values.value = name;
+                    };
+                };
+            };
+
+            //THIS FIELD IS COMMENT OUT! LOOK AT TODO IN TOFHIR MAP
+            //SOP-Versionsnummer des Standorts
+            /*organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then
+                {
+                    organization.name as name then
+                    {   
+                        organization -> data.blockindex = 0;
+                        organization -> data.groupindex = 0;
+                        organization -> data.itemid = 'id_2435';
+                        name -> data.values as values, values.value = name;
+                    };
+                };
+            };*/
+        };
+
+        /*---------------ALK CISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ALK' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2108';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2109';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 3;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2112';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Positive Tumorzellen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2113';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+        };
+        /*---------------ALK FISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ALK' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2115';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2116';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 3;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2119';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Positive Tumorzellen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2120';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+
+            //Polysomie
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 3;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2121';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+        };
+         /*---------------MET CISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MET' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2143';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2144';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 4;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2147';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Amplifikation
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'amplification-level' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2148';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+         /*---------------MET FISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MET' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2150';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2151';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 4;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2154';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Amplifikation
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'amplification-level' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2155';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //15 MET Signal
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = '15-met-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2156';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+
+            //5 MET Signal
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = '5-met-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2157';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+
+            //4 MET Signal
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = '4-met-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2158';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+
+            //gezaehlte Tumorzellen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'C0007584' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2159';
+                            integer -> data.values as values, values.value = integer;
+                        };
+                    };
+                };
+            };
+
+            //MET signale
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'met-signal-count' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2160';
+                            integer -> data.values as values, values.value = integer;
+                        };
+                    };
+                };
+            };
+
+            //CEN signale
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'cet-signal-count' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2161';
+                            integer -> data.values as values, values.value = integer;
+                        };
+                    };
+                };
+            };
+
+            //Quotient MET/CEN signale
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'met-cen-signal-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2162';
+                            integer -> data.values as values, values.value = integer;
+                        };
+                    };
+                };
+            };
+
+            //Durchschnitt MET-Genkopiezahl/Zelle 
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'met-copy-per-cell' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2163';
+                            integer -> data.values as values, values.value = integer;
+                        };
+                    };
+                };
+            };
+
+            //Polysomie
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2164';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+        };
+          /*---------------RET CISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'RET' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 5;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2187';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 5;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2188';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 5;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2191';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Positive Tumorzellen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 5;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2192';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------RET FISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'RET' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 5;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2194';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 5;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2195';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 5;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2198';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Positive Tumorzellen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 5;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2199';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+            //Polysomie
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 5;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2200';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+        };
+
+         /*---------------ROS1 CISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ROS1' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2221';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2222';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 6;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2225';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Positive Tumorzellen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2226';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+            //Polysomie
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2227';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+        };
+
+         /*---------------ROS1 FISH OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ROS1' 
+                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
+        {
+            //Kit Bezeichnung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2229';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Hersteller
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2230';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Ergebnis
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    {
+                        observation -> data.blockindex = 6;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2233';
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Positive Tumorzellen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2234';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+            //Polysomie
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 6;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2235';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+        };
+    };
+}
