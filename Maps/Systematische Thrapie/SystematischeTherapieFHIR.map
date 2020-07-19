@@ -1,0 +1,290 @@
+/// version = 0.1
+/// title = "nNGM: Mapping SystematischeTherapie FHIR"
+
+/*
+TODO
+
+MEDICALADMINISTRATION -> extensions hilfreich and umgesetzt -> boolean values with N/A? Should this be an codeableconcept instead of boolean? N/A would be an extension with no valueBoolean?
+MEDICALADMINISTRATION -> extensions umsetzungsgrund  -> formualr is a dropdown, extension value is string. Maybe a problem?
+
+MEDICALADMINISTRATION -> http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie VALUESET DOES NOT MATCH THE VALUES FOR "Therapeutische Intention" IN THE FORMUALR
+MEDICALADMINISTRATION -> Änderung des Schemas -> There is no field to map this. This should probably be a boolean in reasonstatus? Maybe an extension?
+MEDICALADMINISTRATION -> Grund für die Änderung des Therapieschemas -> SHOULD THIS BE MAPED ON .code INSTEAD OF .text? WITH A VLAUESET? ITS AN RADIOBUTTON IN THE FORMULAR.
+MEDICALADMINISTRATION -> Neues Therapieschema -> THIS CANNOT BE MAPPED TO MEDICATIONCODEABLECONCEPT SINCE THIS IS ALREADY FILLED WITH THE VALUE FROM Therapie Schema.
+MEDICALADMINISTRATION -> Datum der Änderung -> THIS CANNOT BE MAPPED TO EFFECTIVEPERIOD. THE Therapiebeginn AND Therapieende IS ALREADY MAPPED THERE!
+MEDICALADMINISTRATION -> Für die Erhaltungstherapie verabreichtes Medikament -> THIS SHOULD NOT BE MAPPED TO NOTE.TEXT. THIS IS A MEDICATION!
+MEDICALADMINISTRATION -> Art des Therapieendes -> THIS IS NOT POSSIBLE BECASUE THER ARE MULTIBLE VALUES IN THE FORMULAR NOT JUST ONE CODE
+MEDICALADMINISTRATION -> Nebenwirkungen Grad III / Grad IV -> STATUSREASON IS NOT THE CORRECT FIELD TO MAP THIS. THIS ARE SECONDARY EFFECTS NOT THE STATUS
+MEDICALADMINISTRATION -> Bemerkung -> Therapieinformation IS ALREADY MAPPED TO NOTE.TEXT. WE CANNOT MAP THIS BACK WITH TWO ANNOTATIONS IN IT?
+*/
+
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystematischeTherapieFHIR" = nNGM_Mapping_SystematischeTherapieFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+
+
+group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+{
+    //metadata
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';
+
+    src -> bundle.entry as entry then CreateMedicationAdministration(src, entry);
+}
+
+group CreateMedicationAdministration(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1600'
+                                    or blockindex = 1 and groupindex = 0 and itemid = 'id_2336'
+                                    or blockindex = 1 and groupindex = 0 and itemid = 'id_2337'
+                                    or blockindex = 1 and groupindex = 0 and itemid = 'id_2338'
+                                    or blockindex = 1 and groupindex = 0 and itemid = 'id_2339'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_1246'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_1247'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_1242'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_1243'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_2341'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_1245'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_1244'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1241'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1250'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1488'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1464'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1359'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1465'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_1357'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_2342'
+                                    or blockindex = 6 and groupindex = 0 and itemid = 'id_1356'" then
+        {
+            src -> tgt.resource = create('MedicationAdministration') as medicationadministration then TransformMedicationAdministration(src, medicationadministration);
+        };
+    };
+}
+
+group TransformMedicationAdministration(source src: CTS_Transport, target tgt: MedicationAdministration)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/MedicationAdministration'; 
+
+    
+    src.operations as operations, operations.data as data then
+    {
+        //Diagnostikfall-ID
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1600'" then 
+        {
+           values.value as value -> tgt.context as context, context.identifier = create('Identifier') as identifier, identifier.value = value;
+        };
+
+        //Therapieinformation
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2336'" then 
+        {
+           values.value as value -> tgt.note = create('Annotation') as annotation, annotation.text = value;
+        };
+        
+        //MAYBE A PROBLEM? SEE TODO
+        //Therapieinformation war hilfreich
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2337'" then 
+        {
+           values.value as value where "value = 'Ja'" then 
+           {
+               value -> tgt.supportingInformation = create('Reference') as reference, reference.extension as hilfreichextension, hilfreichextension.url = 'http://uk-koeln.de/fhir/Extension/hilfreich',
+                                                                                                                                hilfreichextension.valueBoolean = 'true';
+           };
+
+           values.value as value where "value = 'Nein'" then 
+           {
+               value -> tgt.supportingInformation = create('Reference') as reference, reference.extension as hilfreichextension, hilfreichextension.url = 'http://uk-koeln.de/fhir/Extension/hilfreich',
+                                                                                                                                hilfreichextension.valueBoolean = 'false';
+           };
+
+           values.value as value where "value = 'N/A'" then 
+           {
+               value -> tgt.supportingInformation = create('Reference') as reference, reference.extension as hilfreichextension, hilfreichextension.url = 'http://uk-koeln.de/fhir/Extension/hilfreich';
+           };
+        };
+
+        //Therapieinformation wurde umgesetzt
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2338'" then 
+        {
+           values.value as value where "value = 'Ja'" then 
+           {
+               value -> tgt.supportingInformation = create('Reference') as reference, reference.extension as hilfreichextension, hilfreichextension.url = 'http://uk-koeln.de/fhir/Extension/umgesetzt',
+                                                                                                                                hilfreichextension.valueBoolean = 'true';
+           };
+
+           values.value as value where "value = 'Nein'" then 
+           {
+               value -> tgt.supportingInformation = create('Reference') as reference, reference.extension as hilfreichextension, hilfreichextension.url = 'http://uk-koeln.de/fhir/Extension/umgesetzt',
+                                                                                                                                hilfreichextension.valueBoolean = 'false';
+           };
+
+           values.value as value where "value = 'N/A'" then 
+           {
+               value -> tgt.supportingInformation = create('Reference') as reference, reference.extension as hilfreichextension, hilfreichextension.url = 'http://uk-koeln.de/fhir/Extension/umgesetzt';
+           };
+        };
+
+        //Grund für die Nichtumsetzung
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2339'" then 
+        {
+           values.value as value -> tgt.supportingInformation = create('Reference') as reference, reference.extension as therapieinformation,
+                                                    therapieinformation.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/therapieinformationen',
+                                                    therapieinformation.extension as nichtumsetzungsgrundextension, nichtumsetzungsgrundextension.url = 'nichtumsetzungGrund',
+                                                                                                                    nichtumsetzungsgrundextension.valueString = value;
+        };
+
+        //Therapiebeginn
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1246'" then 
+        {
+           values.value as value -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(value, 'dateTime');
+        };
+
+        //Therapieende
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247'" then 
+        {
+           values.value as value -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(value, 'dateTime');
+        };
+
+        //Durchführende Einrichtung
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1242'" then 
+        {
+           values.value as value -> tgt.performer as performer, performer.actor = create('Reference') as actor, actor.display = value;
+        };
+
+        //Therapeutische Intention
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1243'" then 
+        {
+           values.value as value -> tgt.extension as intentiontherapie, intentiontherapie.url = 'http://uk-koeln.de/fhir/Extension/intentionTherapie', 
+                                                                        intentiontherapie.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', value, value);
+        };
+
+        //Off-Label-Behandlung
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2341'" then 
+        {
+            values.value as value where "value = 'Ja'" then
+            {
+                value -> tgt.extension as intentiontherapie, intentiontherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/OffLabelTherapie', 
+                                                                        intentiontherapie.valueBoolean = 'true';
+            };
+            values.value as value where "value = 'Nein'" then
+            {
+                value -> tgt.extension as intentiontherapie, intentiontherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/OffLabelTherapie', 
+                                                                        intentiontherapie.valueBoolean = 'false';
+            };
+        };
+
+        //Therapie innerhalb einer klinischen Studie
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1245'" then 
+        {
+            values.value as value where "value = 'Ja'" then
+            {
+                value -> tgt.extension as studientherapieextenion, studientherapieextenion.extension as teilnahmeextension, teilnahmeextension.url = 'teilnahme',
+                                                                                                                            teilnahmeextension.valueBoolean = 'true';
+            };
+            values.value as value where "value = 'Nein'" then
+            {
+                 value -> tgt.extension as studientherapieextenion, studientherapieextenion.extension as teilnahmeextension, teilnahmeextension.url = 'teilnahme',
+                                                                                                                            teilnahmeextension.valueBoolean = 'false';
+            };
+        };
+
+        //Therapie innerhalb einer klinischen Studie
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1244'" then 
+        {
+            values.value as value -> tgt.extension as studientherapieextenion collate, studientherapieextenion.extension as studieextension, studieextension.url = 'studie',
+                                                                                                        studieextension.valueReference = create('Reference') as reference, reference.display = value;
+        };
+
+        //Therapieschema
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1241'" then 
+        {
+            values.value as value -> tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/SystemischeTherapieMedikation', value, value);
+        };
+
+        //Anzahl der Zyklen (ohne Erhaltung)
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1250'" then 
+        {
+            values.value as value -> tgt.dosage as dosage, dosage.rateQuantity = create('SimpleQuantity') as quantity, quantity.system = 'http://unitsofmeasure.org',
+                                                                                                                        quantity.code = '1',
+                                                                                                                        quantity.value = value;
+        };
+
+        //NO PLACE TO MAP, LOOK TODO
+
+        //Änderung des Schemas
+        /*data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1488'" then 
+        {
+            
+        };*/
+
+        //SHOULD THIS BE MAPPED ON CODE INSTEAD OF TEXT?
+        //Grund für die Änderung des Therapieschemas
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1464'" then 
+        {
+            values.value as value -> tgt.statusReason as reason, reason.text = value;
+        };
+
+        //THIS CANNOT BE MAPPED TO MEDICATIONCODEABLECONCEPT, THE FIELD Therapieschema IS ALREADY MAPPED THERE!
+        //Neues Therapieschema
+        /*data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1359'" then 
+        {
+           
+        };*/
+
+        //THIS CANNOT BE MAPPED TO EFFECTIVEPERIOD. THE Therapiebeginn AND Therapieende IS ALREADY MAPPED THERE!
+        //Datum der Änderung
+        /*data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1465'" then 
+        {
+            
+        };*/
+
+        //Erhaltungtherapie als Option
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1357'" then 
+        {
+            values.value as value where "value = 'Ja'" then
+            {
+                value -> tgt.extension as erhaltungstherapie, erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie', 
+                                                                        erhaltungstherapie.valueBoolean = 'true';
+            };
+            values.value as value where "value = 'Nein'" then
+            {
+                value -> tgt.extension as erhaltungstherapie, erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie', 
+                                                                        erhaltungstherapie.valueBoolean = 'false';
+            };
+        };
+
+        //THIS SHOULD NOT BE MAPPED TO NOTE.TEXT. THIS IS A MEDICATION!
+        //Für die Erhaltungstherapie verabreichtes Medikament
+        /*data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2342'" then 
+        {
+           
+        };*/
+
+        //THIS IS NOT POSSIBLE BECASUE THER ARE MULTIBLE VALUES IN THE FORMULAR NOT JUST ONE CODE.
+        //Art des Therapieendes
+        /*data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1356'" then 
+        {
+           
+        };*/
+
+        //STATUSREASON IS NOT THE CORRECT FIELD TO MAP THIS. THIS ARE SECONDARY EFFECTS NOT THE STATUS
+        //Nebenwirkungen Grad III / Grad IV
+        /*data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1356'" then 
+        {
+           
+        };*/
+
+        //Therapieinformation IS ALREADY MAPPED TO NOTE.TEXT. WE CANNOT MAP THIS BACK WITH TWO ANNOTATIONS IN IT?
+        //Bemerkungen
+        /*data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_1205'" then 
+        {
+           
+        };*/
+
+    };
+
+
+}
