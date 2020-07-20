@@ -1,6 +1,45 @@
 /// version = 0.1
 /// title = "nNGM: Anforderung - FHIR to CTS"
 
+/*
+
+The following will cause duplicates because cant check on ids and uses same values as gebewediagnostik erfolgte.
+
+ // Blutentnahme erfolgte
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as aufenthaltsart, aufenthaltsart.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsartAnforderung'" then
+                    {
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
+                        {
+                            servicerequest -> data.blockindex = 2;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_2320';
+                            code -> data.values as values, values.value = 'stationär';
+                        };
+
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'AMB'" then
+                        {
+                           servicerequest -> data.blockindex = 2;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_2320';
+                            code -> data.values as values, values.value = 'ambulant';
+                        };
+
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'NA'" then
+                        {
+                            servicerequest -> data.blockindex = 2;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_2320';
+                            code -> data.values as values, values.value = 'N/A';
+                        };
+                    };
+                };
+            };
+
+*/
 
 map "http://uk-koeln.de/fhir/StructureMap/AnforderungCTS" = AnforderungCTS
 
@@ -20,14 +59,33 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         /* ------------------------------ Specimen ---------------------------- */
         entry.resource as specimen where "resource is Specimen" then
         {
-            //Biopsie-ID
+
+            //BiopsieID
             specimen -> tgt.operations as operations collate then
             {
                 specimen -> operations.data as data then
                 {
                     specimen.identifier as biopsieID then
                     {   
-                        biopsieID.value as bid then
+                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
+                        {
+                            specimen -> data.blockindex = 5;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'id_1601';
+                            biopsieID -> data.values as values, values.value = bid;
+                        };
+                    };
+                };
+            };
+
+            //Zu untersuchendes Material
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as biopsieID then
+                    {   
+                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/zuuntersuchendesmaterial'" then
                         {
                             specimen -> data.blockindex = 0;
                             specimen -> data.groupindex = 0;
@@ -37,27 +95,8 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
-        };
-        
-        entry.resource as specimen where "resource is Specimen" then
-        {
-            // Diagnostik Typ
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.category as category then
-                    {
-                        category.coding as coding, coding.code as code then
-                        {
-                            specimen -> data.blockindex = 0;
-                            specimen -> data.groupindex = 0;
-                            specimen -> data.itemid = 'id_1368';
-                            code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
+
+            
 
             // Entnahmedatum
             specimen -> tgt.operations as operations collate then
@@ -66,33 +105,12 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 {
                     specimen.collection as collection then
                     {
-                        collection.valueDateTime as valueDateTime then
+                        collection.collectedDateTime as collectedDateTime then
                         {
                             specimen -> data.blockindex = 1;
                             specimen -> data.groupindex = 0;
                             specimen -> data.itemid = 'id_1551';
-                            valueDateTime -> data.values as values, values.value = valueDateTime;
-                        };
-                    };
-                };
-            };
-
-            // Materialentnahme erfolgte
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.collection as collection then
-                    {
-                        collection.extension as aufenthaltsart then
-                        {
-                            aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
-                            {
-                                specimen -> data.blockindex = 1;
-                                specimen -> data.groupindex = 0;
-                                specimen -> data.itemid  = 'id_1589';
-                                code -> data.values as values, values.value = code;
-                            };
+                            collectedDateTime -> data.values as values, values.value = collectedDateTime;
                         };
                     };
                 };
@@ -111,27 +129,6 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                             specimen -> data.groupindex = 0;
                             specimen -> data.itemid = 'id_2316';
                             collectedDateTime -> data.values as values, values.value = collectedDateTime;
-                        };
-                    };
-                };
-            };
-
-            // Blutentnahme erfolgte
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.collection as collection then
-                    {
-                        collection.extension as aufenthaltsart then
-                        {
-                            aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
-                            {
-                                specimen -> data.blockindex = 2;
-                                specimen -> data.groupindex = 0;
-                                specimen -> data.itemid = 'id_2320';
-                                code -> data.values as values, values.value = code;
-                            };
                         };
                     };
                 };
@@ -235,6 +232,106 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then 
         {
 
+            // Diagnostik Typ
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.category as category then
+                    {
+                        category.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/tests'" then
+                        {
+                            servicerequest -> data.blockindex = 0;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_1368';
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Materialentnahme erfolgte
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as aufenthaltsart, aufenthaltsart.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsartAnforderung'" then
+                    {
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
+                        {
+                            servicerequest -> data.blockindex = 1;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_1589';
+                            code -> data.values as values, values.value = 'stationär';
+                        };
+
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'AMB'" then
+                        {
+                            servicerequest -> data.blockindex = 1;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_1589';
+                            code -> data.values as values, values.value = 'ambulant';
+                        };
+
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'NA'" then
+                        {
+                            servicerequest -> data.blockindex = 1;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_1589';
+                            code -> data.values as values, values.value = 'N/A';
+                        };
+                    };
+                };
+            };
+
+            
+            //Tumorblockanforderung
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.doNotPerform as dnp where "doNotPerform = true" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2476';
+                        dnp -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.doNotPerform as dnp where "doNotPerform = false" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2476';
+                        dnp -> data.values as values, values.value = 'yes';
+                    };
+                };
+            };
+
+            //Grund zum entfallen der Tumorblockanforderung
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as entfallen, entfallen.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundentfallen'" then 
+                    {
+                        entfallen.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then 
+                        {
+                            servicerequest -> data.blockindex = 4;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2490';
+                            code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
             //Liquid Biopsy
             servicerequest -> tgt.operations as operations collate then
             {
@@ -276,14 +373,14 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 servicerequest -> operations.data as data then
                 {
-                    servicerequest.category as category then                        
+                    servicerequest.category as category, category.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/diagnostikanforderung'" then                        
                         {
                             servicerequest -> data.blockindex = 3;
                             servicerequest -> data.groupindex = 0;
                             servicerequest -> data.itemid = 'id_2473';
                             category.code as code -> data.values as values, values.value = code;
                         };
-                };
+                }; 
             };
 
             //Tumorblock anforderung

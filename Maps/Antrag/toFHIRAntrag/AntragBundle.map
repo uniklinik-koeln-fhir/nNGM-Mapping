@@ -1,0 +1,77 @@
+///version = 0.1
+///title = "FHIRMappingAntrag
+///status = draft
+
+/*
+TNM Biopsy-id field (Specimen resource creation) fails
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AntragFHIR" = nNGM_Mapping_AntragFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
+uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
+uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
+uses "http://hl7.org/fhir/StructureDefinition/Coverage" as target
+uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+uses "http://hl7.org/fhir/StructureDefinition/Consent" as target
+uses "http://hl7.org/fhir/StructureDefinition/Practitioner" as target
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/AnforderungFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMMap"
+
+
+group MapAntrag(source src:CTS_Transport, target bundle: Bundle)
+{
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';
+
+
+    //Stammdaten
+    src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatientStammdaten(src, patient);
+    src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverageStammdaten(src, coverage);
+    src -> bundle.entry as entry then CreateEpisodeOfCareStammdaten(src, entry);
+
+    //Basisangaben
+    src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
+    src -> bundle.entry as entry, entry.resource = create('Organization') as organization then TransformOrganizationNetzwerkzentrum(src, organization);
+    src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestTumorboard(src, servicerequest);
+    src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatient(src, patient);
+    src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
+    src -> bundle.entry as entry then CreateObservationHeight(src, entry);
+    src -> bundle.entry as entry then CreateObservationWeight(src, entry);
+    src -> bundle.entry as entry then CreateObservationECOG(src, entry);
+    src -> bundle.entry as entry then CreateObservationSmoking(src, entry);
+    src -> bundle.entry as entry then CreatePractitioner(src, entry);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligungTumorboard1(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligungTumorboard2(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1a(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1b(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung2(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung1(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung2(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung1(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung2(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung3(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung4(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung5(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung6(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung7(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung8(src, consent);
+
+    //Antrag
+    src -> bundle.entry as entry then CreateTransformSpecimenAnforderung(src, entry);
+    src -> bundle.entry as entry then CreateTransformObservationAnforderung(src, entry);
+    src -> bundle.entry as entry then CreateTransformServiceRequestAnforderung(src, entry);
+    src -> bundle.entry as entry then CreateTransformOrganizationAnforderung(src, entry);
+    src -> bundle.entry as entry then CreateTransformPractitionerAnforderung(src, entry);
+
+    //TNM
+    src -> bundle.entry as entry then CreateTransformObservationTNM(src, entry);
+    src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen);
+}

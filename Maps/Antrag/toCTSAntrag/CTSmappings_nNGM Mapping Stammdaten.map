@@ -1,0 +1,82 @@
+/// version = 0.1
+/// title = "nNGM: nNGM_Mapping_StammdatenCTS - FHIR to CTS"
+
+/*
+Currently doesn't have patient and coverage block because this data is doubled since it comes from Basisangaben?
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCTS" = nNGM_Mapping_StammdatenCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+
+group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
+{
+	src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    src -> tgt.operations as operations collate, operations.crfid = '1-SD';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+    
+
+    src.entry as entry then
+    {
+        /* ------------------------------- EpisodeOfCare ---------------------------- */
+
+     entry.resource as episodeofcare where "resource is EpisodeOfCare and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM'" then
+        {   
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then 
+                {
+                    episodeofcare.extension as erstdiagnose then
+                    {
+                        erstdiagnose.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmErstdiagnose'" then 
+                        {
+                           episodeofcare -> data.blockindex = 1;
+                           episodeofcare -> data.groupindex = 0;
+                           episodeofcare -> data.itemid = 'id_1297';
+                           erstdiagnose -> data.values as values, values.value = value; 
+                        };
+                    };
+                };
+            };
+
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then 
+                {
+                    episodeofcare.extension as letzterkontakt then
+                    {
+                        letzterkontakt.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/abrechnungsinformation/letzterKontakt'" then 
+                        {
+                           episodeofcare -> data.blockindex = 1;
+                           episodeofcare -> data.groupindex = 0;
+                           episodeofcare -> data.itemid = 'id_803';
+                           letzterkontakt -> data.values as values, values.value = value; 
+                        };
+                    };
+                };
+            };
+
+            
+             episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then 
+                {
+                    episodeofcare.status as status, status.extension as statusext then
+                    {
+                        statusext.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmStatus'" then 
+                        {
+                           episodeofcare -> data.blockindex = 1;
+                           episodeofcare -> data.groupindex = 0;
+                           episodeofcare -> data.itemid = 'id_1139';
+                           statusext.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as value -> data.values as values, values.value = value; 
+                        };
+                    };
+                };
+            };
+        };
+    };
+}

@@ -1,29 +1,83 @@
 /// version = 0.1
-/// title = "nNGM: nNGM_Mapping_BasisangabenCTS - FHIR to CTS"
+/// title = "nNGM: Antrag - FHIR to CTS"
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCTS" = nNGM_Mapping_BasisangabenCTS
+
+map "http://uk-koeln.de/fhir/StructureMap/AntragCTS" = AntragCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-/*
-TODO:
-- TEST ReverseTransform line 164, 185, 234, 310, 328
-*/
-
 group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
 {
-	src -> tgt.version = '1.1';
+    src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
-
-    src -> tgt.operations as operations collate, operations.crfid = '1-BA';
-    src -> tgt.operations as operations collate, operations.type = 'save';
     
-
-/* ------------------------------ Organization ---------------------------- */
+    src -> tgt.operations as operations collate, operations.crfid = 'Antrag';
+    src -> tgt.operations as operations collate, operations.type = 'save';
 
     src.entry as entry then
     {
+
+        /* -------------------------Stammdaten-----------------------------------*/
+
+        /* ------------------------------- EpisodeOfCare ---------------------------- */
+
+     entry.resource as episodeofcare where "resource is EpisodeOfCare and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM'" then
+        {   
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then 
+                {
+                    episodeofcare.extension as erstdiagnose then
+                    {
+                        erstdiagnose.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmErstdiagnose'" then 
+                        {
+                           episodeofcare -> data.blockindex = 1;
+                           episodeofcare -> data.groupindex = 0;
+                           episodeofcare -> data.itemid = 'id_1297';
+                           erstdiagnose -> data.values as values, values.value = value; 
+                        };
+                    };
+                };
+            };
+
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then 
+                {
+                    episodeofcare.extension as letzterkontakt then
+                    {
+                        letzterkontakt.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/abrechnungsinformation/letzterKontakt'" then 
+                        {
+                           episodeofcare -> data.blockindex = 1;
+                           episodeofcare -> data.groupindex = 0;
+                           episodeofcare -> data.itemid = 'id_803';
+                           letzterkontakt -> data.values as values, values.value = value; 
+                        };
+                    };
+                };
+            };
+
+            
+             episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then 
+                {
+                    episodeofcare.status as status, status.extension as statusext then
+                    {
+                        statusext.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmStatus'" then 
+                        {
+                           episodeofcare -> data.blockindex = 1;
+                           episodeofcare -> data.groupindex = 0;
+                           episodeofcare -> data.itemid = 'id_1139';
+                           statusext.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as value -> data.values as values, values.value = value; 
+                        };
+                    };
+                };
+            };
+        };
+
+        /* -------------------------Basisangaben-----------------------------------*/
         entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://fhir.de/StructureDefinition/organization-de-basis/0.2'" then 
         {
             organization -> tgt.operations as operations collate then
@@ -984,5 +1038,696 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
         };
+        /* -------------------------Anforderung-----------------------------------*/
+        //BiopsieID
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as biopsieID then
+                    {   
+                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
+                        {
+                            specimen -> data.blockindex = 5;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'id_1601';
+                            biopsieID -> data.values as values, values.value = bid;
+                        };
+                    };
+                };
+            };
+
+            //Zu untersuchendes Material
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as biopsieID then
+                    {   
+                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/zuuntersuchendesmaterial'" then
+                        {
+                            specimen -> data.blockindex = 0;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'id_2457';
+                            biopsieID -> data.values as values, values.value = bid;
+                        };
+                    };
+                };
+            };
+
+            
+
+            // Entnahmedatum
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.collection as collection then
+                    {
+                        collection.collectedDateTime as collectedDateTime then
+                        {
+                            specimen -> data.blockindex = 1;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'id_1551';
+                            collectedDateTime -> data.values as values, values.value = collectedDateTime;
+                        };
+                    };
+                };
+            };
+
+            // Entnahmedatum
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.collection as collection then
+                    {
+                        collection.collectedDateTime as collectedDateTime then
+                        {
+                            specimen -> data.blockindex = 2;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'id_2316';
+                            collectedDateTime -> data.values as values, values.value = collectedDateTime;
+                        };
+                    };
+                };
+            };
+        };
+
+        /* ------------------------------ Observation ---------------------------- */
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histologie'" then 
+        {
+            //Histologie des vorbefunds
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as vcc, vcc.coding as coding then
+                    {
+                        observation -> data.blockindex = 1;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_836';
+                        coding -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');
+                    };
+                };
+            };
+
+            // Histologie des vorbefunds (freitext?)
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as vcc, vcc.coding as coding where "$this.valueCodeableConcept.coding.code = 'CUP'" then
+                    {
+                        vcc.text as text then {
+                            observation -> data.blockindex = 2;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2319';
+                            coding.code -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');
+                        };
+                    };
+                };
+            };
+        };
+
+        /* ------------------------------ Organization ---------------------------- */
+        entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site'" then 
+        {
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then
+                {
+                    organization.name as name then 
+                    {
+                        organization -> data.blockindex = 4;
+                        organization -> data.groupindex = 0;
+                        organization -> data.itemid = 'id_1563';
+                        name -> data.values as values, values.value = name;
+                    };
+                };
+            };
+
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then
+                {
+                    organization.address as address then 
+                    {
+                        address.text as text then 
+                        {
+                            organization -> data.blockindex = 4;
+                            organization -> data.groupindex = 0;
+                            organization -> data.itemid = 'id_1562';
+                            text -> data.values as values, values.value = text;
+                        };
+                    };
+                };
+            };
+        };
+
+        /* ------------------------------ Practitioner ---------------------------- */
+        entry.resource as practitioner where "resource is Practitioner and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Practitioner/nNGM'" then 
+        {
+            practitioner -> tgt.operations as operations collate then
+            {
+                practitioner -> operations.data as data then
+                {
+                    practitioner.identifier as identifier then 
+                    {
+                        identifier.value as value then 
+                        {
+                            practitioner -> data.blockindex = 4;
+                            practitioner -> data.groupindex = 0;
+                            practitioner -> data.itemid = 'id_1560';
+                            value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+        };
+
+
+        /* ------------------------------ ServiceRequest ---------------------------- */
+        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then 
+        {
+
+            // Diagnostik Typ
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.category as category then
+                    {
+                        category.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/tests'" then
+                        {
+                            servicerequest -> data.blockindex = 0;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_1368';
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Materialentnahme erfolgte
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as aufenthaltsart, aufenthaltsart.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsartAnforderung'" then
+                    {
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
+                        {
+                            servicerequest -> data.blockindex = 1;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_1589';
+                            code -> data.values as values, values.value = 'stationär';
+                        };
+
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'AMB'" then
+                        {
+                            servicerequest -> data.blockindex = 1;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_1589';
+                            code -> data.values as values, values.value = 'ambulant';
+                        };
+
+                        aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'NA'" then
+                        {
+                            servicerequest -> data.blockindex = 1;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid  = 'id_1589';
+                            code -> data.values as values, values.value = 'N/A';
+                        };
+                    };
+                };
+            };
+
+            
+            //Tumorblockanforderung
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.doNotPerform as dnp where "doNotPerform = true" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2476';
+                        dnp -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.doNotPerform as dnp where "doNotPerform = false" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2476';
+                        dnp -> data.values as values, values.value = 'yes';
+                    };
+                };
+            };
+
+            //Grund zum entfallen der Tumorblockanforderung
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as entfallen, entfallen.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundentfallen'" then 
+                    {
+                        entfallen.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then 
+                        {
+                            servicerequest -> data.blockindex = 4;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2490';
+                            code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Liquid Biopsy
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as liquidbiopsy then 
+                    {
+                        liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/LiquidBiopsy'" then 
+                        {
+                            servicerequest -> data.blockindex = 3;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2313';
+                            liquidbiopsy -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //GrundFehlendeBiopsie
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as liquidbiopsy then 
+                    {
+                        liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/GrundFehlendeBiopsieAnforderung'" then 
+                        {
+                            servicerequest -> data.blockindex = 3;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2314';
+                            liquidbiopsy -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //gewunschte diagnostik
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.category as category, category.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/diagnostikanforderung'" then                        
+                        {
+                            servicerequest -> data.blockindex = 3;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2473';
+                            category.code as code -> data.values as values, values.value = code;
+                        };
+                }; 
+            };
+
+            //Tumorblock anforderung
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.occurrenceDateTime as dt then 
+                    {
+                            servicerequest -> data.blockindex = 4;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2477';
+                            dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+
+            //wiederholungen
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.occurrenceTiming as ot then  
+                    {
+                        ot.repeat as repeat then 
+                        {
+                            servicerequest -> data.blockindex = 4;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2478';
+                            repeat.count as count -> data.values as values, values.value = count;
+                        };
+                    };
+                };
+            };
+
+            //storno
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as storno then 
+                    {
+                        storno.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/storno'" then 
+                        {
+                            servicerequest -> data.blockindex = 4;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2479';
+                            storno.valueDateTime as dt -> data.values as values, values.value = dt;
+                        };
+                    };
+                };
+            };
+
+            //versandmaterial
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.extension as versandmaterial then 
+                    {
+                        versandmaterial.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/versandmaterial'" then 
+                        {
+                            servicerequest -> data.blockindex = 4;
+                            servicerequest -> data.groupindex = 0;
+                            servicerequest -> data.itemid = 'id_2480';
+                            versandmaterial.valueDateTime as dt -> data.values as values, values.value = dt;
+                        };
+                    };
+                };
+            };
+        
+        /* -------------------------TNM-----------------------------------*/
+
+        /* ------------------------------ Specimen ---------------------------- */
+        entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
+        {
+            //Biopsie-ID
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as biopsieID then
+                    {   
+                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
+                        {
+                            specimen -> data.blockindex = 3;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'id_1601';
+                            biopsieID -> data.values as values, values.value = bid;
+                        };
+                    };
+                };
+            };
+        };
+        
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium'" then
+        {
+            //Patient ID -> cts.patid
+             observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.subject as subject then
+                    {   
+                        subject.reference as patient then
+                        {
+                            patient -> tgt.patid = evaluate(patient, '$this.split(\'\/\').last()');
+                        };
+                    };
+                };
+            };
+            
+
+            //Erstdiagnose
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.extension as extensionEDT then
+                    {   
+                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
+                        {
+                            observation -> data.blockindex = 0;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1300';
+                            extensionEDT -> data.values as values, values.value = 'yes';
+                        };
+                        
+                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
+                        {
+                            observation -> data.blockindex = 0;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1300';
+                            extensionEDT -> data.values as values, values.value = 'no';
+                        };
+                    }; 
+                };
+            };
+
+            //Kurativ-operabel
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.extension as extensionEDT then
+                    {   
+                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
+                        {
+                            observation -> data.blockindex = 0;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1385';
+                            extensionEDT -> data.values as values, values.value = 'yes';
+                        };
+                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
+                        {
+                            observation -> data.blockindex = 0;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1385';
+                            extensionEDT -> data.values as values, values.value = 'no';
+                        };
+                    }; 
+                };
+            };
+            //TNM-Klassifikation
+             observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation -> data.blockindex = 0;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2492';
+                    observation.note as note, note.text as text -> data.values as values, values.value = text;
+                };
+            };
+            //TNM-Klassifikation
+            //Date of assessment
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation -> data.blockindex = 1;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1378';
+                    observation.effectiveDateTime as effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
+                };
+            };
+            //Prafix
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.code as code where "code.coding.code = '59479-6'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1379';
+                            code -> data.values as values, values.value = 'r - Rezidiv';
+                        };
+                        component.code as code where "code.coding.code = '21983-2'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1379';
+                            code -> data.values as values, values.value = 'y - Zustand nach Therapie';
+                        };
+                    };
+                };
+            };
+            //Tumor (T)
+            //Größe und Ausdehnung des Tumors
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.code as code where "code.coding.code = '21905-5'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1380';
+                            component.valueCodeableConcept as vcc,
+                            vcc.coding  as coding,
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+            //prafix > 1, 0, id_2493
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.extension as extension then
+                        {
+                            extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'T-praefix slice'" then
+                            {
+                                observation -> data.blockindex = 1;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2493';
+                                valueCodeableConcept.coding as coding,
+                                coding.code as code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            //Suffix > 1, 0, id_2495
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.extension as extension then {
+                            extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'T-suffix slice'" then
+                            {
+                                observation -> data.blockindex = 1;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2495';
+                                valueCodeableConcept.coding as coding,
+                                coding.code as code -> data.values as values, values.value = code;
+                            };
+                        };
+
+                    };
+                };
+            };
+            //Lymphknoten (N)
+            //Größe und Ausdehnung des Tumors
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.code as code where "code.coding.code = '21906-3'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1381';
+                            component.valueCodeableConcept as vcc,
+                            vcc.coding  as coding,
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+            //prafix
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.extension as extension then
+                        {
+                            extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'N-praefix slice'" then
+                            {
+                                observation -> data.blockindex = 1;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2497';
+                                valueCodeableConcept.coding as coding,
+                                coding.code as code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            //Metastasen(M)
+            //Abwesenheit oder Vorhandensein von Metastasen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.code as code where "code.coding.code = '21907-1'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1382';
+                            component.valueCodeableConcept as vcc,
+                            vcc.coding  as coding,
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+            //Prafix
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.extension as extension then
+                        {
+                            extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'M-praefix slice'" then
+                            {
+                                observation -> data.blockindex = 1;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2498';
+                                valueCodeableConcept.coding as coding,
+                                coding.code as code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            //UICC-Stadium
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1383';
+                    observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code -> data.values as values, values.value = code;
+                };
+            };
+        };
+        
     };
 }

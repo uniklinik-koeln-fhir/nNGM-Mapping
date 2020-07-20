@@ -1,18 +1,18 @@
 /*
 TODO
- - How to differentiate the extensions for angaben
- - Review Biopsy id
  - TNM slices map by code.coding.code fill unique code
-
+ - TNM specimen
 */
 
 /// version = 0.1
 /// title = "TNMMap"
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMMap" = nNGM_Mapping_TNMCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMMap" = nNGM_Mapping_TNMMap
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+//uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
+
 
 
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
@@ -20,22 +20,21 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
 
     //Check if any fields are filled in before creating the observation
-    src -> bundle.entry as entry then CreateTransformObservation(src, entry);
+    src -> bundle.entry as entry then CreateTransformObservationTNM(src, entry);
+    src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen);
 }
 
-/*
-group TransformSpecimen(source: CTS_Transport, target tgt: Specimen)
+group TransformSpecimenTNM(source src: CTS_Transport, target tgt: Specimen)
 {
 
     src -> tgt.type as type, 
                         type.coding as coding, 
-                        coding.system = http://snomed.info/sct,
-                        coding.version = http://snomed.info/sct/900000000000207008, 
                         coding.code as code,
-                        code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+                        code.extension as dataAbsentReason, 
+                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                        dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
@@ -51,10 +50,10 @@ group TransformSpecimen(source: CTS_Transport, target tgt: Specimen)
         };
     };
 }
-*/
+
 
 /*checks if there is a need for a Condition resource*/
-group CreateTransformObservation(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateTransformObservationTNM(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
@@ -71,15 +70,14 @@ group CreateTransformObservation(source src: CTS_Transport, target tgt: Backbone
         or blockindex = 1 and groupindex = 0 and itemid = 'id_2497'
         or blockindex = 1 and groupindex = 0 and itemid = 'id_1382'
         or blockindex = 1 and groupindex = 0 and itemid = 'id_2498'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1383'
-        or blockindex = 3 and groupindex - 0 and itemid = 'id_1601'" then
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_1383'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservation(src, observation);
+            src -> tgt.resource = create('Observation') as observation then TransformObservationTNM(src, observation);
         };
     };
 }
 
-group TransformObservation(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium';
@@ -95,39 +93,39 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
 
     src.operations as operations, operations.data as data then
     {
-        //Erstdiagnose -> extension angaben
+        //Erstdiagnose -> extension tnmerstdiagnose
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1300'" then
         {
             values.value as erstdiagnose where "$this.value = 'yes'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/Angaben',
-                angaben.valueBoolean = true;
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose',
+                angaben.valueBoolean = cast(true, 'FHIR.boolean');
             };
 
             values.value as erstdiagnose where "$this.value = 'no'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/Angaben',
-                angaben.valueBoolean = false;
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose',
+                angaben.valueBoolean = cast(false, 'FHIR.boolean');
             };
         };
 
-        //Kurativ-operabel -> extension angaben
+        //Kurativ-operabel -> extension kurativoperabel
          data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1385'" then
         {
             values.value as erstdiagnose where "$this.value = 'yes'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/Angaben',
-                angaben.valueBoolean = true;
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel',
+                angaben.valueBoolean = cast(true, 'FHIR.boolean');
             };
 
             values.value as erstdiagnose where "$this.value = 'no'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/Angaben',
-                angaben.valueBoolean = false;
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel',
+                angaben.valueBoolean = cast(false, 'FHIR.boolean');
             };
         };
         

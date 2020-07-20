@@ -16,7 +16,30 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
     //Observation
     src.entry as entry then 
     {
-        entry.resource as observation where "resource is Observation" then
+
+        /* ------------------------------ Specimen ---------------------------- */
+        entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
+        {
+            //Biopsie-ID
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as biopsieID then
+                    {   
+                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
+                        {
+                            specimen -> data.blockindex = 3;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'id_1601';
+                            biopsieID -> data.values as values, values.value = bid;
+                        };
+                    };
+                };
+            };
+        };
+        
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium'" then
         {
             //Patient ID -> cts.patid
              observation -> tgt.operations as operations collate then
@@ -41,7 +64,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 {
                     observation.extension as extensionEDT then
                     {   
-                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Erstdiagnose'" then
+                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
@@ -49,7 +72,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                             extensionEDT -> data.values as values, values.value = 'yes';
                         };
                         
-                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/Erstdiagnose'" then
+                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
@@ -67,14 +90,14 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 {
                     observation.extension as extensionEDT then
                     {   
-                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/KurativOperabel'" then
+                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
                             observation -> data.itemid = 'id_1385';
                             extensionEDT -> data.values as values, values.value = 'yes';
                         };
-                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/KurativOperabel'" then
+                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
@@ -290,26 +313,4 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             };
         };
     };
-    
-    //Specimen
-        entry.resource as specimen where "resource is Specimen" then
-        {
-            //Biopsie-ID
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.identifier as biopsieID then
-                    {   
-                        biopsieID.value as bid then
-                        {
-                            specimen -> data.blockindex = 3;
-                            specimen -> data.groupindex = 0;
-                            specimen -> data.itemid = 'id_1601';
-                            biopsieID -> data.values as values, values.value = bid;
-                        };
-                    };
-                };
-            };
-        };
 }

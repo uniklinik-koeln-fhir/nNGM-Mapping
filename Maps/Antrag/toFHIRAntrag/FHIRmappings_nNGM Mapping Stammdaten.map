@@ -1,0 +1,143 @@
+/// version = 0.1
+/// title = "nNGM: Mapping Stammdaten FHIR"
+
+
+/* To Do 
+-Translate not working
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR" = nNGM_Mapping_StammdatenFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
+uses "http://hl7.org/fhir/StructureDefinition/Coverage" as target
+uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+
+group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+{   
+    //metadata
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';
+
+    //resources
+    src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatientStammdaten(src, patient);
+    src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverageStammdaten(src, coverage);
+    src -> bundle.entry as entry then CreateEpisodeOfCareStammdaten(src, entry);
+}
+
+
+/* ------------------------------ Patient ---------------------------- */
+
+group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
+
+    src.operations as operations, operations.data as data then
+    {
+        //Geschlecht
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'" then
+        {
+            values.value as value -> tgt.gender = translate(value, 'http://uk-koeln.de/fhir/ConceptMap/nngm/Geschlecht', 'code');
+        };
+
+        //Land
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1280'" then
+        {
+            values.value as country -> tgt.address as tgtAddress collate, tgtAddress.country = country;
+        };
+    };
+}
+
+
+/* ------------------------------ Coverage ---------------------------- */
+group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverage)
+{ 
+
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
+
+    //status = active
+    src -> tgt.status = cast('active', 'FHIR.code'); 
+    
+    //beneficiary, beneficiary.reference
+    src -> tgt.beneficiary as beneficiary,
+           beneficiary.reference as reference, 
+           reference.extension as dataAbsentReason,
+           dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+           dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+    
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2459'" then
+        {
+            //Typ -> type.text
+            values.value as typ -> tgt.type as type, type.text = typ;
+        };
+        
+    };
+}
+
+/* ------------------------------ Observation ---------------------------- */
+
+/*check if there is a EpisodeOfCare required*/
+group CreateEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1297'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_803'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_1139'" then
+        {
+            src -> tgt.resource = create('EpisodeOfCare') as episodeofcare then TransformEpisodeOfCareStammdaten(src, episodeofcare);
+        };
+    };
+}
+
+group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: EpisodeOfCare)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+
+    //status 
+    src -> tgt.status as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //subject
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    //status 
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        //Erstdiagnose -> extension erstdiagnose
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1297'" then
+        {
+            values.value as value -> tgt.extension as erstdiagnose, 
+            erstdiagnose.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmErstdiagnose',
+            erstdiagnose.valueDateTime = dateOp(value, 'dateTime');
+        };
+    
+    
+        //letzter Kontakt 
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_803'" then
+        {
+            values.value as value -> tgt.extension as letzterkontakt, 
+            letzterkontakt.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/abrechnungsinformation/letzterKontakt',
+            letzterkontakt.valueDateTime = dateOp(value, 'dateTime');
+        };
+ 
+        //NNGM status
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1139'" then
+        {
+            values.value as value -> tgt.status as status,
+                                     status.extension as nngmstatus, 
+                                     nngmstatus.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmStatus',
+                                     nngmstatus.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngmStatus', value);
+        };
+   };
+}
