@@ -1,0 +1,416 @@
+/// version = 0.1
+/// title = "nNGM: Mapping NGS Panel FHIR"
+
+/*
+TODO
+
+ORGANIZATION -> CDS FIELD: SOP-Versionsnummer des Standorts -> Mapping this to type.text is not correct. Its also a dropdown in the formular. Is there a Valueset out there
+                                                                to map this? 
+
+- Alllelic fraction, dont know correct code  
+- Add status and status extension to profile
+- Device profile: create nngm device type vs (01.0, 02.0)
+- component VS missing: gen
+- allelicfraction component change to quantity, add code
+- referenztranscript add code
+- ngspanel coverage add code
+- BiologischeMolekulareBewertung add code
+- add slice genomebuild, pos-start, pos-stop
+- 
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSPanelFHIR" = nNGM_Mapping_NGSPanelFHIR
+
+/* ------------------------------ Bundle ---------------------------- */
+group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+{
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';I 
+
+    src -> bundle.entry as entry then CreateSpecimenNGSPanel(src, entry);
+    src -> bundle.entry as entry then CreateOrganizationNGSPanel(src, entry);
+    src -> bundle.entry as entry then CreateObservationNGSPanel(src, entry);
+    src -> bundle.entry as entry then CreateDeviceNGSPanel(src, entry);
+}
+
+/* ------------------------------ Specimen ---------------------------- */
+group CreateSpecimenNGSPanel(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessmend_id'" then
+        {
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+        };
+    };
+}
+
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Patient reference
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    src.operations as operations, operations.data as data then 
+    {
+        //Biopsy-ID
+         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
+        };
+    };
+}
+
+
+/*-----------------Organization-----------------------*/
+group CreateOrganizationNGSPanel(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_2616'" then
+        {
+            src -> tgt.resource = create('Organization') as organization then TransformOrganization(src, organization);
+        };
+    };
+}
+
+group TransformOrganization(source src: CTS_Transport, target tgt: Organization) 
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site';
+
+    //Standort
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as value -> tgt.name = value;
+        };
+    };
+
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2616'" then
+        {
+            values.value as value -> tgt.type as type, type.text = value;
+        };
+    };
+}
+
+/*--------------NGS Panel Device------------------*/
+group CreateDeviceNGSPanel(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1260'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_2603'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_2604'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'ngs_panel_panel_detail'" then
+        {
+            src -> tgt.resource = create('Device') as device then TransformDevice(src, device);
+        };
+    };
+}
+
+group TransformDevice(source src: CTS_Transport, target tgt: Device)
+{
+     src.operations as operations, operations.data as data then
+    {
+        //NGS Lung panel version
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1260'" then
+        {
+            values.value as value -> tgt.version = create('BackboneElement') as version, version.value = value;
+        };
+
+        //NGS Sequencer
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2603'" then
+        {
+            values.value as value -> tgt.type = cc('http://hl7.org/fhir/ValueSet/nngm-device-typ', value);
+        };
+
+        //Hersteller
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2604'" then
+        {
+            values.value as value -> tgt.manufacturer = value;
+        };
+
+        //Panel Detail
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'ngs_panel_panel_detail'" then
+        {
+            values.value as value -> tgt.distinctIdentifier = value;
+        };
+    };
+}
+
+
+/*--------------NGS Panel Observation------------------*/
+group CreateObservationNGSPanel(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1159'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_35'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_36'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_37'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_38'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'ngs_panel_reftranscript'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'ngs_panel_coverage'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_47'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_48'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_41'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_42'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_43'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_44'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_45'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_46'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_39'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_40'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationNGSPanel(src, observation);
+        };
+    };
+}
+
+group TransformObservationNGSPanel(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'; 
+
+    //category
+    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/obs-methods', 'NGS Panel');
+
+    //subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    //methode
+    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C101293');
+
+
+    
+    
+    src.operations as operations, operations.data as data then
+    {
+
+        
+        //Status
+        src then MapObservationStatusNGSPanel(src, tgt);
+    
+        //Status extension
+        src then MapObservationAbschlussNGSPanel(src, tgt);
+
+        //Date of Assessment
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1160'" then
+        {
+            values.value as value -> tgt.effectiveDateTime = dateOp(value, 'dateTime');
+        };
+
+        //Gen
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1159'" then
+        {
+            values.value as gen -> tgt.component = create('BackboneElement') as gencomponent then
+            {
+                gen -> gencomponent.valueCodeableConcept = cc('http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc', gen);
+                gen -> gencomponent.code = cc('http://ncit.nci.nih.gov', 'C16612');
+            };
+        };  
+
+        //Exon
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_35'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueInteger = cast(hersteller, 'FHIR.integer');
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C13231');
+            };
+        };
+
+        //HGVS c.
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_36'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', '48004-6');
+            };
+        };
+
+        //HGVS p.
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_37'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', '48005-3');
+            };
+        };
+
+        //Allelic Fraction
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_38'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValueNGSPanel(hersteller, quantity);
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'AllelicFraction');
+            };
+        };
+
+        //Referenztranscript
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'ngs_panel_reftranscript'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'Referenztranscript');
+            };
+        };
+
+        //ngs_panel_coverage
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'ngs_panel_coverage'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'NGSPanelCoverage');
+            };
+        };
+        
+        //Biologische/molekulare Bewertung
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_47'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'BiologischeMolekulareBewertung');
+            };
+        };
+
+        //Komentar
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_48'" then
+        {
+            values.value as value -> tgt.note = create('BackboneElement') as annotation, annotation.text = value; //cast to markdown
+        };
+
+        //Genome build
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_41'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'GenomeBuild');
+            };
+        };
+
+        //Chromosome
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_42'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueInteger = cast(hersteller, 'FHIR.integer');
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C13202');
+            };
+        };
+
+        //Position Start
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_43'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueInteger = cast(hersteller, 'FHIR.integer');
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'PosStart');
+            };
+        };
+        //Position Stop
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_44'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueInteger = cast(hersteller, 'FHIR.integer');
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'PosStop');
+            };
+        };
+
+        //Ref allele (Nukleotid)
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_45'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', '69547-8');
+            };
+        };
+
+        //Alt allele (Nukleotid)
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_46'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueString = hersteller;
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', '69551-0');
+            };
+        };
+
+        //Reads Ref Allel
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_39'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueInteger = cast(hersteller, 'FHIR.integer');
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'ReadsRefAllel');
+            };
+        };
+
+        //Reads Alt Allel
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_40'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
+            {
+                hersteller -> herstellercomponent.valueInteger = cast(hersteller, 'FHIR.integer');
+                hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'ReadsAltAllel');
+            };
+        };
+        
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            values.value as value -> tgt.effectivePeriod = create('BackboneElement') as period, period.end = dateOp(value, 'dateTime');
+        };   
+    }; 
+}
+
+group MapObservationStatusNGSPanel(source src: CTS_Transport, target tgt: Observation)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2520'" then
+        {
+            values.value as value -> tgt.status;
+        };
+    };
+}
+
+group MapObservationAbschlussNGSPanel(source src: CTS_Transport, target tgt: Observation)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2462'" then
+        {
+            values.value as value -> tgt.status as status, status.extension as extension collate, extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss',
+                                                                                            extension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/statusAbschluss', value, value);
+        };
+    };
+}
+
+group MapPercentageValueNGSPanel(source src: string, target tgt: Quantity)
+{
+    src -> tgt.value = src,
+            tgt.system = 'http://unitsofmeasure.org',
+            tgt.unit = 'percentage',
+            tgt.code = '%';
+}
