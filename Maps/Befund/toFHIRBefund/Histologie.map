@@ -8,6 +8,10 @@
 
     OBSERVATION -> CDSS FIELD: ANTEIL AN SIEGELRINGZELLKARZINOMEN  -> "Anteil an Siegelringzellkarzinomen" has no code attached to the component.
 
+    Create Pathologie fall ID slice http://uk-koeln.de/fhir/NamingSystem/nNGM/pathologiefallid
+
+    
+
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR" = nNGM_Mapping_HistologieFHIR
@@ -30,7 +34,48 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 
     src -> bundle.entry as entry then CreateSpecimenHistologie(src, entry);
     src -> bundle.entry as entry then CreateObservationHistologie(src, entry);
+    src -> bundle.entry as entry then CreateEpisodeOfCareHistologie(src, entry);
+}
 
+/* ------------------------------ EpisodeOfCare ---------------------------- */
+
+/*check if there is a EpisodeOfCare required*/
+group CreateEpisodeOfCareHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            src -> tgt.resource = create('EpisodeOfCare') as episodeofcare then TransformEpisodeOfCareHistologie(src, episodeofcare);
+        };
+    };
+}
+
+group TransformEpisodeOfCareHistologie(source src: CTS_Transport, target tgt: EpisodeOfCare)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+
+    //status 
+    src -> tgt.status as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //subject
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    //status 
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        //Untersuchungs-ID
+         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as value -> tgt.identifier = create('Identifier') as untersuchungsid, untersuchungsid.system = cast('http://uk-koeln.de/fhir/NamingSystem/nNGM/fallnummer', 'FHIR.uri'), untersuchungsid.value = value;
+        };
+    };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
@@ -57,7 +102,7 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
     src.operations as operations, operations.data as data then 
     {
         //Biopsy-ID
-         data.values as values where "blockindex =5 and groupindex = 0 and itemid = 'assessment_id'" then
+         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
         {
             values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
         };
@@ -66,7 +111,7 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
         {
             values.value as value -> tgt.identifier as identifier, identifier.value = value, 
-                                                                    identifier.system = cast('http://uk-koeln.de/fhir/NamingSystem/nNGM/fallnummer', 'FHIR.uri');
+                                                                    identifier.system = cast('http://uk-koeln.de/fhir/NamingSystem/nNGM/pathologiefallid', 'FHIR.uri');
         };
 
         //Eingang des Tumormaterials in der Pathologie
