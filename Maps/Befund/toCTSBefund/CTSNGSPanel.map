@@ -1,0 +1,521 @@
+/// version = 0.1
+/// title = "nNGM: Mapping NGS Panel CTS"
+
+/*
+TODO
+
+
+
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSPanelCTS" = nNGM_Mapping_NGSPanelCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
+{
+    src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    src -> tgt.operations as operations collate, operations.crfid = 'NP';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+
+    src.entry as entry then
+    {
+        /*---------------EpisodeOfCare----------------*/
+        entry.resource as episodeofcare where "resource is EpisodeOfCare" then
+        {
+            //Untersuchung-ID
+            episodeofcare -> tgt.operations as operations collate then
+            {
+                episodeofcare -> operations.data as data then
+                {
+                    episodeofcare.identifier as identifier, identifier.value as value then
+                    {   
+                        episodeofcare -> data.blockindex = 1;
+                        episodeofcare -> data.groupindex = 0;
+                        episodeofcare -> data.itemid = 'assessment_id';
+                        value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+        };
+
+        /*---------------Organization----------------*/
+         entry.resource as organization where "resource is Organization" then
+        {
+            //Standort
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then
+                {
+                    organization.name as name then
+                    {   
+                        organization -> data.blockindex = 0;
+                        organization -> data.groupindex = 0;
+                        organization -> data.itemid = 'id_2435';
+                        name -> data.values as values, values.value = name;
+                    };
+                };
+            };
+
+            //SOP-Versionsnummer des Standorts
+            organization -> tgt.operations as operations collate then
+            {
+                organization -> operations.data as data then
+                {
+                    organization.type as type then
+                    {   
+                        organization -> data.blockindex = 0;
+                        organization -> data.groupindex = 0;
+                        organization -> data.itemid = 'id_2617';
+                        type.text as text -> data.values as values, values.value = text;
+                    };
+                };
+            };
+        };
+
+        /*---------------Specimen----------------*/
+        entry.resource as specimen where "resource is Specimen" then
+        {
+            
+            //Biopsie-ID
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/biopsienummer'" then
+                    {   
+                        specimen -> data.blockindex = 0;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'id_1601';
+                        value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+        };
+
+         /*---------------Device----------------*/
+        entry.resource as device where "resource is Device" then
+        {
+            
+            //Lung panel version
+            device -> tgt.operations as operations collate then
+            {
+                device -> operations.data as data then
+                {
+                    device.version as version then
+                    {   
+                        device -> data.blockindex = 3;
+                        device -> data.groupindex = 0;
+                        device -> data.itemid = 'id_1260';
+                        version.value as value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+
+            //Sequencer
+            device -> tgt.operations as operations collate then
+            {
+                device -> operations.data as data then
+                {
+                    device.type as type, type.coding as coding where "coding.system = 'http://hl7.org/fhir/ValueSet/nngm-device-typ'" then
+                    {   
+                        device -> data.blockindex = 3;
+                        device -> data.groupindex = 0;
+                        device -> data.itemid = 'id_2603';
+                        coding.code as value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+            
+            //Hersteller
+            device -> tgt.operations as operations collate then
+            {
+                device -> operations.data as data then
+                {
+                    device.manufacturer as version then
+                    {   
+                        device -> data.blockindex = 3;
+                        device -> data.groupindex = 0;
+                        device -> data.itemid = 'id_2604';
+                        version.value as value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+
+            //Panel Detail
+            device -> tgt.operations as operations collate then
+            {
+                device -> operations.data as data then
+                {
+                    device.distinctIdentifier as version then
+                    {   
+                        device -> data.blockindex = 3;
+                        device -> data.groupindex = 0;
+                        device -> data.itemid = 'ngs_panel_panel_detail';
+                        version.value as value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+        };
+            
+     /*---------------Observation----------------*/
+
+        entry.resource as observation where "resource is Observation" then
+        {
+            
+            //Gen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = 'C16612' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_1159';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Exon
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'C13231' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_35';
+                            integer -> data.values as values, values.value = integer;
+                        };
+                    };
+                };
+            };
+
+            //HGVS c.
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueCodeableConcept as cc where "code.coding.code = '48004-6' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_36';
+                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //HGVS p.
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueString as string where "code.coding.code = '48005-3' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_37';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Allelic fraction
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueQuantity as quantity where "code.coding.code = 'AllelicFraction' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_38';
+                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                        };
+                    };
+                };
+            };
+
+            //Referenztranskript
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueString as string where "code.coding.code = 'Referenztranscript' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'ngs_panel_reftranscript';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Coverage
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueString as string where "code.coding.code = 'NGSPanelCoverage' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'ngs_panel_reftranscript';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Biologische/molekulare Bewertung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueString as string where "code.coding.code = 'BiologischeMolekulareBewertung' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_47';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Kommentar
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.note as note then
+                    {   
+                        observation -> data.blockindex = 4;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_48';
+                        note.text as value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+
+            //Genome build
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueString as string where "code.coding.code = 'GenomeBuild' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_41';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Chromosom
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as string where "code.coding.code = 'C13202' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_42';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Position Start
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'PosStart' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_43';
+                            integer.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+            
+            //Position Stop
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'PosStop' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_44';
+                            integer.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+            
+            //Ref allele
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueString as string where "code.coding.code = '69547-8' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_45';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+            
+            //Alt allele
+           observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueString as string where "code.coding.code = '69551-0' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_46';
+                            string.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //reads ref allele
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'ReadsRefAllel' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_39';
+                            integer.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //reads alt allele
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {   
+                        component.valueInteger as integer where "code.coding.code = 'ReadsAltAllel' and code.coding.system = 'http://ncit.nci.nih.gov'" then
+                        {
+                            observation -> data.blockindex = 4;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_40';
+                            integer.value as value -> data.values as values, values.value = value;
+                        };
+                    };
+                };
+            };
+
+            //Durchführung
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2520').exists().not()" then
+                    {
+                        observation -> data.blockindex = 5;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2520';
+                        status.value as value -> data.values as values, values.value = value;
+                    };
+                };
+            };
+
+            //Abschluss
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2462').exists().not()" then
+                    {
+                        observation -> data.blockindex = 5;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2462';
+                        status.extension as extension then
+                        {
+                            extension.valueCodeableConcept as cc, cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Datum des Abschlusses
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2521').exists().not()" then
+                    {
+                        observation -> data.blockindex = 5;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2521';
+                        effectiveperiod.end as abschlussdatum -> data.values as values, values.value = abschlussdatum;
+                    };
+                };
+            };
+        };
+    };
+}
