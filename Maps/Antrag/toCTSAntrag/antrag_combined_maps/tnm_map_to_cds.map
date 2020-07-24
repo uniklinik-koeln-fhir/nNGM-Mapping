@@ -1,0 +1,276 @@
+/// version = 0.1
+/// title = "nNGM: nNGM_Mapping_TNMCTS - FHIR to CTS"
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS" = nNGM_Mapping_TNMCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
+{
+    src -> tgt.type = 'save';
+    src -> tgt.crfid = '1-TNM';
+
+    src.entry as entry then
+    {
+        /* ------------------------------ Specimen ---------------------------- */
+        entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
+        {
+            //Biopsie-ID
+            specimen -> tgt.data as data then
+            {
+                specimen.identifier as biopsieID then
+                {   
+                    biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
+                    {
+                        specimen -> data.blockindex = 3;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'id_1601';
+                        biopsieID -> data.values as values, values.value = bid;
+                    };
+                };
+            };
+        };
+        
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium'" then
+        {
+            /*//Patient ID -> cts.patid
+            observation -> tgt.data as data then
+            {
+                observation.subject as subject then
+                {   
+                    subject.reference as patient then
+                    {
+                        patient -> tgt.patid = evaluate(patient, '$this.split(\'\/\').last()');
+                    };
+                };
+            };*/
+
+            //Erstdiagnose
+            observation -> tgt.data as data then
+            {
+                observation.extension as extensionEDT then
+                {   
+                    extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
+                    {
+                        observation -> data.blockindex = 0;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1300';
+                        extensionEDT -> data.values as values, values.value = 'yes';
+                    };
+                    
+                    extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
+                    {
+                        observation -> data.blockindex = 0;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1300';
+                        extensionEDT -> data.values as values, values.value = 'no';
+                    };
+                }; 
+            };
+
+            //Kurativ-operabel
+            observation -> tgt.data as data then
+            {
+                observation.extension as extensionEDT then
+                {   
+                    extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
+                    {
+                        observation -> data.blockindex = 0;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1385';
+                        extensionEDT -> data.values as values, values.value = 'yes';
+                    };
+                    extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
+                    {
+                        observation -> data.blockindex = 0;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1385';
+                        extensionEDT -> data.values as values, values.value = 'no';
+                    };
+                }; 
+            };
+
+            //TNM-Klassifikation
+            observation -> tgt.data as data then
+            {
+                observation -> data.blockindex = 0;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2492';
+                observation.note as note, note.text as text -> data.values as values, values.value = text;
+            };
+
+            //TNM-Klassifikation
+            //Date of assessment
+            observation -> tgt.data as data then
+            {
+                observation -> data.blockindex = 1;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1378';
+                observation.effectiveDateTime as effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
+            };
+
+            //Prafix
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.code as code where "code.coding.code = '59479-6'" then
+                    {
+                        observation -> data.blockindex = 1;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1379';
+                        code -> data.values as values, values.value = 'r - Rezidiv';
+                    };
+                    component.code as code where "code.coding.code = '21983-2'" then
+                    {
+                        observation -> data.blockindex = 1;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1379';
+                        code -> data.values as values, values.value = 'y - Zustand nach Therapie';
+                    };
+                };
+            };
+
+            //Tumor (T)
+            //Größe und Ausdehnung des Tumors
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.code as code where "code.coding.code = '21905-5'" then
+                    {
+                        observation -> data.blockindex = 1;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1380';
+                        component.valueCodeableConcept as vcc,
+                        vcc.coding  as coding,
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //prafix > 1, 0, id_2493
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.extension as extension then
+                    {
+                        extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'T-praefix slice'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2493';
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Suffix > 1, 0, id_2495
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.extension as extension then {
+                        extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'T-suffix slice'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2495';
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Lymphknoten (N)
+            //Größe und Ausdehnung des Tumors
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.code as code where "code.coding.code = '21906-3'" then
+                    {
+                        observation -> data.blockindex = 1;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1381';
+                        component.valueCodeableConcept as vcc,
+                        vcc.coding  as coding,
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //prafix
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.extension as extension then
+                    {
+                        extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'N-praefix slice'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2497';
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //Metastasen(M)
+            //Abwesenheit oder Vorhandensein von Metastasen
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.code as code where "code.coding.code = '21907-1'" then
+                    {
+                        observation -> data.blockindex = 1;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_1382';
+                        component.valueCodeableConcept as vcc,
+                        vcc.coding  as coding,
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            //Prafix
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.extension as extension then
+                    {
+                        extension.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.text = 'M-praefix slice'" then
+                        {
+                            observation -> data.blockindex = 1;
+                            observation -> data.groupindex = 0;
+                            observation -> data.itemid = 'id_2498';
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            //UICC-Stadium
+            observation -> tgt.data as data then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1383';
+                observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code -> data.values as values, values.value = code;
+            };
+        };   
+    };
+}
