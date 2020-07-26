@@ -1,0 +1,41 @@
+/// version = 0.1
+/// title = "nNGM: Mapping Immunhistochemie CTS"
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCTS" = nNGM_Mapping_ImmunhistochemieCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
+{
+    src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    src -> tgt.operations as operations collate, operations.crfid = '*-IHC1';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+
+     src.entry as entry then
+    {
+        //Episode Of Care
+        entry.resource as specimen where "resource is EpisodeOfCare" then
+        {
+            //Biopsie-ID
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as biopsieID then
+                    {   
+                        biopsieID.value as bid then
+                        {
+                            specimen -> data.blockindex = 1;
+                            specimen -> data.groupindex = 0;
+                            specimen -> data.itemid = 'assessment_id';
+                            biopsieID -> data.values as values, values.value = bid;
+                        };
+                    };
+                };
+            };
+        };
+    }
+}
