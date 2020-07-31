@@ -41,9 +41,6 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
      src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
      src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
 
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligungTumorboard1(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligungTumorboard2(src, consent);
-
      src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1a(src, consent);
      src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1b(src, consent);
      src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung2(src, consent);
@@ -142,7 +139,7 @@ group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Org
         //Standort
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
         {
-            values.value as standort -> tgt.identifier = create('Identifier') as identifier, identifier.system = 'http://fhir.de/NamingSystem/asv/teamnummer', identifier.value = standort;
+            values.value as standort -> tgt.identifier = create('Identifier') as identifier, identifier.system = 'http://healex.systems/fhir/NamingSystem/nNGMnetzwerkzentrumid', identifier.value = standort;
         };
 
         //Kontakt
@@ -260,6 +257,46 @@ group TransformServiceRequestTumorboard(source src: CTS_Transport, target tgt: S
                                     aufenthaltsart.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
             };
         };
+       
+        //vorstellung tumorboard
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296'" then
+        {
+            values.value as vorstellung where "$this.value = 'yes'" then
+            {
+                values.value as vorstellung -> tgt.requester as requester,
+                                               requester.extension as vorstellung collate,
+                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
+                                               requester.valueBoolean = cast('permit', 'FHIR.code');
+            };
+
+            values.value as vorstellung where "$this.value = 'no'" then
+            {
+                values.value as vorstellung -> tgt.requester as requester,
+                                               requester.extension as vorstellung collate,
+                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
+                                               requester.valueBoolean = cast('deny', 'FHIR.code');
+            };
+        };
+
+        //vorstellung telefonkonferenz
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
+        {
+            values.value as vorstellung where "$this.value = 'yes'" then
+            {
+                values.value as vorstellung -> tgt.requester as requester,
+                                               requester.extension as vorstellung collate,
+                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
+                                               requester.valueBoolean = cast('permit', 'FHIR.code');
+            };
+
+            values.value as vorstellung where "$this.value = 'no'" then
+            {
+                values.value as vorstellung -> tgt.requester as requester,
+                                               requester.extension as vorstellung collate,
+                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
+                                               requester.valueBoolean = cast('deny', 'FHIR.code');
+            };
+        };
     };
 }
 
@@ -282,12 +319,27 @@ group TransformCoverage(source src: CTS_Transport, target tgt: Coverage)
     
     src.operations as operations, operations.data as data then
     {
+        //Krankenkasse
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'" then
         {
-            //Typ -> type.text
-            values.value as typ -> tgt.type as type, type.text = typ;
+            
+            values.value as kkasse -> tgt.payor as payor, payor.display = kkasse;
         };
         
+        //Typ   
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1269'" then
+        {
+            
+            values.value as typ -> tgt.type = cc('http://fhir.de/ValueSet/versicherungsart-de-basis', typ);
+        };
+
+        //kooperationsvereinbarung
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2460'" then
+        {
+            values.value as value -> tgt.extension as koop, 
+                                     koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung'
+                                     koop.valueBoolean = cast(value, 'FHIR.boolean');
+        };
 
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1333'" then
         {
@@ -296,7 +348,7 @@ group TransformCoverage(source src: CTS_Transport, target tgt: Coverage)
                                                         payor.extension as abrechnungsinformationen,
                                                         abrechnungsinformationen.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/abrechnungsinformation',
                                                         abrechnungsinformationen.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/abrechnungsinformation', Abrechnungsinformationen);
-        };
+        };    
     };
 }
 
@@ -558,7 +610,7 @@ group TransformObservationSmoking(source src: CTS_Transport, target tgt: Observa
                                                             nr.code as code,
                                                             code.text = 'Nichtraucher Seit',
                                                             code.coding = c('http://loinc.org', '63630-8'), 
-                                                            nr.valueDateTime = dateOp(nichtraucher, 'date');
+                                                            nr.valueDateTime = cast(nichtraucher, 'date');
         };
 
     };
@@ -638,7 +690,7 @@ group TransformConsentTeilnahme(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision, 
                                              provision.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'teilnahmeerklarung';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'TE');
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -646,17 +698,14 @@ group TransformConsentTeilnahme(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision, 
                                              provision.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'teilnahmeerklarung';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'TE');
             };
         };
 
         //teilnahme datum -> provision.type.period.standort
          data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2393'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     }; 
 }
@@ -684,7 +733,7 @@ group TransformConsentDatenschutz(source src: CTS_Transport, target tgt: Consent
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision, 
                                              provision.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin',  policy.uri = 'datenschutzerklarung';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'DS');
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -692,145 +741,18 @@ group TransformConsentDatenschutz(source src: CTS_Transport, target tgt: Consent
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision, 
                                              provision.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'datenschutzerklarung';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'DS');
             };
         };
 
         //datenschutz datum -> provision.type.period.standort
          data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2390'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     }; 
 }
 
-group TransformConsentDatenschutz(source src: CTS_Transport, target tgt: Consent)
-{
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-datenschutz');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
-    src.operations as operations, operations.data as data then
-    {
-        //datenschutz unterschrieben -> provision.type
-        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2389'" then
-        {
-            values.value as signature where "$this.value = 'yes'" then
-            {
-                values.value as signature -> tgt.provision = create('BackboneElement') as provision, 
-                                             provision.type = cast('permit', 'FHIR.code');
-
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin',  policy.uri = 'datenschutzerklarung';
-            };
-
-            values.value as signature where "$this.value = 'no'" then
-            {
-                values.value as signature -> tgt.provision = create('BackboneElement') as provision, 
-                                             provision.type = cast('deny', 'FHIR.code');
-
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'datenschutzerklarung';
-            };
-        };
-
-        //datenschutz datum -> provision.type.period.standort
-         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2390'" then
-         {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
-         };
-    }; 
-}
-
-group TransformConsentEinwilligungTumorboard1(source src: CTS_Transport, target tgt: Consent)
-{
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
-    src.operations as operations, operations.data as data then
-    {
-        //vorstellung -> provision.type
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296'" then
-        {
-            values.value as signature where "$this.value = 'yes'" then
-            {
-                values.value as signature -> tgt.provision = create('BackboneElement') as provision , 
-                                             provision.type = cast('permit', 'FHIR.code');
-                                             
-                src -> tgt.policy = create('BackboneElement') as policy, 
-                                            policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Vorstellung des Falls im Tumorboard des nNGM (nNGM-Zentrum der Anforderung)';
-                                             
-            };
-
-            values.value as signature where "$this.value = 'no'" then
-            {
-                values.value as signature -> tgt.provision = create('BackboneElement') as provision , 
-                                             provision.type = cast('deny', 'FHIR.code');
-
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Vorstellung des Falls im Tumorboard des nNGM (nNGM-Zentrum der Anforderung)';                             
-            };
-        };
-    };
-}
-
-group TransformConsentEinwilligungTumorboard2(source src: CTS_Transport, target tgt: Consent)
-{
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
-    src.operations as operations, operations.data as data then
-    {
-        //vorstellung -> provision.type
-         //Telefonkonferenz -> provision.type
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
-        {
-            values.value as signature where "$this.value = 'yes'" then
-            {
-                values.value as signature -> tgt.provision = create('BackboneElement') as provision , 
-                                             provision.type = cast('permit', 'FHIR.code');
-                                             
-                src -> tgt.policy = create('BackboneElement') as policy, 
-                                            policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Tumorboard personlich oder per Telefonkonferenz';
-                                             
-            };
-
-            values.value as signature where "$this.value = 'no'" then
-            {
-                values.value as signature -> tgt.provision = create('BackboneElement') as provision , 
-                                             provision.type = cast('deny', 'FHIR.code');
-
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Tumorboard personlich oder per Telefonkonferenz';
-            };
-        };
-    };
-}
 
 group TransformConsentEinwilligung1a(source src: CTS_Transport, target tgt: Consent)
 {
@@ -855,9 +777,7 @@ group TransformConsentEinwilligung1a(source src: CTS_Transport, target tgt: Cons
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision collate, 
                                              provision.type = cast('permit', 'FHIR.code');
                                              
-                src -> tgt.policy = create('BackboneElement') as policy, 
-                                            policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = '1a unterschrieben';
-                                             
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -865,17 +785,14 @@ group TransformConsentEinwilligung1a(source src: CTS_Transport, target tgt: Cons
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision collate, 
                                              provision.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = '1a unterschrieben';                             
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
             };
         };
 
         //1a datum -> provision.type.period.standort
          data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2441'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -903,7 +820,7 @@ group TransformConsentEinwilligung1b(source src: CTS_Transport, target tgt: Cons
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = '1b unterschrieben'; 
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -911,17 +828,14 @@ group TransformConsentEinwilligung1b(source src: CTS_Transport, target tgt: Cons
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = '1b unterschrieben'; 
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
             };
         };
 
         //1b datum -> provision.type.period.standort
          data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2447'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -948,7 +862,7 @@ group TransformConsentEinwilligung2(source src: CTS_Transport, target tgt: Conse
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = '2 unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '2');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -956,17 +870,14 @@ group TransformConsentEinwilligung2(source src: CTS_Transport, target tgt: Conse
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = '2 unterschrieben';                
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '2');                 
             };
         };
 
         //2 datum -> provision.type.period.standort
          data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2450'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
         };
     };
 }
@@ -993,7 +904,7 @@ group TransformConsentVersorgung1(source src: CTS_Transport, target tgt: Consent
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Molekularpathologische Diagnostik im nNGM (Behandlungskontext)';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'MD');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1001,16 +912,13 @@ group TransformConsentVersorgung1(source src: CTS_Transport, target tgt: Consent
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Molekularpathologische Diagnostik im nNGM (Behandlungskontext)';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'MD');                 
             };
         };
 
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2352'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1037,7 +945,7 @@ group TransformConsentVersorgung2(source src: CTS_Transport, target tgt: Consent
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Uberregionale Beratung und Studiensuche im nNGM (Behandlungskontext)'; 
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'ST');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1045,16 +953,13 @@ group TransformConsentVersorgung2(source src: CTS_Transport, target tgt: Consent
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Uberregionale Beratung und Studiensuche im nNGM (Behandlungskontext)'; 
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'ST');                 
             };
         };
 
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2358'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1082,7 +987,7 @@ group TransformConsentForschung1(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner'; 
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WPI');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1090,17 +995,14 @@ group TransformConsentForschung1(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WPI');                 
             };
         };
 
         //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2362'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1128,7 +1030,7 @@ group TransformConsentForschung2(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WP');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1136,17 +1038,14 @@ group TransformConsentForschung2(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WP');                 
             };
         };
 
         //Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2365'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1174,7 +1073,7 @@ group TransformConsentForschung3(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WD');                 
                
             };
 
@@ -1183,17 +1082,14 @@ group TransformConsentForschung3(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WD');                 
             };
         };
 
         //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2368'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1221,7 +1117,7 @@ group TransformConsentForschung4(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe von MDAT und Resttumorproben in ein Drittland unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WR');                 
                
             };
 
@@ -1230,17 +1126,14 @@ group TransformConsentForschung4(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe von MDAT und Resttumorproben in ein Drittland unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WR');                 
             };
         };
 
         //Weitergabe von MDAT und Resttumorproben in ein Drittland datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2371'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1268,7 +1161,7 @@ group TransformConsentForschung5(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WPK');                 
                
             };
 
@@ -1277,17 +1170,14 @@ group TransformConsentForschung5(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WPK');                 
             };
         };
 
         //Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung datum-> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2374'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1315,7 +1205,7 @@ group TransformConsentForschung6(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WK');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1323,17 +1213,14 @@ group TransformConsentForschung6(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WK');                 
             };
         };
 
         //Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2377'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1361,7 +1248,7 @@ group TransformConsentForschung7(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeiptunkt zur Gewinnung weiterer informationen uber den Behandlungsverlauf unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'KW');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1369,17 +1256,14 @@ group TransformConsentForschung7(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeiptunkt zur Gewinnung weiterer informationen uber den Behandlungsverlauf unterschrieben';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'KW');                 
             };
         };
 
         //Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeiptunkt zur Gewinnung weiterer informationen uber den Behandlungsverlauf unterschrieben Datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2383'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dDateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1407,7 +1291,7 @@ group TransformConsentForschung8(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Kontaktaufnahme des nNGM-Zentrums zum Zweck des Einschlusses in eine mogliche infrage kommende neue Studie';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WK');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1415,17 +1299,14 @@ group TransformConsentForschung8(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policy = create('BackboneElement') as policy, policy.authority = 'nationales Netzwerk Genomische Medizin', policy.uri = 'Kontaktaufnahme des nNGM-Zentrums zum Zweck des Einschlusses in eine mogliche infrage kommende neue Studie';
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WK');                 
             };
         };
 
         //Kontaktaufnahme des nNGM-Zentrums zum Zweck des Einschlusses in eine mogliche infrage kommende neue Studie datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2380'" then
          {
-            values.value as datum -> tgt.policy as policy collate,
-                                     policy.extension as date, 
-                                     date.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/policysigndate', 
-                                     date.valueDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }

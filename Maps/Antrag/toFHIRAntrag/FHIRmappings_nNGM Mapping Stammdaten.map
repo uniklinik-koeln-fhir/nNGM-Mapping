@@ -3,7 +3,8 @@
 
 
 /* To Do 
--Translate not working
+Standardtariff
+kooperationsvereinbarung string -> boolean
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR" = nNGM_Mapping_StammdatenFHIR
@@ -36,17 +37,48 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
 
     src.operations as operations, operations.data as data then
     {
-        //Geschlecht
+        //Gender
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'" then
         {
-            values.value as value -> tgt.gender = translate(value, 'http://uk-koeln.de/fhir/ConceptMap/nngm/Geschlecht', 'code');
+            values.value as value where "$this = 'weiblich'" then
+            {
+                values.value as value -> tgt.gender = cc('http://hl7.org/fhir/ValueSet/administrative-gender', 'female');
+            };
+
+            values.value as value where "$this = 'männlich'" then
+            {
+                values.value as value -> tgt.gender = cc('http://hl7.org/fhir/ValueSet/administrative-gender', 'male');
+            };
+
+            values.value as value where "$this = 'divers'" then
+            {
+                values.value as value -> tgt.gender as gender, 
+                                         gender.extension as other, 
+                                         other.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de', 
+                                         other.valueCodeableConcept = cc('http://fhir.de/ValueSet/gender-amtlich-de', 'X');
+            };
         };
 
-        //Land
+
+        //Country
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1280'" then
         {
-            values.value as country -> tgt.address as tgtAddress collate, tgtAddress.country = country;
+            values.value as country -> tgt.address as tgtAddress, tgtAddress.country = country;
         };
+
+        //deceasedDateTime
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1298'" then
+        {
+            values.value as ddt -> tgt.deceasedDateTime = dateOp(ddt, 'dateTime');
+        };
+
+        //informationsquelleTod
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2436'" then
+        {
+            values.value as value -> tgt.extension as infoq, 
+                                       infoq.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/izt',
+                                       infoq.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/izt', value);
+        }; 
     };
 }
 
@@ -70,12 +102,30 @@ group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverag
     
     src.operations as operations, operations.data as data then
     {
+        //Krankenkasse
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2459'" then
         {
-            //Typ -> type.text
-            values.value as typ -> tgt.type as type, type.text = typ;
+            values.value as value -> tgt.payor as payor, payor.display = value;
         };
+
+        //Typ   
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1269'" then
+        {
+            
+            values.value as type -> tgt.type = cc('http://fhir.de/ValueSet/versicherungsart-de-basis', type);
+        };
+
+         //Tarriff   
         
+        /*
+        //kooperationsvereinbarung
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2460'" then
+        {
+            values.value as value -> tgt.extension as koop, 
+                                     koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
+                                     koop.valueBoolean = cast(value, 'FHIR.boolean');
+        };
+        */
     };
 }
 
