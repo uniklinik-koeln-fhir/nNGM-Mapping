@@ -1,0 +1,380 @@
+/// version = 0.1
+/// title = "nNGM: Mapping Resistenztestung FHIR"
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR" = nNGM_Mapping_ResistenztestungFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Condition" as target
+uses "http://hl7.org/fhir/StructureDefinition/MedicationStatement" as target
+uses "http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/egfrPrimaermutation" as target
+
+group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+{
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';
+
+    src -> bundle.entry as entry, 
+           entry.resource = create('Condition') as condition 
+           then TransformCondition(src, condition);
+
+    src -> bundle.entry as entry, 
+           entry.resource = create('Observation') as observation 
+           then TransformObservation(src, observation);
+    
+    src -> bundle.entry as entry then TransformMedicationStatementEGFRTKI1(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementEGFRTKI2(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementEGFRTKI3(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementEGFRTKI4(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementALKTKI1(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementALKTKI2(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementALKTKI3(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementALKTKI4(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementROS1TKO1(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementROS1TKO2(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementROS1TKO3(src, entry);
+    src -> bundle.entry as entry then TransformMedicationStatementROS1TKO4(src, entry);
+}
+
+/* ------------------------------ Condition ---------------------------- */
+group TransformCondition(source src: CTS_Transport, target tgt: Condition)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Condition/nNGM'; 
+
+    //patient referenze
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    //data absend
+    src -> tgt.code as code, code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //verificationStatus -> fixedValue "confirmed"
+    src -> tgt.verificationStatus as verificationStatus, verificationStatus.text = 'confirmed';
+
+    src.operations as operations, operations.data as data then
+    {
+        //Rezidiv/Progress Ja/Nein-> clinicalStatus Recurrence/relapse
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1573'" then 
+        {
+           values.value as yes where "value ='yes'" -> tgt.clinicalStatus = cc('http://hl7.org/fhir/ValueSet/condition-clinical', 'recurrence');
+           values.value as no where "value ='no'" -> tgt.clinicalStatus = cc('http://hl7.org/fhir/ValueSet/condition-clinical', 'relapse');
+        };
+
+         //Date of Assessment -> recordedDate
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2397'" then
+        {
+           values.value as dateofassessment -> tgt.recordedDate = dateOp(dateofassessment, 'dateTime');
+        }; 
+    };
+}
+
+/* ------------------------------ Observation ---------------------------- */
+group TransformObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/egfrPrimaermutation'; 
+
+    //patient referenze
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    //data absend
+    src -> tgt.category as category, category.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    src -> tgt.code as code, code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    src -> tgt.encounter as encounter, encounter.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //status -> fixedvalue "final"
+    src -> tgt.status = cast('final', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        //exon
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1436'" then
+        {
+            values.value as exontherapy -> tgt.component = create('BackboneElement') as exon then
+            {
+                exon -> exon.valueString = exontherapy;
+                exon -> exon.code as code, code.coding as coding, coding.system = cast('http://uk-koeln.de/fhir/CodeSystem/nngm/molpatho-components', 'FHIR.uri');
+                exon -> exon.code as code, code.coding as coding, coding.code = cast('exon', 'FHIR.code');
+            };
+        };
+
+        //c
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1437'" then
+        {
+            values.value as ctherapy -> tgt.component = create('BackboneElement') as c then
+            {
+                c -> c.valueString = ctherapy;
+                c -> c.code as code, code.coding as coding, coding.system = cast('http://uk-koeln.de/fhir/CodeSystem/nngm/molpatho-components', 'FHIR.uri');
+                c -> c.code as code, code.coding as coding, coding.code = cast('c', 'FHIR.code');
+            };
+        };
+
+        //p
+         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1438'" then
+        {
+            values.value as ptherapy -> tgt.component = create('BackboneElement') as p then
+            {
+                p -> p.valueString = ptherapy;
+                p -> p.code as code, code.coding as coding, coding.system = cast('http://uk-koeln.de/fhir/CodeSystem/nngm/molpatho-components', 'FHIR.uri');
+                p -> p.code as code, code.coding as coding, coding.code = cast('p', 'FHIR.code');
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementEGFRTKI1 ---------------------------- */
+group TransformMedicationStatementEGFRTKI1(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1441'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementEGFRTKI2 ---------------------------- */
+group TransformMedicationStatementEGFRTKI2(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1442'" then
+        {
+             values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementEGFRTKI3 ---------------------------- */
+group TransformMedicationStatementEGFRTKI3(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1443'" then
+        {
+             values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementEGFRTKI4 ---------------------------- */
+group TransformMedicationStatementEGFRTKI4(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1444'" then
+        {
+             values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementALKTKI1 ---------------------------- */
+group TransformMedicationStatementALKTKI1(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1447'" then
+        {
+             values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddALKTIFusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementALKTKI2 ---------------------------- */
+group TransformMedicationStatementALKTKI2(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1448'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddALKTIFusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementALKTKI3 ---------------------------- */
+group TransformMedicationStatementALKTKI3(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1449'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddALKTIFusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementALKTKI4 ---------------------------- */
+group TransformMedicationStatementALKTKI4(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1450'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddALKTIFusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementROS1TKO1 ---------------------------- */
+group TransformMedicationStatementROS1TKO1(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1453'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddROS1FusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementROS1TKO2 ---------------------------- */
+group TransformMedicationStatementROS1TKO2(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1454'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddROS1FusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementROS1TKO3 ---------------------------- */
+group TransformMedicationStatementROS1TKO3(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1455'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddROS1FusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+/* ------------------------------ MedicationStatementROS1TKO4 ---------------------------- */
+group TransformMedicationStatementROS1TKO4(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1456'" then
+        {
+            values -> tgt.resource = create('MedicationStatement') as medicationstatement then
+            {
+                values.value as value -> medicationstatement.medicationCodeableConcept as concept, concept.text = value;
+                values.value as value then AddPatientReferenceAndDataAbsendReason(src, medicationstatement);
+                values.value as value then AddROS1FusionsPartner(src, medicationstatement);
+                values.value as value then AddDateAsserted(src, medicationstatement);
+            };
+        };
+    };
+}
+
+group AddPatientReferenceAndDataAbsendReason(source src: CTS_Transport, target tgt: MedicationStatement)
+{
+    //patient referenze
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    //dataabsend
+    src ->  tgt.status as status, status.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    src ->  tgt.category as category, category.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    src ->  tgt.context as context, context.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+}
+
+group AddALKTIFusionsPartner(source src: CTS_Transport, target tgt: MedicationStatement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2504'" then
+        {
+             values.value as value -> tgt.note as note, note.text = cast(value, 'FHIR.markdown');
+        };
+    };
+}
+
+group AddDateAsserted(source src: CTS_Transport, target tgt: MedicationStatement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2502'" then
+        {
+             values.value as value -> tgt.dateAsserted = dateOp(value, 'date');
+        };
+    };
+}
+
+group AddROS1FusionsPartner(source src: CTS_Transport, target tgt: MedicationStatement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2506'" then
+        {
+             values.value as value -> tgt.note as note, note.text = cast(value, 'FHIR.markdown');
+        };
+    };
+}

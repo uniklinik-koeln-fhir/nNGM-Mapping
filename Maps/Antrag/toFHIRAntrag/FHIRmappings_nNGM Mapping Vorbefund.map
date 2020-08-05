@@ -1,0 +1,2783 @@
+/// version = 0.1
+/// title = "nNGM: Mapping Vorbefund FHIR"
+/*
+------------TODO----------------
+Specimen -> mandatory type.coding.code has no binding
+TransformMETIHCObservation -> IHC Expression HighLevel the code of the component is missing (what code do we use here?)
+PDL1 Observation -> Values missing in IHC Profile???
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR" = nNGM_Mapping_VorbefundFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM" as target
+uses "https://simplifier.net/nngm-registrationformr4/observationnngmhistologie" as target
+
+group TransformBundle(source src: CTS_Transport, target tgt: Bundle)
+{
+    //metadata
+    src -> tgt.id = uuid();
+    src -> tgt.type = 'collection';
+
+    src -> tgt.entry as entry then CreateSpecimen(src, entry);
+    src -> tgt.entry as entry then CreateHistologieObservation(src, entry);
+    src -> tgt.entry as entry then CreateAlkIHCObservation(src, entry);
+    src -> tgt.entry as entry then CreateAlkCISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateAlkFISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateAlkNGSFusionObservation(src, entry);
+    src -> tgt.entry as entry then CreateBRAFObservation(src, entry);
+    src -> tgt.entry as entry then CreateCK7Observation(src, entry);
+    src -> tgt.entry as entry then CreateMETIHCObservation(src, entry);
+    src -> tgt.entry as entry then CreateMETCISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateMETFISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateMIB1Observation(src, entry);
+    src -> tgt.entry as entry then CreateNTRK1Observation(src, entry);
+    src -> tgt.entry as entry then CreateNTRK2Observation(src, entry);
+    src -> tgt.entry as entry then CreateNTRK3Observation(src, entry);
+    src -> tgt.entry as entry then CreateFGFR1Observation(src, entry);
+    src -> tgt.entry as entry then CreateFGFR2Observation(src, entry);
+    src -> tgt.entry as entry then CreateFGFR3Observation(src, entry);
+    src -> tgt.entry as entry then CreateNAPSINAObservation(src, entry);
+    src -> tgt.entry as entry then CreateP40Observation(src, entry);
+    src -> tgt.entry as entry then CreatePDL1Observation(src, entry);
+    src -> tgt.entry as entry then CreateROS1IHCObservation(src, entry);
+    src -> tgt.entry as entry then CreateROS1CISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateROS1FISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateROS1NGSFUSIONObservation(src, entry);
+    src -> tgt.entry as entry then CreateSynaptophysinObservation(src, entry);
+    src -> tgt.entry as entry then CreateTTF1Observation(src, entry);
+    src -> tgt.entry as entry then CreateRETCISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateRETFISHObservation(src, entry);
+    src -> tgt.entry as entry then CreateRETNGSFUSIONObservation(src, entry);
+    src -> tgt.entry as entry then CreateVRAFEXON15Observation(src, entry);
+    src -> tgt.entry as entry then CreateEGFREXON19Observation(src, entry);
+    src -> tgt.entry as entry then CreateEGFREXON20Observation(src, entry);
+    src -> tgt.entry as entry then CreateEGFREXON21Observation(src, entry);
+    src -> tgt.entry as entry then CreateKRASEXON2Observation(src, entry);
+}
+
+/*-------------Specimen------------------------*/
+group CreateSpecimen(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1653'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1654'" then
+        {
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+        };
+    };
+}
+
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'; 
+
+    //type (mandatory)
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
+
+    //Eingang des Tumormaterials am nNGM-Standort
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
+        {
+            values.value as eingangsdatum -> tgt.receivedTime = dateOp(eingangsdatum, 'date');
+        };
+    };
+
+    //Befunddatum
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1653'" then
+        {
+            values.value as befunddatum -> tgt.collection as collection, collection.collectedDateTime = dateOp(befunddatum, 'date'); 
+        };
+    };
+
+    //Befundnummer
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1654'" then
+        {
+            values -> tgt.identifier = create('Identifier') as biopsieid then
+            {
+                values.value as befundnummer -> biopsieid.value = befundnummer;
+            };
+        };
+    };
+}
+    
+/*----------------HistologieOberservation----------------------*/
+group CreateHistologieObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1658'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2469'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2403'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformHistologieObservation(src, observation);
+        };
+    };
+}
+
+group TransformHistologieObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'https://simplifier.net/nngm-registrationformr4/observationnngmhistologie'; 
+
+    //status
+    src -> tgt.status = 'final';
+
+    //category
+    src -> tgt.category as category, category.coding as coding, coding.system = 'http://hl7.org/fhir/observation-category',
+                                                                coding.code = 'laboratory';
+
+    src ->  tgt.encounter as encounter, encounter.reference as reference, reference.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                                                                                                                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    //patient reference
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    //Klassifikation
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1658'" then
+        {
+            values.value as klassifikation -> tgt.valueCodeableConcept as cc, cc.coding as coding then
+            {
+                klassifikation -> coding.system = 'http://uk-koeln.de/fhir/ValueSet/icd-o-3-m-lunge', 
+                                    coding.code = evaluate(klassifikation, '$this.split(\'\\t\').first()'),
+                                    coding.display = evaluate(klassifikation, '$this.split(\'\\t\').last()');
+            };
+        };
+    };
+
+    //Lokalisation
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2469'" then
+        {
+            values.value as lokalisation -> tgt.bodySite as code, code.coding as cc then
+            {
+                lokalisation -> cc.system = 'http://fhir.de/CodeSystem/dimdi/icd-10-gm', 
+                                    cc.code = evaluate(lokalisation, '$this.split(\'\\t\').first()'),
+                                    cc.display = evaluate(lokalisation, '$this.split(\'\\t\').last()');
+            };
+        };
+    };
+
+    /*//Grading
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2403'" then
+        {
+            values.value as grading -> tgt.coding as coding then
+            {
+                grading -> coding.system = 'UNKNOWN', 
+                                    coding.code = grading,
+                                    coding.display = grading;
+            };
+        };
+    };*/
+}
+
+/*--------------ALK IHC Observation------------------*/
+group CreateAlkIHCObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2098'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2099'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2106'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformAlkIHCObservation(src, observation);
+        };
+    };
+}
+
+group TransformAlkIHCObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapALKDateOfAssessment(src, tgt);
+    src then MapALKPhaenotyp(src, tgt);
+    src then MapIHCCategory(src, tgt);
+    src then MapALKCode(src, tgt);
+
+    src -> tgt.status = 'final';
+
+    //IHC Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2106'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+   
+}
+
+
+/*----------------ALK CISH Observation------------*/
+group CreateAlkCISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2098'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2099'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2112'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2113'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformAlkCISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformAlkCISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
+
+    src then MapALKDateOfAssessment(src, tgt);
+    src then MapALKPhaenotyp(src, tgt);
+    src then MapCISHCategory(src, tgt);
+    src then MapALKCode(src, tgt);
+
+    //CISH Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2112'" then
+        {
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //CISH Positive Tumorzellen
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2113'" then
+        {
+            values.value as ergebnis -> tgt.component = create('BackboneElement') as postumorzellencomponent then
+            {
+                ergebnis -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(ergebnis, quantity);
+                ergebnis -> postumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C70460');
+            };
+        };
+    };
+}
+
+/*----------------ALK FISH Observation------------*/
+group CreateAlkFISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2098'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2099'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2119'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2120'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2121'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformAlkFISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformAlkFISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
+
+    src then MapALKDateOfAssessment(src, tgt);
+    src then MapALKPhaenotyp(src, tgt);
+    src then MapFISHCategory(src, tgt);
+    src then MapALKCode(src, tgt);
+
+    //FISH Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2119'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //FISH Positive Tumorzellen
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2120'" then
+        {
+            values.value as ergebnis -> tgt.component = create('BackboneElement') as postumorzellencomponent then
+            {
+                ergebnis -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(ergebnis, quantity);
+                ergebnis -> postumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C70460');
+            };
+        };
+    };
+
+    //FISH Polysomie
+     src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2121'" then
+        {
+            values.value as ergebnis -> tgt.component = create('BackboneElement') as polysomiecomponent then
+            {
+                ergebnis -> polysomiecomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(ergebnis, quantity);
+                ergebnis -> polysomiecomponent.code = cc('http://ncit.nci.nih.gov', 'C36331');
+            };
+        };
+    };
+}
+
+/*---------------ALK NGS Fusion Observation--------------------*/
+group CreateAlkNGSFusionObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2098'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2099'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2127'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2128'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2129'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2130'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2131'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformAlkNGSFusionObservation(src, observation);
+        };
+    };
+}
+
+group TransformAlkNGSFusionObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapALKDateOfAssessment(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+    src then MapALKCode(src, tgt);
+
+    //NGS FUSION Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2127'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //NGS FUSION Fusionspartner
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2128'" then
+        {
+            values.value as ergebnis -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                ergebnis -> fusionspartnercomponent.valueString = 'ergebnis';
+                ergebnis -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //NGS Fusion Anzahl der Fusionsthreads
+     src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2129'" then
+        {
+            values.value as ergebnis -> tgt.component = create('BackboneElement') as fusionsthreadcomponent then
+            {
+                ergebnis -> fusionsthreadcomponent.valueInteger = ergebnis;
+                ergebnis -> fusionsthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //NGS Fusion partner Exon
+     src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2130'" then
+        {
+            values.value as ergebnis -> tgt.component = create('BackboneElement') as fusionspartnerexonxomponent then
+            {
+                ergebnis -> fusionspartnerexonxomponent.valueInteger = ergebnis;
+                ergebnis -> fusionspartnerexonxomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+
+    //NGS ALK Exon
+     src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2131'" then
+        {
+            values.value as ergebnis -> tgt.component = create('BackboneElement') as exoncomponent then
+            {
+                ergebnis -> exoncomponent.valueInteger = ergebnis;
+                ergebnis -> exoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'C13231');
+            };
+        };
+    };
+}
+
+/*----------------BRAF Observation---------------------*/
+group CreateBRAFObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_phaenotype'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_group'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformBRAFTObservation(src, observation);
+        };
+    };
+}
+
+group TransformBRAFTObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'; 
+
+    src then MAPBRAFCode(src, tgt);
+    src then MAPNGSPanelCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_group'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //BRAF Phaenotyp 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_phaenotype'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+     //BRAF Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*--------------CK7 Observation------------------*/
+group CreateCK7Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2037'
+                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_2038'
+                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformCK7Observation(src, observation);
+        };
+    };
+}
+
+group TransformCK7Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'; 
+
+    src then MapCK7Code(src, tgt);
+    src then MAPNGSPanelCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2037'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //CK7 Phaenotyp 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2038'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+     //CK7 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*----------------------MET IHC Observation ------------------*/
+group CreateMETIHCObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2132'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2133'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2139'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2140'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2141'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformMETIHCObservation(src, observation);
+        };
+    };
+}
+
+group TransformMETIHCObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapMETDateOfAssessment(src, tgt);
+    src then MapMETPhaenotyp(src, tgt);
+    src then MapIHCCategory(src, tgt);
+    src then MapMETCode(src, tgt);
+
+
+    //IHC Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2139'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //IHC Klassifikation
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2140'" then
+        {
+            values.value as klassifikation -> tgt.component = create('BackboneElement') as klassifikationcomponent then
+            {
+                klassifikation -> klassifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', klassifikation, klassifikation);
+                klassifikation -> klassifikationcomponent.code = cc('http://ncit.nci.nih.gov', 'C25161');
+            };
+        };
+    };
+
+    //IHC Expression HighLevel
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2141'" then
+        {
+            values.value as yes where "value ='yes'" -> tgt.component = create('BackboneElement') as expressionhigh, expressionhigh.valueBoolean = true;
+            values.value as no where "value ='no'" -> tgt.component = create('BackboneElement') as expressionhigh, expressionhigh.valueBoolean = false;
+        };
+    };
+}
+
+
+/*----------------------MET CISH Observation ------------------*/
+group CreateMETCISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2132'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2133'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2147'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2148'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformMETCISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
+
+    src then MapMETDateOfAssessment(src, tgt);
+    src then MapMETPhaenotyp(src, tgt);
+    src then MapMETCode(src, tgt);
+    src then MapCISHCategory(src, tgt);
+
+    //CISH Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2147'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //CISH Amplifikation
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2148'" then
+        {
+            values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+            {
+                amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', amplifikation, amplifikation);
+                amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+            };
+        };
+    };
+}
+
+/*----------------------MET FISH Observation ------------------*/
+group CreateMETFISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2132'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2133'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2154'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2155'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2156'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2157'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2158'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2159'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2160'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2161'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2162'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2163'
+                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2164'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformMETFISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
+
+    src then MapMETDateOfAssessment(src, tgt);
+    src then MapMETPhaenotyp(src, tgt);
+    src then MapMETCode(src, tgt);
+    src then MapFISHCategory(src, tgt);
+
+
+    //FISH Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2154'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //FISH Amplifikation
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2155'" then
+        {
+            values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+            {
+                amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', amplifikation, amplifikation);
+                amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+            };
+        };
+    };
+
+    //FISH 15 MET Signal
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2156'" then
+        {
+            values.value as met15signal -> tgt.component = create('BackboneElement') as met15signalcomponent then
+            {
+                met15signal -> met15signalcomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(met15signal, quantity);
+                met15signal -> met15signalcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', '15-met-ratio');
+            };
+        };
+    };
+
+    //FISH 5 MET Signal
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2157'" then
+        {
+            values.value as met5signal -> tgt.component = create('BackboneElement') as met5signalcomponent then
+            {
+                met5signal -> met5signalcomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(met5signal, quantity);
+                met5signal -> met5signalcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', '5-met-ratio');
+            };
+        };
+    };
+
+    //FISH 4 MET Signal
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2158'" then
+        {
+            values.value as met4signal -> tgt.component = create('BackboneElement') as met4signalcomponent then
+            {
+                met4signal -> met4signalcomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(met4signal, quantity);
+                met4signal -> met4signalcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', '4-met-ratio');
+            };
+        };
+    };
+
+    //FISH gezaehlte Tumorzellen
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2159'" then
+        {
+            values.value as tumorzellen -> tgt.component = create('BackboneElement') as gezaeltetumorzellencomponent then
+            {
+                tumorzellen -> gezaeltetumorzellencomponent.valueInteger = tumorzellen;
+                tumorzellen -> gezaeltetumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C0007584');
+            };
+        };
+    };
+
+    //FHIS MET signale
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2160'" then
+        {
+            values.value as metsignale -> tgt.component = create('BackboneElement') as metsignalecomponent then
+            {
+                metsignale -> metsignalecomponent.valueInteger = metsignale;
+                metsignale -> metsignalecomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'met-signal-count');
+            };
+        };
+    };
+
+    //FHIS CEN signale
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2161'" then
+        {
+            values.value as censignale -> tgt.component = create('BackboneElement') as censignalecomponent then
+            {
+                censignale -> censignalecomponent.valueInteger = censignale;
+                censignale -> censignalecomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'cet-signal-count');
+            };
+        };
+    };
+
+    //FHIS Quotient MET/CEN signale
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2162'" then
+        {
+            values.value as qmetcensignale -> tgt.component = create('BackboneElement') as qmetcensignalecomponent then
+            {
+                qmetcensignale -> qmetcensignalecomponent.valueInteger = qmetcensignale;
+                qmetcensignale -> qmetcensignalecomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'met-cen-signal-ratio');
+            };
+        };
+    };
+
+    //FHIS Durchschnitt MET-Genkopiezahl/Zelle 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2163'" then
+        {
+            values.value as genkopiezahl -> tgt.component = create('BackboneElement') as genkopiezahlcomponent then
+            {
+                genkopiezahl -> genkopiezahlcomponent.valueInteger = genkopiezahl;
+                genkopiezahl -> genkopiezahlcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'met-copy-per-cell');
+            };
+        };
+    };
+
+    //FHIS Polysomie
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2164'" then
+        {
+            values.value as polysomie -> tgt.component = create('BackboneElement') as polysomiecomponent then
+            {
+                polysomie -> polysomiecomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(polysomie, quantity);
+                polysomie -> polysomiecomponent.code = cc('http://ncit.nci.nih.gov', 'C36331');
+            };
+        };
+    };
+}
+
+/*--------------MIB1 Observation------------------*/
+group CreateMIB1Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2055'
+                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2056'
+                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2063'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformMIB1Observation(src, observation);
+        };
+    };
+}
+
+group TransformMIB1Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
+
+    src then MapMIB1Code(src, tgt);
+    src then MapFISHCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2055'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //MIB1 Phaenotyp 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2056'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+     //MIB1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2063'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*--------------NTRK1 Observation------------------*/
+group CreateNTRK1Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2540'
+                                        or blockindex = 8 and groupindex = 0 and itemid = 'id_2547'
+                                        or blockindex = 8 and groupindex = 0 and itemid = 'id_2548'
+                                        or blockindex = 8 and groupindex = 0 and itemid = 'id_2549'
+                                        or blockindex = 8 and groupindex = 0 and itemid = 'id_2550'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformNTRK1Observation(src, observation);
+        };
+    };
+}
+
+group TransformNTRK1Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapNTRK1Code(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2540'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //NTRK1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2547'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //NTRK1 Fusionspartner 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2548'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //NTRK1 anzahl der Fusionsthreads
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2549'" then
+        {
+            values.value as anzahlfusionsthread -> tgt.component = create('BackboneElement') as anzhalfusionthreadcomponent then
+            {
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.valueInteger = anzahlfusionsthread;
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //NTRK1 Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2550'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+}
+
+/*--------------NTRK2 Observation------------------*/
+group CreateNTRK2Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2592'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2596'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2597'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2598'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2599'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformNTRK2Observation(src, observation);
+        };
+    };
+}
+
+group TransformNTRK2Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapNTRK2Code(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2592'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //NTRK2 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2596'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //NTRK2 Fusionspartner 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2597'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //NTRK2 anzahl der Fusionsthreads
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2598'" then
+        {
+            values.value as anzahlfusionsthread -> tgt.component = create('BackboneElement') as anzhalfusionthreadcomponent then
+            {
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.valueInteger = anzahlfusionsthread;
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //NTRK2 Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2599'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+}
+
+/*--------------NTRK3 Observation------------------*/
+group CreateNTRK3Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2584'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2588'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2589'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2590'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2591'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformNTRK3Observation(src, observation);
+        };
+    };
+}
+
+group TransformNTRK3Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapNTRK3Code(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2584'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //NTRK3 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2588'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //NTRK3 Fusionspartner 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2589'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //NTRK3 anzahl der Fusionsthreads
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2590'" then
+        {
+            values.value as anzahlfusionsthread -> tgt.component = create('BackboneElement') as anzhalfusionthreadcomponent then
+            {
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.valueInteger = anzahlfusionsthread;
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //NTRK3 Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2591'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+}
+
+/*--------------FGFR1 Observation------------------*/
+group CreateFGFR1Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2576'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2580'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2581'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2582'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2583'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformFGFR1Observation(src, observation);
+        };
+    };
+}
+
+group TransformFGFR1Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapFGFR1Code(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2576'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //FGFR1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2580'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //FGFR1 Fusionspartner 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2581'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //FGFR1 anzahl der Fusionsthreads
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2582'" then
+        {
+            values.value as anzahlfusionsthread -> tgt.component = create('BackboneElement') as anzhalfusionthreadcomponent then
+            {
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.valueInteger = anzahlfusionsthread;
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //FGFR1 Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2583'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+}
+
+/*--------------FGFR2 Observation------------------*/
+group CreateFGFR2Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2568'
+                                        or blockindex = 12 and groupindex = 0 and itemid = 'id_2572'
+                                        or blockindex = 12 and groupindex = 0 and itemid = 'id_2573'
+                                        or blockindex = 12 and groupindex = 0 and itemid = 'id_2574'
+                                        or blockindex = 12 and groupindex = 0 and itemid = 'id_2575'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformFGFR2Observation(src, observation);
+        };
+    };
+}
+
+group TransformFGFR2Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapFGFR2Code(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2568'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //FGFR2 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2572'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //FGFR2 Fusionspartner 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2573'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //FGFR2 anzahl der Fusionsthreads
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2574'" then
+        {
+            values.value as anzahlfusionsthread -> tgt.component = create('BackboneElement') as anzhalfusionthreadcomponent then
+            {
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.valueInteger = anzahlfusionsthread;
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //FGFR2 Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2575'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+}
+
+/*--------------FGFR3 Observation------------------*/
+group CreateFGFR3Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2560'
+                                        or blockindex = 13 and groupindex = 0 and itemid = 'id_2564'
+                                        or blockindex = 13 and groupindex = 0 and itemid = 'id_2565'
+                                        or blockindex = 13 and groupindex = 0 and itemid = 'id_2566'
+                                        or blockindex = 13 and groupindex = 0 and itemid = 'id_2567'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformFGFR3Observation(src, observation);
+        };
+    };
+}
+
+group TransformFGFR3Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapFGFR3Code(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2560'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //FGFR3 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2564'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //FGFR3 Fusionspartner 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2565'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //FGFR3 anzahl der Fusionsthreads
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2566'" then
+        {
+            values.value as anzahlfusionsthread -> tgt.component = create('BackboneElement') as anzhalfusionthreadcomponent then
+            {
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.valueInteger = anzahlfusionsthread;
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //FGFR3 Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2567'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+}
+
+/*--------------NAPSINA Observation------------------*/
+group CreateNAPSINAObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2064'
+                                        or blockindex = 14 and groupindex = 0 and itemid = 'id_2065'
+                                        or blockindex = 14 and groupindex = 0 and itemid = 'id_2072'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformNAPSINAObservation(src, observation);
+        };
+    };
+}
+
+group TransformNAPSINAObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapNAPSINACode(src, tgt);
+    src then MapIHCCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2064'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //NAPSINA Phaenotyp 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2065'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+    //NAPSINA Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2072'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*--------------P40 Observation------------------*/
+group CreateP40Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2073'
+                                        or blockindex = 15 and groupindex = 0 and itemid = 'id_2074'
+                                        or blockindex = 15 and groupindex = 0 and itemid = 'id_2079'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformP40Observation(src, observation);
+        };
+    };
+}
+
+group TransformP40Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapP40Code(src, tgt);
+    src then MapIHCCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2073'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //P40 Phaenotyp 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2074'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+    //P40 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2079'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*--------------PD-L1 Observation------------------*/
+group CreatePDL1Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2172'
+                                        or blockindex = 16 and groupindex = 0 and itemid = 'id_2173'
+                                        or blockindex = 16 and groupindex = 0 and itemid = 'id_2180'
+                                        or blockindex = 16 and groupindex = 0 and itemid = 'id_2181'
+                                        or blockindex = 16 and groupindex = 0 and itemid = 'id_2182'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformPDL1Observation(src, observation);
+        };
+    };
+}
+
+group TransformPDL1Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapPDL1Code(src, tgt);
+    src then MapIHCCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2172'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //PDL1 Phaenotyp 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2173'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+    //PDL1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2180'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    /*//PDL1 menge der Tumorzellen 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2181'" then
+        {
+            values.value as mengedertumorzellen -> tgt.component = create('BackboneElement') as mengetumorzellencomponent then
+            {
+                mengedertumorzellen -> mengetumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(mengedertumorzellen, quantity);
+                mengedertumorzellen -> mengetumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };*/
+
+    /*//PDL1 flaeche pos tumorzellen
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2181'" then
+        {
+            values.value as fleache -> tgt.component = create('BackboneElement') as flaechecomponent then
+            {
+                fleache -> flaechecomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(fleache, quantity);
+                fleache -> flaechecomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };*/
+}
+
+/*--------------ROS1 IHC Observation------------------*/
+group CreateROS1IHCObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2219'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformROS1IHCObservation(src, observation);
+        };
+    };
+}
+
+group TransformROS1IHCObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapROS1Code(src, tgt);
+    src then MapIHCCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //ROS1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2219'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*--------------ROS1 CISH Observation------------------*/
+group CreateROS1CISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2225'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2226'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2227'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformROS1CISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
+
+    src then MapROS1Code(src, tgt);
+    src then MapCISHCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //ROS1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2225'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //ROS1 Positive Tumorzellen 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2226'" then
+        {
+            values.value as postumorzellen -> tgt.component = create('BackboneElement') as postumorzellencomponent then
+            {
+                postumorzellen -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(postumorzellen, quantity);
+                postumorzellen -> postumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C70460');
+            };
+        };
+    };
+
+    //ROS1 Polysomie 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2227'" then
+        {
+            values.value as polysomie -> tgt.component = create('BackboneElement') as polysomiecomponent then
+            {
+                polysomie -> polysomiecomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(polysomie, quantity);
+                polysomie -> polysomiecomponent.code = cc('http://ncit.nci.nih.gov', 'C36331');
+            };
+        };
+    };
+}
+
+/*--------------ROS1 FISH Observation------------------*/
+group CreateROS1FISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2233'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2234'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2235'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformROS1FISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
+
+    src then MapROS1Code(src, tgt);
+    src then MapFISHCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //ROS1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2233'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //ROS1 Positive Tumorzellen 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2234'" then
+        {
+            values.value as postumorzellen -> tgt.component = create('BackboneElement') as postumorzellencomponent then
+            {
+                postumorzellen -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(postumorzellen, quantity);
+                postumorzellen -> postumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C70460');
+            };
+        };
+    };
+
+    //ROS1 Polysomie 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2235'" then
+        {
+            values.value as polysomie -> tgt.component = create('BackboneElement') as polysomiecomponent then
+            {
+                polysomie -> polysomiecomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(polysomie, quantity);
+                polysomie -> polysomiecomponent.code = cc('http://ncit.nci.nih.gov', 'C36331');
+            };
+        };
+    };
+}
+
+
+/*--------------ROS1 NGS Fusion Observation------------------*/
+group CreateROS1NGSFUSIONObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2241'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2242'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2243'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2244'
+                                        or blockindex = 17 and groupindex = 0 and itemid = 'id_2245'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformROS1NGSFUSIONObservation(src, observation);
+        };
+    };
+}
+
+group TransformROS1NGSFUSIONObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapROS1Code(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //ROS1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2241'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+
+    //ROS1 Fusionspartner 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2242'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //ROS1 Anzahl der Fusionsthreads 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2243'" then
+        {
+            values.value as fusionsthreads -> tgt.component = create('BackboneElement') as fusionsthreadcomponent then
+            {
+                fusionsthreads -> fusionsthreadcomponent.valueInteger = fusionsthreads;
+                fusionsthreads -> fusionsthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //ROS1 5' Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2244'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+
+    //ROS1 Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2245'" then
+        {
+            values.value as exon -> tgt.component = create('BackboneElement') as exoncomponent then
+            {
+                exon -> exoncomponent.valueInteger = exon;
+                exon -> exoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'C13231');
+            };
+        };
+    };
+}
+
+/*--------------Synaptophysin Observation------------------*/
+group CreateSynaptophysinObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2080'
+                                        or blockindex = 18 and groupindex = 0 and itemid = 'id_2081'
+                                        or blockindex = 18 and groupindex = 0 and itemid = 'id_2088'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformSynaptophysinObservation(src, observation);
+        };
+    };
+}
+
+group TransformSynaptophysinObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapSynaptophysinCode(src, tgt);
+    src then MapIHCCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2080'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //Synaptophysin Phaenotyp
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2081'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+    //Synaptophysin Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2088'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*--------------TTF1 Observation------------------*/
+group CreateTTF1Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2089'
+                                        or blockindex = 19 and groupindex = 0 and itemid = 'id_2090'
+                                        or blockindex = 19 and groupindex = 0 and itemid = 'id_2097'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformTTF1Observation(src, observation);
+        };
+    };
+}
+
+group TransformTTF1Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'; 
+
+    src then MapTTF1Code(src, tgt);
+    src then MapIHCCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2089'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //TTF1 Phaenotyp
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2090'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+
+    //TTF1 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2097'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+}
+
+/*--------------RET CISH Observation------------------*/
+group CreateRETCISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2183'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2191'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2192'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformRETCISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
+
+    src then MapRETCode(src, tgt);
+    src then MapCISHCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2183'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //Ret CISH Ergbenis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2191'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //RET CISH Pos Tumorzellen
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2192'" then
+        {
+            values.value as postumorzellen -> tgt.component = create('BackboneElement') as postumorzellencomponent then
+            {
+                postumorzellen -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(postumorzellen, quantity);
+                postumorzellen -> postumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C70460');
+            };
+        };
+    };
+}
+
+/*--------------RET FISH Observation------------------*/
+group CreateRETFISHObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2183'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2198'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2199'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2200'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformRETFISHObservation(src, observation);
+        };
+    };
+}
+
+group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
+
+    src then MapRETCode(src, tgt);
+    src then MapFISHCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2183'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //Ret FISH Ergbenis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2198'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //RET FISH Pos Tumorzellen
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2199'" then
+        {
+            values.value as postumorzellen -> tgt.component = create('BackboneElement') as postumorzellencomponent then
+            {
+                postumorzellen -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(postumorzellen, quantity);
+                postumorzellen -> postumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C70460');
+            };
+        };
+    };
+
+    //RET FISH Polysomie
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2200'" then
+        {
+            values.value as polysomie -> tgt.component = create('BackboneElement') as polysomiecomponent then
+            {
+                polysomie -> polysomiecomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(polysomie, quantity);
+                polysomie -> polysomiecomponent.code = cc('http://ncit.nci.nih.gov', 'C36331');
+            };
+        };
+    };
+}
+
+/*--------------RET NGS FUSION Observation------------------*/
+group CreateRETNGSFUSIONObservation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2183'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2206'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2207'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2208'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2209'
+                                        or blockindex = 20 and groupindex = 0 and itemid = 'id_2210'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformRETNGSFUSIONObservation(src, observation);
+        };
+    };
+}
+
+group TransformRETNGSFUSIONObservation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapRETCode(src, tgt);
+    src then MapNGSFUSIONCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2183'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //Ret NGS FUSION Ergbenis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2206'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //RET NGS FUSION Fusionspartner
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2207'" then
+        {
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as fusionspartnercomponent then
+            {
+                fusionspartner -> fusionspartnercomponent.valueString = fusionspartner;
+                fusionspartner -> fusionspartnercomponent.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            };
+        };
+    };
+
+    //RET NGS FUSION Anzahl Fusionsthreads
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2208'" then
+        {
+            values.value as anzahlfusionsthread -> tgt.component = create('BackboneElement') as anzhalfusionthreadcomponent then
+            {
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.valueInteger = anzahlfusionsthread;
+                anzahlfusionsthread -> anzhalfusionthreadcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+
+    //RET NGS FUSION 5' Fusionspartner Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2209'" then
+        {
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
+            {
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = fusionspartnerexon;
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+            };
+        };
+    };
+
+    //RET NGS FUSION Exon
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2210'" then
+        {
+            values.value as exon -> tgt.component = create('BackboneElement') as exoncomponent then
+            {
+                exon -> exoncomponent.valueInteger = exon;
+                exon -> exoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'C13231');
+            };
+        };
+    };
+}
+
+//BRAF EXON 15
+group CreateVRAFEXON15Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'id_1945'
+                                        or blockindex = 22 and groupindex = 0 and itemid = 'id_1946'
+                                        or blockindex = 22 and groupindex = 0 and itemid = 'id_1947'
+                                        or blockindex = 22 and groupindex = 0 and itemid = 'id_1948'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformBRAFEXON15Observation(src, observation);
+        };
+    };
+}
+
+group TransformBRAFEXON15Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'; 
+
+    src then MapBRAFExon15Code(src, tgt);
+    src then MapFastTrackCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'id_1945'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //BRAF EXON 15 Ergbenis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'id_1946'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //BRAF EXON 15 Change DNA
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'id_1947'" then
+        {
+            values.value as dnacng -> tgt.component = create('BackboneElement') as dnacngcomponent then
+            {
+                dnacng -> dnacngcomponent.valueString = dnacng;
+                dnacng -> dnacngcomponent.code = cc('http://loinc.org', '48004-6');
+            };
+        };
+    };
+
+    //BRAF EXON 15 Chnage Protein
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'id_1948'" then
+        {
+            values.value as protcng -> tgt.component = create('BackboneElement') as protcngcomponent then
+            {
+                protcng -> protcngcomponent.valueString = protcng;
+                protcng -> protcngcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+}
+
+//EGFR EXON 19
+group CreateEGFREXON19Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'ft_grp_egfr_19-21'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_2608'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_2609'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1950'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1951'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1952'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformEGFREXON19Observation(src, observation);
+        };
+    };
+}
+
+group TransformEGFREXON19Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapEGFREXON19Code(src, tgt);
+    src then MapFastTrackCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'ft_grp_egfr_19'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //EGFR EXON 19 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1950'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //EGFR EXON 19 Change DNA
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1951'" then
+        {
+            values.value as dnacng -> tgt.component = create('BackboneElement') as dnacngcomponent then
+            {
+                dnacng -> dnacngcomponent.valueString = dnacng;
+                dnacng -> dnacngcomponent.code = cc('http://loinc.org', '48004-6');
+            };
+        };
+    };
+
+    //EGFR EXON 19 Chnage Protein
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1952'" then
+        {
+            values.value as protcng -> tgt.component = create('BackboneElement') as protcngcomponent then
+            {
+                protcng -> protcngcomponent.valueString = protcng;
+                protcng -> protcngcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+}
+
+//EGFR EXON 20
+group CreateEGFREXON20Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'ft_grp_egfr_19-21'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_2608'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_2609'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1954'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1955'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1956'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformEGFREXON20Observation(src, observation);
+        };
+    };
+}
+
+group TransformEGFREXON20Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapEGFREXON20Code(src, tgt);
+    src then MapFastTrackCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'ft_grp_egfr_19'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //EGFR EXON 20 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1954'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //BRAF EXON 20 Change DNA
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1955'" then
+        {
+            values.value as dnacng -> tgt.component = create('BackboneElement') as dnacngcomponent then
+            {
+                dnacng -> dnacngcomponent.valueString = dnacng;
+                dnacng -> dnacngcomponent.code = cc('http://loinc.org', '48004-6');
+            };
+        };
+    };
+
+    //BRAF EXON 20 Chnage Protein
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1956'" then
+        {
+            values.value as protcng -> tgt.component = create('BackboneElement') as protcngcomponent then
+            {
+                protcng -> protcngcomponent.valueString = protcng;
+                protcng -> protcngcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+}
+
+//EGFR EXON 21
+group CreateEGFREXON21Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'ft_grp_egfr_19-21'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_2608'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_2609'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1958'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1959'
+                                        or blockindex = 23 and groupindex = 0 and itemid = 'id_1960'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformEGFREXON21Observation(src, observation);
+        };
+    };
+}
+
+group TransformEGFREXON21Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapEGFREXON21Code(src, tgt);
+    src then MapFastTrackCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'ft_grp_egfr_19'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //EGFR EXON 21 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1958'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //BRAF EXON 21 Change DNA
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1959'" then
+        {
+            values.value as dnacng -> tgt.component = create('BackboneElement') as dnacngcomponent then
+            {
+                dnacng -> dnacngcomponent.valueString = dnacng;
+                dnacng -> dnacngcomponent.code = cc('http://loinc.org', '48004-6');
+            };
+        };
+    };
+
+    //BRAF EXON 21 Chnage Protein
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1960'" then
+        {
+            values.value as protcng -> tgt.component = create('BackboneElement') as protcngcomponent then
+            {
+                protcng -> protcngcomponent.valueString = protcng;
+                protcng -> protcngcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+}
+
+//KRAS EXON 2
+group CreateKRASEXON2Observation(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'id_1961'
+                                        or blockindex = 24 and groupindex = 0 and itemid = 'id_1962'
+                                        or blockindex = 24 and groupindex = 0 and itemid = 'id_1963'
+                                        or blockindex = 24 and groupindex = 0 and itemid = 'id_1964'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformKRASEXON2Observation(src, observation);
+        };
+    };
+}
+
+group TransformKRASEXON2Observation(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'; 
+
+    src then MapKRASEXON2Code(src, tgt);
+    src then MapFastTrackCategory(src, tgt);
+
+    //Date of Assessment 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'id_1961'" then
+        {
+            values.value as dateofassessment -> tgt.effectiveDateTime = dateOp(dateofassessment, 'dateTime');
+        };
+    };
+
+    //KRAS EXON 2 Ergebnis
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'id_1962'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        };
+    };
+    
+
+    //KRAS EXON 2 Change DNA
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'id_1963'" then
+        {
+            values.value as dnacng -> tgt.component = create('BackboneElement') as dnacngcomponent then
+            {
+                dnacng -> dnacngcomponent.valueString = dnacng;
+                dnacng -> dnacngcomponent.code = cc('http://loinc.org', '48004-6');
+            };
+        };
+    };
+
+    //KRAS EXON 2 Chnage Protein
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'id_1964'" then
+        {
+            values.value as protcng -> tgt.component = create('BackboneElement') as protcngcomponent then
+            {
+                protcng -> protcngcomponent.valueString = protcng;
+                protcng -> protcngcomponent.code = cc('http://loinc.org', '82121-5');
+            };
+        };
+    };
+}
+/*---------------------------------------------------------------*/
+/*------------------Functionality--------------------------------*/
+/*---------------------------------------------------------------*/
+
+group MapALKDateOfAssessment(source src: CTS_Transport, target tgt: Observation)
+{
+     //Date of Assesment
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2098'" then
+        {
+            values.value as dateOfAssessment -> tgt.effectiveDateTime = dateOp(dateOfAssessment, 'dateTime');
+        };
+    };
+}
+
+group MapALKPhaenotyp(source src: CTS_Transport, target tgt: Observation)
+{
+    //Phänotype
+     src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2099'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+}
+
+group MapMETDateOfAssessment(source src: CTS_Transport, target tgt: Observation)
+{
+     //Date of Assesment
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2132'" then
+        {
+            values.value as dateOfAssessment -> tgt.effectiveDateTime = dateOp(dateOfAssessment, 'dateTime');
+        };
+    };
+}
+
+group MapMETPhaenotyp(source src: CTS_Transport, target tgt: Observation)
+{
+    //Phänotype
+     src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2133'" then
+        {
+            values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+            {
+                phaenotyp -> phaenotypcomponent.valueString = phaenotyp;
+                phaenotyp -> phaenotypcomponent.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+    };
+}
+
+group MapPercentageValue(source src: string, target tgt: Quantity)
+{
+    src -> tgt.value = src,
+            tgt.system = 'http://unitsofmeasure.org',
+            tgt.unit = 'percentage',
+            tgt.code = '%';
+}
+
+group MapIHCCategory(source src: CTS_Transport, target tgt: Observation)
+{
+    //IHC category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
+                                                                coding.code = 'IHC';                                                     
+    };
+}
+
+group MapCISHCategory(source src: CTS_Transport, target tgt: Observation)
+{
+    //CISH category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
+                                                                coding.code = 'CISH';                                                     
+    };
+}
+
+group MapFISHCategory(source src: CTS_Transport, target tgt: Observation)
+{
+    //FISH category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
+                                                                coding.code = 'FISH';                                                     
+    };
+}
+
+group MapNGSFUSIONCategory(source src: CTS_Transport, target tgt: Observation)
+{
+    //NGSFusion category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
+                                                                coding.code = 'Fusion NGS';                                                     
+    };
+}
+
+group MAPNGSPanelCategory(source src: CTS_Transport, target tgt: Observation)
+{
+    //NGSPanel category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
+                                                                coding.code = 'NGS Panel';                                                     
+    };
+}
+
+group MapFastTrackCategory(source src: CTS_Transport, target tgt: Observation)
+{
+    //NGSPanel category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
+                                                                coding.code = 'Fast Track';                                                     
+    };
+}
+
+group MapALKCode(source src: CTS_Transport, target tgt: Observation)
+{
+    //ALK code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'ALK');
+}
+
+group MAPBRAFCode(source src: CTS_Transport, target tgt: Observation)
+{
+    //BRAF code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'BRAF');
+}
+
+group MapCK7Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //BRAF code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'CK7');
+}
+
+group MapMETCode(source src: CTS_Transport, target tgt: Observation)
+{
+    //MET code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'MET');
+}
+
+group MapMIB1Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //MIB1 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'MIB1');
+}
+
+group MapNTRK1Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //NTRK1 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'NTRK1');
+}
+
+group MapNTRK2Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //NTRK2 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'NTRK2');
+}
+
+group MapNTRK3Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //NTRK3 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'NTRK3');
+}
+
+group MapFGFR1Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //FGFR1 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'FGFR1');
+}
+
+group MapFGFR2Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //FGFR2 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'FGFR2');
+}
+
+group MapFGFR3Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //FGFR3 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'FGFR3');
+}
+
+group MapNAPSINACode(source src: CTS_Transport, target tgt: Observation)
+{
+    //Napsin A code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'Napsin A');
+}
+
+group MapP40Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //P40 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'P40');
+}
+
+group MapPDL1Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //PDL1 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'PD-L1');
+}
+
+group MapROS1Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //ROS1 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'ROS1');
+}
+
+group MapSynaptophysinCode(source src: CTS_Transport, target tgt: Observation)
+{
+    //SYNAPTOPHYSIN code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'SYNAPTOPHYSIN');
+}
+
+group MapTTF1Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //TTF1 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'TTF1');
+}
+
+group MapRETCode(source src: CTS_Transport, target tgt: Observation)
+{
+    //RET code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'RET');
+}
+
+group MapBRAFExon15Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //BRAF EXON 15 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'BRAF EXON 15');
+}
+
+group MapEGFREXON19Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //EGFR EXON 19 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'EGFR EXON 19');
+}
+
+group MapEGFREXON20Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //EGFR EXON 20 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'EGFR EXON 20');
+}
+
+group MapEGFREXON21Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //EGFR EXON 21 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'EGFR EXON 21');
+}
+
+group MapKRASEXON2Code(source src: CTS_Transport, target tgt: Observation)
+{
+    //KRAS EXON 2 code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'KRAS EXON 2');
+}

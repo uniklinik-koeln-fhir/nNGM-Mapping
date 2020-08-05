@@ -1,0 +1,117 @@
+/*
+To Do:
+- Therapieinformation should come from beurteilung, where does it come from
+- Therapiebeginn and ende as tgt.performedPeriod
+- Lokalisation allow only 1 value, build in logic to accept text 
+- Methode? check  ->  need to make subset and logic for free text field
+- Bezeichnung code.text? backbone collate code? does cc() create backbone?
+*/
+
+/// version = 0.1
+/// title = "nNGM: Mapping TherapieformSONST"
+/// status = draft
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TherapieSON" = nNGM_Mapping_TherapieformSON
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport"as source
+uses "http://hl7.org/fhir/StructureDefinition/Procedure"as target
+
+group TransformBundle(source src: CTS_Transport, target bundle: Bundle) {
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';
+
+
+    src -> bundle.entry as entry,
+        entry.resource = create('Procedure') as procedure
+    then TransformProcedureSonstigeTherapie(src, procedure);
+}
+
+group TransformProcedureSonstigeTherapie(source src: CTS_Transport, target tgt: Procedure) {
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/SonstigeTherapie';
+
+
+    src.operations as operations, operations.data as data then {
+        //ArtDerTherapie -> Category 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1213'"
+        then {
+            values.value as artdertherapie -> tgt.category = cc('https://www.uk-koeln.de/fhir/ValueSet/SonstigeTherapieCategory', translate(artdertherapie, 'http://uk-koeln.de/fhir/ConceptMap/SonstigeTherapieCategory', 'code'));
+        };
+
+        /*
+              //Therapiebeginn 
+              data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1120'" then
+              {
+                  values.value as value -> tgt.start = dateOp(value);
+              };
+
+              //Therapieende
+              data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1121'" then
+              {
+                values.value as value -> tgt.end = dateOp(value);
+              };
+
+             */
+
+        //DurchführendeEinrichtung
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2434'"
+        then {
+            values.value as durchfuehrendeEinrichtung -> tgt.performer = create('BackboneElement') as performer,
+                performer.actor as actor,
+                actor.display = durchfuehrendeEinrichtung;
+        };
+
+        //Lokalisation allow only 1 value, build in logic to accept text  
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1215'"
+        then {
+            values.value as value -> tgt.bodySite = create('BackboneElement') as bodysite,
+                bodysite.coding = c('http://uk-koeln.de/fhir/ValueSet/cancer-base/icdo-o-3-t', value);
+            //bodysite.text = values[2].value; 
+        };
+
+        //Methode? check  ->  need to make subset and logic for free text field
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1467'"
+        then {
+            values.value as methode -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/sonstige-therapie-code', methode);
+        };
+
+        /*
+			        //TherapeutischeIntention     note.text create annotation somehow
+              data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1218'" then
+              {
+                values.value as value -> tgt.component = create('BackboneElement') as note,
+                note.text = value;                 
+              };
+
+              //Bezeichnung code.text? backbone collate code? does cc() create backbone?
+               data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1219' and itemid = 'id_2324'.exists().not()" then
+               {
+                   values.value as bezeichnung -> tgt.code = create('BackboneElement') as code,
+                   code.txt = bezeichnung;
+               };         
+              */
+
+        //GrundfuerKeineTherapie reasonCode -> cc http://uk-koeln.de/fhir/ValueSet/nNGM/sonstige-therapie-grund-bsc and itemid = 'id_5'.exists().not()?
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1547'"
+        then {
+            values.value as reasoncode -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/sonstige-therapie-grund-bsc', reasoncode);
+        };
+
+        /*
+        //Todesdatum deceased Date requires patient ref
+          data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2401'" then
+          {
+            values.value as todesdatum -> create('Reference') as patient,
+            patient.deceasedDate = evaluate(patientId, '\'Patient/\' + $this');
+          }; 
+          
+         */
+
+        //Sontstiges --> string;     
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1472'"
+        then {
+            values.value as sonstiges -> tgt.note = create('BackboneElement') as note,
+                note.text = sonstiges;
+        };
+    };
+}
