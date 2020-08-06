@@ -3,8 +3,8 @@
 
 
 /* To Do 
-Standardtariff
-kooperationsvereinbarung string -> boolean
+Standardtariff passed?
+kooperationsvereinbarung string -> boolean cast requiered
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR" = nNGM_Mapping_StammdatenFHIR
@@ -37,20 +37,20 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
 
     src.operations as operations, operations.data as data then
     {
-        //Gender
+        //Geschlecht -> Gender
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'" then
         {
-            values.value as value where "$this = 'weiblich'" then
+            values.value as value where "$this.value = 'weiblich'" then
             {
-                values.value as value -> tgt.gender = cc('http://hl7.org/fhir/ValueSet/administrative-gender', 'female');
+                values.value as value -> tgt.gender = cast('female', 'FHIR.code');
             };
 
-            values.value as value where "$this = 'männlich'" then
+            values.value as value where "$this.value = 'männlich'" then
             {
-                values.value as value -> tgt.gender = cc('http://hl7.org/fhir/ValueSet/administrative-gender', 'male');
+                values.value as value -> tgt.gender = cast('male', 'FHIR.code');
             };
 
-            values.value as value where "$this = 'divers'" then
+            values.value as value where "$this.value = 'divers'" then
             {
                 values.value as value -> tgt.gender as gender, 
                                          gender.extension as other, 
@@ -59,6 +59,23 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
             };
         };
 
+        //Strasse -> address.line
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1127'" then
+        {
+            values.value as line -> tgt.address as tgtAddress, tgtAddress.line = line;
+        };
+
+        //PLZ -> address.postalcode
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1128'" then
+        {
+            values.value as plz -> tgt.address as tgtAddress, tgtAddress.postalCode = plz;
+        };
+
+        //Wohnort -> address.city
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1129'" then
+        {
+            values.value as city -> tgt.address as tgtAddress, tgtAddress.city = city;
+        };
 
         //Country
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1280'" then

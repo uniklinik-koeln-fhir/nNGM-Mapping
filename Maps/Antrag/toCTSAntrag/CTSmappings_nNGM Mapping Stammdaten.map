@@ -13,11 +13,9 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
 
     src.entry as entry then
     {
-
-    /* ------------------------------- Patient ---------------------------- */
-
         entry.resource as patient where "resource is Patient" then
         {   
+            //Patient.gender -> Geschlecht
             patient -> tgt.data as data then 
             {
                 patient.gender as gender where "gender = 'female'" then
@@ -34,7 +32,6 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                     patient -> data.itemid = 'id_1131';
                     gender -> data.values as values, values.value = 'männlich'; 
                 };
-                
                 patient.gender as gender where "gender = 'X'" then
                 {
                     patient -> data.blockindex = 0;
@@ -43,84 +40,52 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                     gender -> data.values as values, values.value = 'divers'; 
                 };
             };
-
-            patient -> tgt.data as data then 
-            {
-                patient.address as address then
-                {
-                    patient -> data.blockindex = 0;
-                    patient -> data.groupindex = 0;
-                    patient -> data.itemid = 'id_1280';
-                    address.country as country -> data.values as values, values.value = country;
-                };
-            };
-
-            patient -> tgt.data as data then 
-            {
-                patient.deceasedDateTime as ddt then
-                {
-                    patient -> data.blockindex = 1;
-                    patient -> data.groupindex = 0;
-                    patient -> data.itemid = 'id_1298';
-                    ddt -> data.values as values, values.value = ddt;
-                };
-            };
-
-            patient -> tgt.data as data then 
-            {
-                patient.extension as infoq then 
-                { 
-                    patient.extension where "patient.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/izt'" then
-                    {
-                        patient -> data.blockindex = 1;
-                        patient -> data.groupindex = 0;
-                        patient -> data.itemid = 'id_2436';
-                        infoq.valueCodeableConcept as vcc -> data.values as values, values.value = vcc;
-                    };
-                };
-            };
         };
 
 
         entry.resource as coverage where "resource is Coverage" then
         {   
-            //Krankenkasse
+            //Type.text -> Krankenkasse
             coverage -> tgt.data as data then 
             {
-                coverage.payor as payor then
+                coverage.type as type, type.text as text then
                 {
                     coverage -> data.blockindex = 2;
                     coverage -> data.groupindex = 0;
                     coverage -> data.itemid = 'id_2459';
-                    payor.display as krankenkasse -> data.values as values, values.value = krankenkasse;
+                    text -> data.values as values, values.value = text;
                 };
             };
 
-            //Typ
+            //Type.coding.code -> Typ
             coverage -> tgt.data as data then 
             {
-                coverage.type as type then
+                coverage.type as type, type.coding as coding, coding.code as code then 
                 {
                     coverage -> data.blockindex = 2;
                     coverage -> data.groupindex = 0;
                     coverage -> data.itemid = 'id_1269';
-                    type -> data.values as values, values.value = type;
+                    code -> data.values as values, values.value = code;
                 };
             };
 
-            //Kooperationsvereinbarung
             coverage -> tgt.data as data then 
             {
-                coverage.extension as type then
-                {
-                    coverage.extension where "patient.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung'" then
-                    {
-                        coverage -> data.blockindex = 2;
-                        coverage -> data.groupindex = 0;
-                        coverage -> data.itemid = 'id_2460';
-                        type -> data.values as values, values.value = type;
-                    };
-                };
+               coverage.extension as ext where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung' and $this.extension.valueBoolean = true" then 
+               {
+                    coverage -> data.blockindex = 2;
+                    coverage -> data.groupindex = 0;
+                    coverage -> data.itemid = 'id_2460';
+                    coverage -> data.values as values, values.value = 'yes';
+               };
+
+               coverage.extension as ext where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung' and $this.extension.valueBoolean = false" then 
+               {
+                    coverage -> data.blockindex = 2;
+                    coverage -> data.groupindex = 0;
+                    coverage -> data.itemid = 'id_2460';
+                    coverage -> data.values as values, values.value = 'no';
+               };
             };
         };
 
