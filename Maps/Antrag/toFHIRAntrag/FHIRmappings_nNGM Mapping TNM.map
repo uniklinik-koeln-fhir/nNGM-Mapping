@@ -1,8 +1,7 @@
 /*
 TODO
- - 
+ - Observation.code is marked as absent but that is only partially true. Look in the profile for further information.
  - TNM slices map by code.coding.code fill unique code
- - TNM specimen
 */
 
 /// version = 0.1
@@ -13,7 +12,6 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMMap" = nNGM_Mapping_TN
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
-//uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 
  /* ------------------------------ Bundle ---------------------------- */
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
@@ -23,32 +21,6 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 
     //Check if any fields are filled in before creating the observation
     src -> bundle.entry as entry then CreateTransformObservationTNM(src, entry);
-    src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen);
-}
-
- /* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimenTNM(source src: CTS_Transport, target tgt: Specimen)
-{
-    src -> tgt.type as type, 
-                        type.coding as coding, 
-                        coding.code as code,
-                        code.extension as dataAbsentReason, 
-                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                        dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-
-    src.operations as operations, operations.data as data then
-    {
-        //Biopsy-ID -> extension angaben
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1601'" then
-        {
-                values.value as bid -> tgt.identifier = create('Identifier') as biopsieID,
-                                                          biopsieID.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsieID',
-                                                          biopsieID.value = bid;
-        };
-    };
 }
 
  /* ------------------------------ Check if there is a need for a Condition resource ---------------------------- */
@@ -86,7 +58,6 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
     
     //data absent because not delivered from form but mandatory in profile
     src -> tgt.code as code, code.coding as coding, coding.version as version, version.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
 
     //Works for patient because patient id is always present in cts data for every form
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
@@ -130,12 +101,6 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
             };
         };
         
-        // TNM-Klassifikation -> note
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
-        {
-            values.value as value -> tgt.note = create('Annotation') as annotation, annotation.text = value;
-        };
-        
         // Date of assessment -> effectiveDateTime
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1378'" then
         {
@@ -168,7 +133,7 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                 src -> T.code =  cc('http://loinc.org', '21905-5'),
                        T.valueCodeableConcept as vcc,
                                                 vcc.text = 'T slice',
-                                                vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-t-nngm', value);
+                                                vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-t-nngm', value);
                     
                 src.operations as operations, operations.data as data then
                 {
@@ -176,12 +141,12 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                     {   
                         valuesprafix.value as value then{
                             src -> T.extension as praefixcpu,
-                            praefixcpu.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/tnm-praefix-cpu',
+                            praefixcpu.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-praefix-cpu',
                             
                             //Create the coding so you can add slice info in text field
                             praefixcpu.valueCodeableConcept as vcc,
                             vcc.text = 'T-praefix slice',
-                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-praefix-cpu',value);
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-praefix-cpu',value);
                         };
                     };
                 };
@@ -192,10 +157,10 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                     {   
                         valuessuffix.value as value then{
                             src -> T.extension as suffixmiscy,
-                            suffixmiscy.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/tnm-suffix-miscy',
+                            suffixmiscy.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-suffix-miscy',
                             suffixmiscy.valueCodeableConcept as vcc,
                             vcc.text = 'T-suffix slice',
-                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-suffix-miscy',value);
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-suffix-miscy',value);
                         };
                     };
                 };
@@ -213,7 +178,7 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                 //add value valueCodeableConcept   
                 value as Nclass -> N.valueCodeableConcept as vcc,
                                     vcc.text = 'N slice',
-                                    vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-n-nngm', Nclass);
+                                    vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-n-nngm', Nclass);
                 
                 src.operations as operations, operations.data as data then
                 {
@@ -222,11 +187,11 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                         valuesprafix.value as value then
                         {
                             src -> N.extension as praefixcpu,
-                            praefixcpu.url = 'http://uk-koeln.de/fhir/Extension/tnm-praefix-cpu',
+                            praefixcpu.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-praefix-cpu',
 
                             //Create the coding so you can add slice info in text field
                             praefixcpu.valueCodeableConcept as vcc,
-                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-praefix-cpu' , value),
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-praefix-cpu' , value),
                             vcc.text = 'N-praefix slice';
                         };
                     };
@@ -245,7 +210,7 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                 // Add value valueCodeableConcept   
                 value as Mclass -> M.valueCodeableConcept as vcc,
                                     vcc.text = 'M slice',
-                                    vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-m-nngm', Mclass);
+                                    vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-m-nngm', Mclass);
                 
                 src.operations as operations, operations.data as data then
                 {
@@ -254,22 +219,40 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                         valuesprafix.value as value then
                         {
                             src -> M.extension as praefixcpu,
-                            praefixcpu.url = 'http://uk-koeln.de/fhir/Extension/tnm-praefix-cpu',
+                            praefixcpu.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-praefix-cpu',
 
-                            //Create the coding so you can add slice info in text field
+                            // Create the coding so you can add slice info in text field
                             praefixcpu.valueCodeableConcept as vcc,
-                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-praefix-cpu' , value),
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-praefix-cpu' , value),
                             vcc.text = 'M-praefix slice';
                         };
                     };
                 };
             };
         };
-        
+
+        // Stadium nach union internationale contre le cancer (UICC)
         // UICC-Stadium
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1383'" then
         {
-             values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/uicc-lunge',value);
+            values.value as value-> tgt.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.coding as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/uicc-stage', coding.code = value;
         };
+
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
+        {
+            values.value as value-> tgt.valueCodeableConcept as valueCodeableConcept collate, valueCodeableConcept.coding as coding, coding.version = value;
+
+        };
+
+
+            //values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/uicc-stage',value);
+
+            //coding.version as version
+
+            // TNM-Klassifikation -> valueCodeableConcept.coding.version
+            //data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
+            //{
+            //    values.value as value -> tgt.valueCodeableConcept as concept, concept.coding as coding, coding.version as version, version.text = value;
+            //};
     };
 }
