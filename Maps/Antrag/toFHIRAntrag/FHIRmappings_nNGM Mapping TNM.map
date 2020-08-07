@@ -93,6 +93,7 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
 
     src.operations as operations, operations.data as data then
     {
+        // Angaben zum Tumorstadium
         // Erstdiagnose -> extension tnmerstdiagnose
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1300'" then
         {
@@ -132,32 +133,34 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
         // TNM-Klassifikation -> note
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
         {
-           values.value as value -> tgt.note = create('Annotation') as annotation, annotation.text = value;
+            values.value as value -> tgt.note = create('Annotation') as annotation, annotation.text = value;
         };
         
-        // date of assessment -> effectiveDateTime
+        // Date of assessment -> effectiveDateTime
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1378'" then
         {
            values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
         };
 
-        //Prafix
+        // Prafix
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1379'" then
         {
             values.value as value where "value = 'r - Rezidiv'" then
             {
               value -> tgt.component = create('BackboneElement') as r,
-              r.code =  cc('http://loinc.org', '59479-6');
+              r.code =  cc('http://loinc.org', '21983-2'),
+              r.valueBoolean = cast(true, 'FHIR.boolean');
             };
             values.value as value where "value ='y - Zustand nach Therapie'" then
             {
               value -> tgt.component = create('BackboneElement') as y,
-              y.code =  cc('http://loinc.org', '21983-2');
+              y.code =  cc('http://loinc.org', '59479-6'),
+              y.valueBoolean = cast(true, 'FHIR.boolean');
             };
         };
         
-         //Tumor (T)
-        //GrÃ¶ÃŸe und Ausdehnung des Tumors
+        // Tumor (T)
+        // Größe und Ausdehnung des Tumors
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1380'" then
         {
             values.value as value -> tgt.component = create('BackboneElement') as T then
@@ -199,8 +202,8 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
             };  
         };
 
-        //Lymphknoten (N)
-        //GrÃ¶ÃŸe und Ausdehnung des Tumors 
+        // Lymphknoten (N)
+        // Größe und Ausdehnung des Tumors 
          data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1381'" then
         {
             values.value as value -> tgt.component = create('BackboneElement') as N then
@@ -231,15 +234,15 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
             };
         };
 
-        //Metastasen(M)
-        //Abwesenheit oder Vorhandensein von Metastasen
+        // Metastasen(M)
+        // Abwesenheit oder Vorhandensein von Metastasen
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1382'" then
         {
             values.value as value -> tgt.component = create('BackboneElement') as M then
             {
                 src -> M.code =  cc('http://loinc.org', '21907-1');
 
-                //add value valueCodeableConcept   
+                // Add value valueCodeableConcept   
                 value as Mclass -> M.valueCodeableConcept as vcc,
                                     vcc.text = 'M slice',
                                     vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/tnm-m-nngm', Mclass);
@@ -263,7 +266,7 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
             };
         };
         
-        //UICC-Stadium
+        // UICC-Stadium
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1383'" then
         {
              values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/uicc-lunge',value);
