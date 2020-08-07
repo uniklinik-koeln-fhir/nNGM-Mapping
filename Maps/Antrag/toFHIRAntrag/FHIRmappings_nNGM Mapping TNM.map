@@ -1,11 +1,13 @@
 /*
 TODO
+ - 
  - TNM slices map by code.coding.code fill unique code
  - TNM specimen
 */
 
 /// version = 0.1
 /// title = "TNMMap"
+/// CTS to FHIR
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMMap" = nNGM_Mapping_TNMMap
 
@@ -13,22 +15,20 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 //uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 
-
-
+ /* ------------------------------ Bundle ---------------------------- */
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
-
 
     //Check if any fields are filled in before creating the observation
     src -> bundle.entry as entry then CreateTransformObservationTNM(src, entry);
     src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen);
 }
 
+ /* ------------------------------ Specimen ---------------------------- */
 group TransformSpecimenTNM(source src: CTS_Transport, target tgt: Specimen)
 {
-
     src -> tgt.type as type, 
                         type.coding as coding, 
                         coding.code as code,
@@ -51,8 +51,7 @@ group TransformSpecimenTNM(source src: CTS_Transport, target tgt: Specimen)
     };
 }
 
-
-/*checks if there is a need for a Condition resource*/
+ /* ------------------------------ Check if there is a need for a Condition resource ---------------------------- */
 group CreateTransformObservationTNM(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -77,6 +76,7 @@ group CreateTransformObservationTNM(source src: CTS_Transport, target tgt: Backb
     };
 }
 
+ /* ------------------------------ Observation ---------------------------- */
 group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation)
 {
     src -> tgt.id = uuid();
@@ -93,49 +93,49 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
 
     src.operations as operations, operations.data as data then
     {
-        //Erstdiagnose -> extension tnmerstdiagnose
+        // Erstdiagnose -> extension tnmerstdiagnose
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1300'" then
         {
             values.value as erstdiagnose where "$this.value = 'yes'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose',
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-erstdiagnose',
                 angaben.valueBoolean = cast(true, 'FHIR.boolean');
             };
 
             values.value as erstdiagnose where "$this.value = 'no'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose',
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-erstdiagnose',
                 angaben.valueBoolean = cast(false, 'FHIR.boolean');
             };
         };
 
-        //Kurativ-operabel -> extension kurativoperabel
+        // Kurativ-operabel -> extension kurativoperabel
          data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1385'" then
         {
             values.value as erstdiagnose where "$this.value = 'yes'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel',
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-kurativ-operabel',
                 angaben.valueBoolean = cast(true, 'FHIR.boolean');
             };
 
             values.value as erstdiagnose where "$this.value = 'no'" then
             {
                 values.value as value -> tgt.extension as angaben, 
-                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel',
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-kurativ-operabel',
                 angaben.valueBoolean = cast(false, 'FHIR.boolean');
             };
         };
         
-        //TNM-Klassifikation -> note
+        // TNM-Klassifikation -> note
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
         {
            values.value as value -> tgt.note = create('Annotation') as annotation, annotation.text = value;
         };
         
-        //date of assessment -> effectiveDateTime
+        // date of assessment -> effectiveDateTime
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1378'" then
         {
            values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
