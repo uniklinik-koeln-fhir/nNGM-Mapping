@@ -1,7 +1,6 @@
 /*
 TODO
- - Observation.code is marked as absent but that is only partially true. Look in the profile for further information.
- - TNM slices map by code.coding.code fill unique code
+- Observation.code.coding.code is marked as absent. As soon as the profile is update, this should be update as well
 */
 
 /// version = 0.1
@@ -57,7 +56,7 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
     src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'survey');
     
     //data absent because not delivered from form but mandatory in profile
-    src -> tgt.code as code, code.coding as coding, coding.version as version, version.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    src -> tgt.code as topLevelCode, topLevelCode.coding as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/cancer-base/tnm-art', coding.code as code, code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     //Works for patient because patient id is always present in cts data for every form
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
@@ -99,6 +98,12 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
                 angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-kurativ-operabel',
                 angaben.valueBoolean = cast(false, 'FHIR.boolean');
             };
+        };
+
+        // TNM-Klassifikation -> valueCodeableConcept.coding.version
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
+        {
+            values.value as value -> tgt.valueCodeableConcept = create('CodeableConcept') as valueCodeableConcept collate, valueCodeableConcept.coding as coding collate, coding.version = value;
         };
         
         // Date of assessment -> effectiveDateTime
@@ -235,24 +240,7 @@ group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation
         // UICC-Stadium
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1383'" then
         {
-            values.value as value-> tgt.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.coding as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/uicc-stage', coding.code = value;
+            values.value as value -> tgt.valueCodeableConcept = create('CodeableConcept') as valueCodeableConcept collate, valueCodeableConcept.coding as coding collate, coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/uicc-stage', coding.code = value;
         };
-
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
-        {
-            values.value as value-> tgt.valueCodeableConcept as valueCodeableConcept collate, valueCodeableConcept.coding as coding, coding.version = value;
-
-        };
-
-
-            //values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/uicc-stage',value);
-
-            //coding.version as version
-
-            // TNM-Klassifikation -> valueCodeableConcept.coding.version
-            //data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
-            //{
-            //    values.value as value -> tgt.valueCodeableConcept as concept, concept.coding as coding, coding.version as version, version.text = value;
-            //};
     };
 }
