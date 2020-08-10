@@ -1,6 +1,11 @@
 /*
 TODO
- - Change Consent CTS Metadata to policy.uri (Alex will provide the uris) -> Test line 582
+ - Nichtraucher cut off day with split?
+- kooperationsvereinbarung cast string -> boolean
+- make 2 instances of organization.contact
+- replaces raucherstatus with loinc VS
+
+Check valuesets!
 */
 
 /// version = 0.1
@@ -26,7 +31,6 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 
     //resources
      src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
-     src -> bundle.entry as entry, entry.resource = create('Organization') as organization then TransformOrganizationNetzwerkzentrum(src, organization);
      src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestTumorboard(src, servicerequest);
      src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatient(src, patient);
      src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
@@ -78,74 +82,39 @@ group CreateOrganizationReferenzen(source src: CTS_Transport, target tgt: Backbo
 group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Organization)
 {
     src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://fhir.de/StructureDefinition/organization-de-basis/0.2';
+    src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
     src.operations as operations, operations.data as data then
     {
-        //Netzwerkzentrum-id
+        //Netzwerkzentrum-id -> tgt.identifier
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'" then
         {
             values.value as netzwerkzentrumid -> tgt.identifier = id('http://healex.systems/fhir/netzwerkzentrumid', netzwerkzentrumid);
         };
     
-        //Netzwerkpartnernummer
+        //Netzwerkpartnernummer -> tgt.identifier
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2326'" then
         {
-            values.value as netzwerkpartnernr -> tgt.identifier = id('http://fhir.de/NamingSystem/kbv/bsnr', netzwerkpartnernr);
+            values.value as netzwerkpartnernr -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGM/netzwerkpartnerid', netzwerkpartnernr);
         };
-
-        //Kontakt
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2485'" then
-        {
-            values.value as kontakt -> tgt.address = create('Address') as address, address.text = kontakt;
-        };
-    };
-}
-
-group TransformOrganizationNetzwerkzentrum(source src: CTS_Transport, target tgt: Organization)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://fhir.de/StructureDefinition/organization-de-basis/0.2';
-
-    src.operations as operations, operations.data as data then
-    {
-        //Netzwerkzentrum-id
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'" then
-        {
-            values.value as netzwerkzentrumid -> tgt.identifier = id('http://healex.systems/fhir/netzwerkzentrumid', netzwerkzentrumid);
-        };
-    
-        //Netzwerkpartnernummer
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2326'" then
-        {
-            values.value as netzwerkpartnernr -> tgt.identifier = create('Identifier') as identifier, identifier.system = 'http://fhir.de/NamingSystem/kbv/bsnr', identifier.value = netzwerkpartnernr;
-        };
-
-        //Kontakt
+        
+        //Kontakt -> tgt.address
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
         {
-            values.value as kontakt -> tgt.address = create('Address') as address, address.text = kontakt;
+            values.value as kontakt -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = kontakt;
         };
-    };
-}
+       
 
-group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Organization)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site';
-
-    src.operations as operations, operations.data as data then
-    {
-        //Standort
+        //Netzwerkzentrum-id -> tgt.identifier
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
         {
-            values.value as standort -> tgt.identifier = create('Identifier') as identifier, identifier.system = 'http://healex.systems/fhir/NamingSystem/nNGMnetzwerkzentrumid', identifier.value = standort;
+            values.value as netzwerkzentrumid -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGMnetzwerkzentrumid', netzwerkzentrumid);
         };
-
-        //Kontakt
+    
+        //Kontakt -> tgt.address
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
         {
-            values.value as kontakt -> tgt.address = create('Address') as address, address.text = kontakt;
+            values.value as kontakt -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = kontakt;
         };
     };
 }
@@ -250,13 +219,15 @@ group TransformServiceRequestTumorboard(source src: CTS_Transport, target tgt: S
                                     aufenthaltsart.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'AMB', 'ambulatory');
             };
             
-            values.value where "$this.value = 'UNK'" then 
+            values.value where "$this.value = 'N/A'" then 
             {
                 values.value as za -> tgt.extension as aufenthaltsart, 
                                     aufenthaltsart.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
                                     aufenthaltsart.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
             };
         };
+
+        /*
        
         //vorstellung tumorboard
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296'" then
@@ -265,16 +236,16 @@ group TransformServiceRequestTumorboard(source src: CTS_Transport, target tgt: S
             {
                 values.value as vorstellung -> tgt.requester as requester,
                                                requester.extension as vorstellung collate,
-                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
-                                               requester.valueBoolean = cast('permit', 'FHIR.code');
+                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
+                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
             };
 
             values.value as vorstellung where "$this.value = 'no'" then
             {
                 values.value as vorstellung -> tgt.requester as requester,
-                                               requester.extension as vorstellung collate,
-                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
-                                               requester.valueBoolean = cast('deny', 'FHIR.code');
+                                               vorstellung.extension as vorstellung collate,
+                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
+                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
             };
         };
 
@@ -285,18 +256,20 @@ group TransformServiceRequestTumorboard(source src: CTS_Transport, target tgt: S
             {
                 values.value as vorstellung -> tgt.requester as requester,
                                                requester.extension as vorstellung collate,
-                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
-                                               requester.valueBoolean = cast('permit', 'FHIR.code');
+                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
+                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
             };
 
             values.value as vorstellung where "$this.value = 'no'" then
             {
                 values.value as vorstellung -> tgt.requester as requester,
                                                requester.extension as vorstellung collate,
-                                               requester.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
-                                               requester.valueBoolean = cast('deny', 'FHIR.code');
+                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
+                                               vorstellung.valueBoolean = vorstellung; //cast('deny', 'FHIR.Boolean');
             };
         };
+
+        */
     };
 }
 
@@ -333,13 +306,49 @@ group TransformCoverage(source src: CTS_Transport, target tgt: Coverage)
             values.value as typ -> tgt.type = cc('http://fhir.de/ValueSet/versicherungsart-de-basis', typ);
         };
 
+        //PKVTyp
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1270'" then
+        {
+            values.value as vorstellung where "$this.value = 'Basistarif'" then 
+            {
+            values.value as value -> tgt.extension as pkv, 
+                                     pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                     pkv.valueCodeableConcept as vcc, 
+                                     vcc.coding as coding, 
+                                     coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 
+                                     coding.code = cast('basis', 'FHIR.code');
+            };
+
+            values.value as vorstellung where "$this.value = 'standard'" then 
+            {
+            values.value as value -> tgt.extension as pkv, 
+                                     pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                     pkv.valueCodeableConcept as vcc, 
+                                     vcc.coding as coding, 
+                                     coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 
+                                     coding.code = cast('Standardtarif', 'FHIR.code');
+            };
+
+            values.value as vorstellung where "$this.value = 'Vollversichert'" then 
+            {
+            values.value as value -> tgt.extension as pkv, 
+                                     pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                     pkv.valueCodeableConcept as vcc, 
+                                     vcc.coding as coding, 
+                                     coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 
+                                     coding.code = cast('voll', 'FHIR.code');
+            };
+        };
+
+        /*
         //kooperationsvereinbarung
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2460'" then
         {
             values.value as value -> tgt.extension as koop, 
-                                     koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung'
+                                     koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
                                      koop.valueBoolean = cast(value, 'FHIR.boolean');
         };
+        */
 
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1333'" then
         {
@@ -610,7 +619,7 @@ group TransformObservationSmoking(source src: CTS_Transport, target tgt: Observa
                                                             nr.code as code,
                                                             code.text = 'Nichtraucher Seit',
                                                             code.coding = c('http://loinc.org', '63630-8'), 
-                                                            nr.valueDateTime = cast(nichtraucher, 'date');
+                                                            nr.valueDateTime = dateOp(nichtraucher, 'date');
         };
 
     };
@@ -680,6 +689,9 @@ group TransformConsentTeilnahme(source src: CTS_Transport, target tgt: Consent)
     //patient
     src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
+    src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
     src.operations as operations, operations.data as data then
     {
         //teilnahme unterschrieben -> provision.type
@@ -716,6 +728,9 @@ group TransformConsentDatenschutz(source src: CTS_Transport, target tgt: Consent
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
     
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-datenschutz');
 
@@ -759,7 +774,9 @@ group TransformConsentEinwilligung1a(source src: CTS_Transport, target tgt: Cons
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -802,7 +819,8 @@ group TransformConsentEinwilligung1b(source src: CTS_Transport, target tgt: Cons
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -845,7 +863,8 @@ group TransformConsentEinwilligung2(source src: CTS_Transport, target tgt: Conse
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -887,7 +906,8 @@ group TransformConsentVersorgung1(source src: CTS_Transport, target tgt: Consent
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -928,7 +948,8 @@ group TransformConsentVersorgung2(source src: CTS_Transport, target tgt: Consent
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -969,7 +990,8 @@ group TransformConsentForschung1(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -1012,7 +1034,8 @@ group TransformConsentForschung2(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -1055,7 +1078,8 @@ group TransformConsentForschung3(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -1099,7 +1123,8 @@ group TransformConsentForschung4(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -1143,7 +1168,8 @@ group TransformConsentForschung5(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -1187,7 +1213,8 @@ group TransformConsentForschung6(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -1230,7 +1257,8 @@ group TransformConsentForschung7(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
@@ -1263,7 +1291,7 @@ group TransformConsentForschung7(source src: CTS_Transport, target tgt: Consent)
         //Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeiptunkt zur Gewinnung weiterer informationen uber den Behandlungsverlauf unterschrieben Datum -> provision.type.period.standort
          data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2383'" then
          {
-            values.value as datum -> tgt.dDateTime = dateOp(datum, 'dateTime');
+            values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
          };
     };
 }
@@ -1273,7 +1301,8 @@ group TransformConsentForschung8(source src: CTS_Transport, target tgt: Consent)
 
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-    
+     src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
     //category
     src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
