@@ -1,5 +1,6 @@
 /// version = 0.1
-/// title = "nNGM: nNGM_Mapping_TNMCTS - FHIR to CTS"
+/// title = "CTSTNMmap"
+/// FHIR to CTS
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS" = nNGM_Mapping_TNMCTS
 
@@ -13,33 +14,10 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
 
     src.entry as entry then
     {
-
-        /* ------------------------------ Specimen ---------------------------- */
-        entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
-        {
-            //Biopsie-ID
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.identifier as biopsieID then
-                    {   
-                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
-                        {
-                            specimen -> data.blockindex = 3;
-                            specimen -> data.groupindex = 0;
-                            specimen -> data.itemid = 'id_1601';
-                            biopsieID -> data.values as values, values.value = bid;
-                        };
-                    };
-                };
-            };
-        };
-        
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium'" then
         {
-            //Patient ID -> cts.patid
-             observation -> tgt.operations as operations collate then
+            // Patient ID -> cts.patid
+            observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
                 {
@@ -53,15 +31,14 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                 };
             };
             
-
-            //Erstdiagnose
+            // Erstdiagnose -> 0, 0, 1300
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
                 {
                     observation.extension as extensionEDT then
                     {   
-                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
+                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-erstdiagnose'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
@@ -69,7 +46,7 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                             extensionEDT -> data.values as values, values.value = 'yes';
                         };
                         
-                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/TNMErstdiagnose'" then
+                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-erstdiagnose'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
@@ -80,21 +57,21 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                 };
             };
 
-            //Kurativ-operabel
+            // Kurativ-operabel -> 0, 0, 1385
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
                 {
                     observation.extension as extensionEDT then
                     {   
-                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
+                        extensionEDT.valueBoolean where "value = true and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-kurativ-operabel'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
                             observation -> data.itemid = 'id_1385';
                             extensionEDT -> data.values as values, values.value = 'yes';
                         };
-                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/kurativoperabel'" then
+                        extensionEDT.valueBoolean where "value = false and $this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-kurativ-operabel'" then
                         {
                             observation -> data.blockindex = 0;
                             observation -> data.groupindex = 0;
@@ -104,19 +81,20 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     }; 
                 };
             };
-            //TNM-Klassifikation
-             observation -> tgt.operations as operations collate then
+
+            // TNM-Klassifikation -> 0, 0, 2492
+            observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
                 {
                     observation -> data.blockindex = 0;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2492';
-                    observation.note as note, note.text as text -> data.values as values, values.value = text;
+                    observation.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.coding as coding, coding.version as version -> data.values as values, values.value = version;
                 };
             };
-            //TNM-Klassifikation
-            //Date of assessment
+
+            // Date of assessment -> 1, 0, 1378
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -127,21 +105,22 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     observation.effectiveDateTime as effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
                 };
             };
-            //Prafix
+
+            // Prafix -> 1, 0, 1379
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
                 {
                     observation.component as component then
                     {   
-                        component.code as code where "code.coding.code = '59479-6'" then
+                        component.code as code where "code.coding.code = '21983-2'" then
                         {
                             observation -> data.blockindex = 1;
                             observation -> data.groupindex = 0;
                             observation -> data.itemid = 'id_1379';
                             code -> data.values as values, values.value = 'r - Rezidiv';
                         };
-                        component.code as code where "code.coding.code = '21983-2'" then
+                        component.code as code where "code.coding.code = '59479-6'" then
                         {
                             observation -> data.blockindex = 1;
                             observation -> data.groupindex = 0;
@@ -151,8 +130,9 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     };
                 };
             };
-            //Tumor (T)
-            //Größe und Ausdehnung des Tumors
+
+            // Tumor (T)
+            // Gr��e und Ausdehnung des Tumors -> 1, 0, id_1380
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -171,7 +151,8 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     };
                 };
             };
-            //prafix > 1, 0, id_2493
+
+            // prafix -> 1, 0, id_2493
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -192,7 +173,8 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     };
                 };
             };
-            //Suffix > 1, 0, id_2495
+
+            // Suffix -> 1, 0, id_2495
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -213,8 +195,9 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     };
                 };
             };
-            //Lymphknoten (N)
-            //Größe und Ausdehnung des Tumors
+
+            // Lymphknoten (N)
+            // Gr��e und Ausdehnung des Tumors -> 1, 0, 1381
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -227,13 +210,14 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                             observation -> data.groupindex = 0;
                             observation -> data.itemid = 'id_1381';
                             component.valueCodeableConcept as vcc,
-                            vcc.coding  as coding,
+                            vcc.coding as coding,
                             coding.code as code -> data.values as values, values.value = code;
                         };
                     };
                 };
             };
-            //prafix
+
+            // Prafix -> 1, 0, 2497
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -254,8 +238,9 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     };
                 };
             };
-            //Metastasen(M)
-            //Abwesenheit oder Vorhandensein von Metastasen
+
+            // Metastasen(M)
+            // Abwesenheit oder Vorhandensein von Metastasen -> 1, 0, 1382
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -274,7 +259,8 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     };
                 };
             };
-            //Prafix
+
+            // Prafix -> 1, 0, 2498
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then
@@ -295,7 +281,8 @@ group TransformTNMOperation(source src: Bundle, target tgt: BackboneElement)
                     };
                 };
             };
-            //UICC-Stadium
+
+            // UICC-Stadium -> 2, 0, 1383
             observation -> tgt.operations as operations collate then
             {
                 observation -> operations.data as data then

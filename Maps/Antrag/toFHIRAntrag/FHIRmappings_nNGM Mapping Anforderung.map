@@ -11,7 +11,7 @@ map "http://uk-koeln.de/fhir/StructureMap/AnforderungMapping" = AnforderungMappi
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
-uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
+uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
@@ -22,36 +22,40 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    src -> bundle.entry as entry then CreateEpisodeOfCareAnforderung(src, entry);
+    src -> bundle.entry as entry then CreateSpecimenAnforderung(src, entry);
     src -> bundle.entry as entry then CreateTransformSpecimenAnforderung(src, entry);
     src -> bundle.entry as entry then CreateTransformServiceRequestAnforderung(src, entry);
     src -> bundle.entry as entry then CreateTransformObservationAnforderung(src, entry);
     src -> bundle.entry as entry then CreateTransformOrganizationAnforderung(src, entry);
 }
 
-/* ------------------------------ EpisodeOfCare ---------------------------- */
-/*check if there is a EpisodeOfCare required*/
-group CreateEpisodeOfCareAnforderung(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Specimen ---------------------------- */
+/*check if there is a Specimen required*/
+group CreateSpecimenAnforderung(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1601'" then
         {
-            src -> tgt.resource = create('EpisodeOfCare') as episodeofcare then TransformEpisodeOfCareAnforderung(src, episodeofcare);
+            src -> tgt.resource = create('Specimen') as episodeofcare then TransformSpecimenAnforderung(src, episodeofcare);
         };
     };
 }
 
-group TransformEpisodeOfCareAnforderung(source src: CTS_Transport, target tgt: EpisodeOfCare)
+group TransformSpecimenAnforderung(source src: CTS_Transport, target tgt: Specimen)
 {
     src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
-    //status 
-    src -> tgt.status as code, 
+    //type 
+    src -> tgt.type as type,
+            type.coding as coding,
+            coding.system = 'http://snomed.info/sct',
+            coding.version = 'http://snomed.info/sct/900000000000207008',
+            coding.code as code 
             code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code')
 
     //subject
     src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
