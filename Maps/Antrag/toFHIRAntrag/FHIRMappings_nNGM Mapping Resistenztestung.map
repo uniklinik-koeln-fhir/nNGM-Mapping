@@ -13,6 +13,7 @@ TODO
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR" = nNGM_Mapping_ResistenztestungFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
@@ -22,9 +23,30 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.type = 'collection';
 
     //resources
+    src -> bundle.entry as entry, entry.resource = create('EpisodeOfCare') as episodeOfCare then TransformEpisodeOfCare(src, episodeOfCare); 
     src -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationKrebserkrankung(src, observation);
     src then CreateObservationsResistenztestung(src, bundle);
 }
+
+ /* ------------------------------ EpisodeOfCare ---------------------------- */ 
+group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCare) 
+{ 
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM'; 
+    src -> tgt.status = 'active'; 
+ 
+    // Patient reference 
+    src.patid as patid -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(patid, '\'Patient/\' + $this'); 
+ 
+    src.operations as operations, operations.data as data then 
+    { 
+        // Biopsienummer -> tgt.identifier.value 
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601'" then 
+        { 
+            values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value); 
+        }; 
+    }; 
+} 
 
 /* ------------------------------ Observation Progress/Rezidiv Krebserkrankung ---------------------------- */
 group TransformObservationKrebserkrankung(source src: CTS_Transport, target tgt: Observation)
