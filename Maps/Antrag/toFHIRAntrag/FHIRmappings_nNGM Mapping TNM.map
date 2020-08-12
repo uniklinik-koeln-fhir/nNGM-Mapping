@@ -20,63 +20,31 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-
-    //Check if any fields are filled in before creating the observation
-    src -> bundle.entry as entry then CreateTransformObservationTNM(src, entry);
-    src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen);
+    src -> bundle.entry as entry, entry.resource = create('EpisodeOfCare') as episodeOfCare then TransformEpisodeOfCare(src, episodeOfCare);
+    src -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationTNM(src, observation);
 }
 
-group TransformSpecimenTNM(source src: CTS_Transport, target tgt: Specimen)
+ /* ------------------------------ EpisodeOfCare ---------------------------- */
+group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCare)
 {
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+    src -> tgt.status = 'active';
 
-    src -> tgt.type as type, 
-                        type.coding as coding, 
-                        coding.code as code,
-                        code.extension as dataAbsentReason, 
-                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                        dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
+    // Patient reference
+    src.patid as patid -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(patid, '\'Patient/\' + $this');
 
     src.operations as operations, operations.data as data then
     {
-        //Biopsy-ID -> extension angaben
+        // Biopsienummer -> tgt.identifier.value
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1601'" then
         {
-                values.value as bid -> tgt.identifier = create('Identifier') as biopsieID,
-                                                          biopsieID.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsieID',
-                                                          biopsieID.value = bid;
+            values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value);
         };
     };
 }
 
-
-/*checks if there is a need for a Condition resource*/
-group CreateTransformObservationTNM(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1573'
-        or blockindex = 0 and groupindex = 0 and itemid = 'id_1300'
-        or blockindex = 0 and groupindex = 0 and itemid = 'id_1385'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_2492'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1378'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1379'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1380'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_2493'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_2495'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1381'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_2497'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1382'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_2498'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1383'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationTNM(src, observation);
-        };
-    };
-}
-
+ /* ------------------------------ Observation ---------------------------- */
 group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation)
 {
     src -> tgt.id = uuid();
