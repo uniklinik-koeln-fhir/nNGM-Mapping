@@ -22,6 +22,8 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/AnforderungFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMMap"
+//Resistenztestung
+
 
 
 group MapAntrag(source src:CTS_Transport, target bundle: Bundle)
@@ -74,4 +76,91 @@ group MapAntrag(source src:CTS_Transport, target bundle: Bundle)
     //TNM
     src -> bundle.entry as entry then CreateTransformObservationTNM(src, entry);
     src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen);
+
+    //Resistenztestung
+
+    //Composition
+    MapCompositionAnmeldung(src, tgt);
+     
 }
+
+//Supposed to take the relevant references from the generated resources above and add it to the bundle
+group MapCompositionAnmeldung(source src:Bundle, target bundle: Bundle)
+{
+
+    
+    map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_CompositionFHIR" = nNGM_Mapping_AntragFHIR
+
+    uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+    uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+    uses "http://hl7.org/fhir/StructureDefinition/Composition" as target
+
+
+    imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AntragFHIR"
+    
+    src -> tgt.status = cast('final', 'FHIR.code');
+    src -> tgt.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'anmeldung');
+    src -> tgt.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
+    src -> tgt.title =  'Anmeldung';
+
+    //crf date? -> date
+
+
+    //Patient-id -> subject
+    entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorboard'" then
+        {   
+            //Patient ID -> cts.patid
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.subject as subject then
+                {   
+                    subject.reference as patient then
+                    {
+                        patient -> tgt.patid = evaluate(patient, '$this.split(\'\/\').last()');
+                    };
+                };
+            };
+        };
+       
+    //netzwerkzentrm -> author 
+    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" then 
+        {
+            //Netzwerkzentrum Standort
+            organization -> tgt.data as data then 
+            {
+                organization.identifier as name then
+                {
+                    organization -> data.blockindex = 2;
+                    organization -> data.groupindex = 0;
+                    organization -> data.itemid = 'id_2435';
+                    name.value as value -> data.values as values, values.value = value;
+                };
+            };
+        };
+
+    src.entry as entry, 
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium'" then
+    {
+        observation -> tgt.data as data then
+        {
+            src -> tgt.section as section, 
+            section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'tnm'),
+            section.entry as entry,
+            entry.reference =  evaluate('observation.id', 'observation.resourceType + / + id');
+        }     
+    };
+
+    src.entry as entry, 
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium'" then
+    {
+        observation -> tgt.data as data then
+        {
+            src -> tgt.section as section, 
+            section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'tnm'),
+            section.entry as entry,
+            entry.reference =  evaluate('observation.id', 'observation.resourceType + / + id');
+        }     
+    };
+}    
+
+
