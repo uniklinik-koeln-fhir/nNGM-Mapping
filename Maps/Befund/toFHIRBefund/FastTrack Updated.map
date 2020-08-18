@@ -1,0 +1,559 @@
+/// version = 0.1
+/// title = "FastTrackFHIR"
+
+/*
+   EXCEL FILE 
+    - Biopsie-ID is not mapped on the excel file 
+   ServiceRequest -> Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
+                    in the CTS structure
+  
+
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/FastTrackFHIR" = FastTrackFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
+uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
+uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
+
+
+
+
+group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+{
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';
+    //src -> bundle.entry as entry then CreateTransformEpisodeOfCare(src, entry);
+    src -> bundle.entry as entry then CreateTransformOrganization(src, entry);
+    src -> bundle.entry as entry then CreateTransformObservationBRAFExon15(src, entry);
+    src -> bundle.entry as entry then CreateTransformObservationBRAFExon19(src, entry);
+    src -> bundle.entry as entry then CreateTransformObservationBRAFExon20(src, entry);
+    src -> bundle.entry as entry then CreateTransformObservationBRAFExon21(src, entry);
+    src -> bundle.entry as entry then CreateTransformObservationKRASExon2(src, entry);
+    src -> bundle.entry as entry then CreateTransformServiceRequest(src, entry);
+    
+}
+
+/* ------------------------------ Episode Of Care ---------------------------- */
+
+/*group CreateTransformEpisodeOfCare(source src: CTS_Transport, target tgt: BackboneElement)
+
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            src -> tgt.resource = create('EpisodeOfCare') as episodeOfCare then TransformEpisodeOfCare(src, episodeOfCare);
+        };          
+    };
+}
+
+group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCare)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+
+    //src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    src.operations as operations, operations.data as data then
+    {
+        src -> tgt.status = cast('active', 'FHIR.code');
+        src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+        // ------------------------------ Referenzen ---------------------------- 
+        // Untersuchungs-ID
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as value ->    tgt.identifier as identifier,
+                                        identifier.value = value;
+        };
+    };
+}*/
+
+/* ------------------------------ Organization ---------------------------- */
+group CreateTransformOrganization(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            src -> tgt.resource = create('Organization') as organization then TransformOrganization(src, organization);
+        };
+    };
+}
+
+/* ------------------------------ Organization ---------------------------- */
+group TransformOrganization(source src: CTS_Transport, target tgt: Organization)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
+
+    src.operations as operations, operations.data as data then
+    {
+        /* ------------------------------ Netzwerkzentrum ---------------------------- */
+        // Standort
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as name -> tgt.name = name;
+        };
+
+    };
+}
+        
+/* ------------------------------ Observation BRAF Exon 15 ---------------------------- */
+group CreateTransformObservationBRAFExon15(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1945'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_1912'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_1913'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_1946'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_1947'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_1948'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon15(src, observation);
+        };
+    };
+}
+
+/* ------------------------------ Observation BRAF Exon 15 ---------------------------- */
+group TransformObservationBRAFExon15(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+    
+    //BRAF code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'C158854', 'BRAF Exon 15 Mutation');
+
+    
+    //Fast track category
+    src then MapfasttrackCategory(src, tgt);
+
+    src.operations as operations, operations.data as data then
+    {
+
+        // Date of Assessment
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1945'" then
+        {
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
+        };
+        
+        // Assay
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1912'" then
+        {
+            values.value as assay -> tgt.component = create('BackboneElement') as componentAssay then
+            {
+                assay -> componentAssay.code = cc('http://ncit.nci.nih.gov', 'C60819');
+                assay -> componentAssay.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-assays', assay) ;
+            };
+        };
+
+        // Hersteller
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1913'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
+            {
+                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
+                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
+            };
+        };
+
+        // Ergebnis
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1946'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis);
+        };
+        
+        //Change DNA
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1947'" then
+        {
+            values.value as DNAchg -> tgt.component = create('BackboneElement') as componentDNAchg then
+            {
+                DNAchg -> componentDNAchg.code = cc('http://loinc.org', '48004-6');
+                DNAchg -> componentDNAchg.valueString = DNAchg;
+            };
+        };
+
+        //Change Protein
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1948'" then
+        {
+            values.value as AminoAcidChg -> tgt.component = create('BackboneElement') as componentAminoAcidChg then
+            {
+                AminoAcidChg -> componentAminoAcidChg.code = cc('http://loinc.org', '48005-3');
+                AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
+            };
+        };
+
+    };
+}
+
+/* ------------------------------ Observation EGFR Exon 19 ---------------------------- */
+group CreateTransformObservationBRAFExon19(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1950'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_1951'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_1952'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon19(src, observation);
+        };
+    };
+}
+
+/* ------------------------------ Observation EGFR Exon 19 ---------------------------- */
+group TransformObservationBRAFExon19(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+
+    //BRAF code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128662','EGFR Exon 19 Mutation');
+
+    //Fast track category
+    src then MapfasttrackCategory(src, tgt);
+
+    src then MapEGFREXO1921(src, tgt);
+    
+    src.operations as operations, operations.data as data then
+    {
+        // Ergebnis
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1950'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+        };
+        //Change DNA
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1951'" then
+        {
+            values.value as DNAchg -> tgt.component = create('BackboneElement') as componentDNAchg then
+            {
+                DNAchg -> componentDNAchg.code = cc('http://loinc.org', '48004-6');
+                DNAchg -> componentDNAchg.valueString = DNAchg;
+            };
+        };
+        //Change Protein
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1952'" then
+        {
+            values.value as AminoAcidChg -> tgt.component = create('BackboneElement') as componentAminoAcidChg then
+            {
+                AminoAcidChg -> componentAminoAcidChg.code = cc('http://loinc.org', '48005-3');
+                AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
+            };
+        };
+
+    };
+}
+
+/* ------------------------------ Observation EGFR Exon 20 ---------------------------- */
+group CreateTransformObservationBRAFExon20(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1954'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_1955'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_1956'
+        " then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon20(src, observation);
+        };
+    };
+}
+
+/* ------------------------------ Observation EGFR Exon 20 ---------------------------- */
+group TransformObservationBRAFExon20(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+
+    //EGFR Exon code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'EGFR Exon 20','EGFR Exon 20');
+
+    //Fast track category
+    src then MapfasttrackCategory(src, tgt);
+
+    src then MapEGFREXO1921(src, tgt);
+
+    src.operations as operations, operations.data as data then
+    {
+
+        // Ergebnis
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1954'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+        };
+        //Change DNA
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1955'" then
+        {
+            values.value as DNAchg -> tgt.component = create('BackboneElement') as componentDNAchg then
+            {
+                DNAchg -> componentDNAchg.code = cc('http://loinc.org', '48004-6');
+                DNAchg -> componentDNAchg.valueString = DNAchg;
+            };
+        };
+        //Change Protein
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1956'" then
+        {
+            values.value as AminoAcidChg -> tgt.component = create('BackboneElement') as componentAminoAcidChg then
+            {
+                AminoAcidChg -> componentAminoAcidChg.code = cc('http://loinc.org', '48005-3');
+                AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
+            };
+        };
+
+    };
+}
+
+
+/* ------------------------------ Observation EGFR Exon 21 ---------------------------- */
+group CreateTransformObservationBRAFExon21(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1958'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_1959'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_1960'
+        " then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon21(src, observation);
+        };
+    };
+}
+
+/* ------------------------------ Observation EGFR Exon 21 ---------------------------- */
+group TransformObservationBRAFExon21(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+
+    //EGFR Exon code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128666','EGFR Exon 21 Mutation');
+
+    //Fast track category
+    src then MapfasttrackCategory(src, tgt);
+
+    src then MapEGFREXO1921(src, tgt);
+
+    src.operations as operations, operations.data as data then
+    {
+        // Ergebnis
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1958'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+        };
+        //Change DNA
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1959'" then
+        {
+            values.value as DNAchg -> tgt.component = create('BackboneElement') as componentDNAchg then
+            {
+                DNAchg -> componentDNAchg.code = cc('http://loinc.org', '48004-6');
+                DNAchg -> componentDNAchg.valueString = DNAchg;
+            };
+        };
+        //Change Protein
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1960'" then
+        {
+            values.value as AminoAcidChg -> tgt.component = create('BackboneElement') as componentAminoAcidChg then
+            {
+                AminoAcidChg -> componentAminoAcidChg.code = cc('http://loinc.org', '48005-3');
+                AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
+            };
+        };
+
+    };
+}
+
+/* ------------------------------ Observation KRAS Exon 2 ---------------------------- */
+group CreateTransformObservationKRASExon2(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1961'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2610'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2611'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_1962'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_1963'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_1964'
+        " then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationKRASExon2(src, observation);
+        };
+    };
+}
+
+/* ------------------------------ Observation EGFR Exon 21 ---------------------------- */
+group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+
+    //EGFR Exon code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C135715','KRAS Exon 2 Mutation');
+
+    //Fast track category
+    src then MapfasttrackCategory(src, tgt);
+
+    src.operations as operations, operations.data as data then
+    {
+        // Date of Assessment
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1961'" then
+        {
+            values.value as effectiveDT  -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
+        };
+
+        // Assay
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2610'" then
+        {
+            values.value as assay -> tgt.component = create('BackboneElement') as componentAssay then
+            {
+                assay -> componentAssay.code = cc('http://ncit.nci.nih.gov', 'C60819');
+                assay -> componentAssay.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/fasttrack-assays',assay) ;
+            };
+        };
+
+
+        // Hersteller
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2611'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
+            {
+                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
+                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
+            };
+        };
+
+        // Ergebnis
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1962'" then
+        {
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+        };
+        //Change DNA
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1963'" then
+        {
+            values.value as DNAchg -> tgt.component = create('BackboneElement') as componentDNAchg then
+            {
+                DNAchg -> componentDNAchg.code = cc('http://loinc.org', '48004-6');
+                DNAchg -> componentDNAchg.valueString = DNAchg;
+            };
+        };
+        //Change Protein
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1964'" then
+        {
+            values.value as AminoAcidChg -> tgt.component = create('BackboneElement') as componentAminoAcidChg then
+            {
+                AminoAcidChg -> componentAminoAcidChg.code = cc('http://loinc.org', '48005-3');
+                AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
+            };
+        };
+
+    };
+}
+
+group MapfasttrackCategory(source src: CTS_Transport, target tgt: Observation)
+{
+    // ------------------------------ Netzwerkzentrum ---------------------------- 
+    // SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2486'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
+            {
+                sop -> componentSop.valueString = sop;
+                sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
+            };
+        };
+    };
+    //FISH category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';                                                    
+    };
+}
+
+group MapEGFREXO1921(source src: CTS_Transport, target tgt: Observation)
+{
+    // ------------------------------ EGFR Exon 19-21 ---------------------------- 
+    src.operations as operations, operations.data as data then
+    {
+        // Date of Assessment
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'ft_grp_egfr_19-21'" then
+        {
+            values.value as effectiveDT  -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
+        };
+
+
+        // Assay
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2608'" then
+        {
+            values.value as assay -> tgt.component = create('BackboneElement') as componentAssay then
+            {
+                assay -> componentAssay.code = cc('http://ncit.nci.nih.gov', 'C60819');
+                assay -> componentAssay.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/fasttrack-assays',assay) ;
+            };
+        };
+        // Hersteller
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2609'" then
+        {
+            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
+            {
+                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
+                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
+            };
+        };
+    };
+}
+
+/* -------------------------------------- Service Request -------------------------------------------- */
+group CreateTransformServiceRequest(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2462'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequest(src, serviceRequest);
+        };
+    };
+}
+
+
+group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    src.operations as operations, operations.data as data then
+    {
+        //Status der Untersuchungen
+        //Durchfuehrung
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
+        {
+            values.value as value -> tgt.status = value;
+        };
+        //Abschluss
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
+        {
+            values.value as value -> tgt.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusExtension then
+            {
+                value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                value -> statusExtension.url = 'status';
+            };
+
+        };
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            values.value as value -> tgt.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumExtension then
+            {
+                value -> datumExtension.valueDate = dateOp(value, 'date');
+                value -> datumExtension.url = 'datum';
+            };
+
+        };
+
+    };
+}
