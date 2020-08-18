@@ -30,7 +30,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         {
             episodeOfCare.identifier as identifier -> tgt.operations as operations collate then
             {
-                identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" -> operations.data as data then
+                identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer' and %tgt.operations.data.where(itemid = 'id_1601').exists().not()" -> operations.data as data then
                 {
                     episodeOfCare -> data.blockindex = 2;
                     episodeOfCare -> data.groupindex = 0;
@@ -70,9 +70,9 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 observation.effectiveDateTime as effectiveDateTime where "$this.effectiveDateTime.empty() = false" then
                 {
-                    observation -> data.blockindex = 0;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2397';
+                    effectiveDateTime -> data.blockindex = 0;
+                    effectiveDateTime -> data.groupindex = 0;
+                    effectiveDateTime -> data.itemid = 'id_2397';
                     effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
                 };
             };
@@ -81,24 +81,136 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         // Observation EGFR
         observations as observation where "$this.code.coding.code = 'C134501'" -> tgt.operations as operations collate then
         {
+            // Observation.effectiveDateTime -> 1, 0, 2502
+            observation then TransformEffectiveDateTimeObservation(observation, tgt);
+
+            // Mutations
             observation then TransformMutationsCTSResistenztestung(observation, tgt);
-            
+
+            // Therapy components
+            observation.component as components -> operations.data as data then 
+            {
+                // 1. Therapie
+                components as component where "$this.extension.valueInteger = 1" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1441';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+
+                // 2. Therapie
+                components as component where "$this.extension.valueInteger = 2" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1442';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+
+                // 3. Therapie
+                components as component where "$this.extension.valueInteger = 3" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1443';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+
+                // 4. Therapie
+                components as component where "$this.extension.valueInteger = 4" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1444';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+            };
         };
 
         // Observation ALK
         observations as observation where "$this.code.coding.code = 'C142114'" -> tgt.operations as operations collate then
         {
-            observation then TransformMutationsCTSResistenztestung(observation, tgt);
+            // Observation.effectiveDateTime -> 1, 0, 2502
+            observation then TransformEffectiveDateTimeObservation(observation, tgt);
             
+            // Mutations
+            observation then TransformMutationsCTSResistenztestung(observation, tgt);
+
+            // Therapy and fusionPartner
+            observation.component as components -> operations.data as data then 
+            {
+                // Observation.Fusionpartner -> 1, 0, 2504
+                components as component where "$this.code.coding.code = 'C28510'" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_2504';
+                    component.valueString as valueString -> data.values as values, values.value = valueString;
+                };
+
+                // 1. Therapie
+                components as component where "$this.extension.valueInteger = 1" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1447';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+
+                // 2. Therapie
+                components as component where "$this.extension.valueInteger = 2" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1448';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+
+                // 3. Therapie
+                components as component where "$this.extension.valueInteger = 3" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1449';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+
+                // 4. Therapie
+                components as component where "$this.extension.valueInteger = 4" -> operations.data as data then
+                {   
+                    component -> data.blockindex = 1;
+                    component -> data.groupindex = 0;
+                    component -> data.itemid = 'id_1450';
+                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+                };
+            };
         };
 
         // Observation ROS1
         observations as observation where "$this.code.coding.code = 'C131071'" -> tgt.operations as operations collate then
         {
+            // Observation.effectiveDateTime -> 1, 0, 2502
+            observation then TransformEffectiveDateTimeObservation(observation, tgt);
+
+            // Mutations
             observation then TransformMutationsCTSResistenztestung(observation, tgt);
-            
         };
 
+    };
+}
+
+group TransformEffectiveDateTimeObservation(source observation: Observation, target tgt: CTS_Transport)
+{
+    observation -> tgt.operations as operations collate, operations.data as data then 
+    {
+        observation.effectiveDateTime as effectiveDateTime where "$this.effectiveDateTime.empty() = false and %tgt.operations.data.where(itemid = 'id_1436').exists().not()" then
+        {
+            effectiveDateTime -> data.blockindex = 1;
+            effectiveDateTime -> data.groupindex = 0;
+            effectiveDateTime -> data.itemid = 'id_2502';
+            effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
+        };
     };
 }
 
