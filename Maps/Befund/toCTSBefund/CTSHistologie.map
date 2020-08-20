@@ -4,8 +4,24 @@
 /*
 TODO
 
-TUMORSTATUS IS NOT MAAPED BECAUSE TODOS IN TOFHIR MAPPING
-Not sure about ICD-O code of Siegelringzellkarzinomen
+Components not used anymore according to forms
+Observation is skipped?
+
+Move to DiagnosticReport:
+//Untersuchungs-ID 
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> tgt.data as data then
+                {
+                    specimen.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/fallnummer'" then
+                    {   
+                        specimen -> data.blockindex = 1;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'assessment_id';
+                        value -> data.values as values, values.value = value;
+                    };
+                };
+            };
 
 */
 
@@ -14,70 +30,51 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS" = nNGM_Map
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
+group TransformHistologieOperation(source src: Bundle, target tgt: BackboneElement)
 {
-    src -> tgt.version = '1.1';
-    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
-
-    src -> tgt.operations as operations collate, operations.crfid = '*-HL1';
-    src -> tgt.operations as operations collate, operations.type = 'save';
+    src -> tgt.type = 'save';
+    src -> tgt.crfid = 'HL1';
 
     src.entry as entry then
     {
+
+        /*------------------------------Specimen-------------------------------*/
+
         //Specimen
         entry.resource as specimen where "resource is Specimen" then
         {
             
-            //Untersuchungs-ID 
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/fallnummer'" then
-                    {   
-                        specimen -> data.blockindex = 5;
-                        specimen -> data.groupindex = 0;
-                        specimen -> data.itemid = 'extern_patho_case_id';
-                        value -> data.values as values, values.value = value;
-                    };
-                };
-            };
+            //biopsienummer identifier --> Biopsy-ID
 
-            //Pathologie-Fall-ID
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
+                specimen -> tgt.data as data then
                 {
                     specimen.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
                     {   
-                        specimen -> data.blockindex = 0;
+                        specimen -> data.blockindex = 1;
                         specimen -> data.groupindex = 0;
-                        specimen -> data.itemid = 'assessment_id';
+                        specimen -> data.itemid = 'id_1601';
                         value -> data.values as values, values.value = value;
                     };
                 };
-            };
-            
-            //Eingang des Tumormaterials in der Pathologie
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
+
+
+             //receivedTime -> Eingang des Tumormaterials in der Pathologie
+
+                specimen -> tgt.data as data then
                 {
-                    specimen.collection as collection, collection.collectedDateTime as eingangsdatum then
+                    specimen.receivedTime as receivedtime then
                     {   
                         specimen -> data.blockindex = 0;
                         specimen -> data.groupindex = 0;
                         specimen -> data.itemid = 'id_2515';
-                        eingangsdatum -> data.values as values, values.value = eingangsdatum;
+                        receivedtime -> data.values as values, values.value = receivedtime;
                     };
                 };
-            };
 
+            
+            //accessionIdentifier.value -> Eingangsnummer des Tumormaterials in der Pathologie
 
-            //Eingangsnummer des Tumormaterials in der Pathologie
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
+                specimen -> tgt.data as data then
                 {
                     specimen.accessionIdentifier as identifier, identifier.value as identValue then
                     {   
@@ -87,62 +84,71 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                         identValue -> data.values as values, values.value = identValue;
                     };
                 };
-            };
+        
 
-            //Tumormaterial 
-            //THIS GROUP MAPS NOTHING BECAUSE TODOS IN TO FHIR MAPPING. LOOK TODO IN THE TOFHIR MAP!
-            /*specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
+            //type.text -> Tumormaterial 
+            
+
+                specimen -> tgt.data as data then
                 {
-                    specimen.accessionIdentifier as identifier, identifier.value as identValue then
+                    specimen.type as type, type.text as text then
                     {   
                         specimen -> data.blockindex = 0;
                         specimen -> data.groupindex = 0;
-                        specimen -> data.itemid = 'id_2516';
-                        identValue -> data.values as values, values.value = identValue;
+                        specimen -> data.itemid = 'id_2517';
+                        text -> data.values as values, values.value = text;
                     };
                 };
-            };*/
         };
 
-       
-        entry.resource as observation where "resource is Observation" then
+        /*------------------------------EpisodeOfCare-------------------------------*/
+
+
+        entry.resource as episodeofcare where "resource is EpisodeOfCare" then
         {
-            //Klassifikation
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
+            //Pathologie-Fall-ID
+                episodeofcare -> tgt.data as data then
                 {
-                    observation.code as code, code.coding as coding then
+                    episodeofcare.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer'" then
+                    {   
+                        episodeofcare -> data.blockindex = 1;
+                        episodeofcare -> data.groupindex = 0;
+                        episodeofcare -> data.itemid = 'extern_patho_case_id';
+                        value -> data.values as values, values.value = value;
+                    };
+                };
+
+            
+        /*------------------------------Observation-------------------------------*/
+
+        entry.resource as observation where "resource is Observation and meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histologie'" then
+        {
+            //Component.code -> Klassifikation
+                observation -> tgt.data as data then
+                {
+                    observation.component as component, component.valueCodeableConcept as vcc, vcc.coding as coding where "valueCodeableConcept.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/histologie-klassifikation'" then
                     {   
                         observation -> data.blockindex = 2;
                         observation -> data.groupindex = 0;
                         observation -> data.itemid = 'id_1658';
-                        coding -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' +  $this.display');
+                        coding.code as code -> data.values as values, values.value = code;
                     };
                 };
-            };
 
-            //Lokalisation
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
+            //bodysite -> Lokalisation
+                observation -> tgt.data as data then
                 {
-                    observation.bodySite as code, code.coding as coding then
+                    observation.bodySite as code, code.coding as coding, coding.code as code then
                     {   
                         observation -> data.blockindex = 2;
                         observation -> data.groupindex = 0;
                         observation -> data.itemid = 'id_2469';
-                        coding -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' +  $this.display');
+                        code -> data.values as values, values.value = code;
                     };
                 };
-            };
 
-            //Grading
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
+            // valueCodeableConcept -> Grading
+                observation -> tgt.data as data then
                 {
                     observation.valueCodeableConcept as cc, cc.coding as coding then
                     {   
@@ -152,12 +158,12 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                         coding.code as code -> data.values as values, values.value = code;
                     };
                 };
-            };
-
+            
+            /*
             //Wachstumsmuster bei Adenokarzinom lepidisch
             observation -> tgt.operations as operations collate then
             {
-                observation -> operations.data as data then
+                observation -> tgt.data as data then
                 {
                    observation.component as component then
                     {   
@@ -175,7 +181,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             //Wachstumsmuster bei Adenokarzinom azinär
             observation -> tgt.operations as operations collate then
             {
-                observation -> operations.data as data then
+                observation -> tgt.data as data then
                 {
                    observation.component as component then
                     {   
@@ -193,7 +199,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             //Wachstumsmuster bei Adenokarzinom papillär
             observation -> tgt.operations as operations collate then
             {
-                observation -> operations.data as data then
+                observation -> tgt.data as data then
                 {
                    observation.component as component then
                     {   
@@ -211,7 +217,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             //Wachstumsmuster bei Adenokarzinom mikropapillär
             observation -> tgt.operations as operations collate then
             {
-                observation -> operations.data as data then
+                observation -> tgt.data as data then
                 {
                    observation.component as component then
                     {   
@@ -229,7 +235,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             //Wachstumsmuster bei Adenokarzinom solide
             observation -> tgt.operations as operations collate then
             {
-                observation -> operations.data as data then
+                observation -> tgt.data as data then
                 {
                    observation.component as component then
                     {   
@@ -248,7 +254,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             //Anteil an Siegelringzellkarzinomen 
             observation -> tgt.operations as operations collate then
             {
-                observation -> operations.data as data then
+                observation -> tgt.data as data then
                 {
                    observation.component as component then
                     {   
@@ -262,55 +268,55 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
-
-
-            //Durchführung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2520').exists().not()" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2520';
-                        status.value as value -> data.values as values, values.value = value;
-                    };
-                };
-            };
-
-            //Abschluss
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2462').exists().not()" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2462';
-                        status.extension as extension then
-                        {
-                            extension.valueCodeableConcept as cc, cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Datum des Abschlusses
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2521').exists().not()" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2521';
-                        effectiveperiod.end as abschlussdatum -> data.values as values, values.value = abschlussdatum;
-                    };
-                };
-            };
+            */
         };
+
+        /*------------------------------ServiceRequest-------------------------------*/
+
+        entry.resource as servicerequest where "resource is ServiceRequest and meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
+        {
+
+                //status.code Durchführung
+                servicerequest -> tgt.data as data then
+                {
+                    servicerequest.status as status then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2520';
+                        status -> data.values as values, values.value = status;
+                    };
+                };
+        
+
+                //Abschluss
+                servicerequest -> tgt.data as data then
+                {
+                    servicerequest.status as status, 
+                    status.extension as abschluss, 
+                    abschluss.extension as abschlussstatus where "$this.url = 'status'" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2462';
+                        abschlussstatus.valuecoding as vc, vc.code as value  -> data.values as values, values.value = value;
+                    };
+                };
+            
+                //Datum des Abschlusses
+                servicerequest -> tgt.data as data then
+                {
+                    servicerequest.status as status, 
+                    status.extension as abschluss, 
+                    abschluss.extension as abschlussstatus where "$this.url = 'datum'" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2462';
+                        abschlussstatus.valueDate as value  -> data.values as values, values.value = value;
+                    };
+                };
+        };
+    };
     };
 }
