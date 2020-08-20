@@ -1,6 +1,17 @@
 /// version = 0.1
 /// title = "nNGM: nNGM_Mapping_BasisangabenCTS - FHIR to CTS"
 
+/*
+Check identifiers by system
+2296
+2297
+id_2293 cut of day 
+
+Coverage triggers SD map too 
+
+*/
+
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCTS" = nNGM_Mapping_BasisangabenCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
@@ -9,11 +20,11 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneElement)
 {
     src -> tgt.type = 'save';
-    src -> tgt.crfid = '1_BA';
+    src -> tgt.crfid = 'BA';
 
     src.entry as entry then
     {
-        entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://fhir.de/StructureDefinition/organization-de-basis/0.2'" then 
+        entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" then 
         {
             organization -> tgt.data as data then 
             {
@@ -24,7 +35,22 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
                         organization -> data.blockindex = 0;
                         organization -> data.groupindex = 0;
                         organization -> data.itemid = 'id_ba_siteid';
-                         ival -> data.values as values, values.unit = 'count', values.value = ival;
+                        ival -> data.values as values, values.unit = 'count', values.value = ival;
+                    };
+                };
+            };
+
+            //Netzwerkpartnernr
+            organization -> tgt.data as data then 
+            {
+                organization.address as address then
+                {
+                    address.text as text then
+                    {
+                        organization -> data.blockindex = 1;
+                        organization -> data.groupindex = 0;
+                        organization -> data.itemid = 'id_2326';
+                        text -> data.values as values, values.value = text;
                     };
                 };
             };
@@ -43,11 +69,7 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
                     };
                 };
             };
-        };
 
-
-        entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site' and resource.id = '70c389c2-4cb6-445c-99f7-df982132c5ca'" then 
-        {
             //Netzwerkzentrum Standort
             organization -> tgt.data as data then 
             {
@@ -75,9 +97,9 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
 
         /* ------------------------------ ServiceRequest ---------------------------- */
 
-        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
+        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorboard'" then
         {   
-            /*//Patient ID -> cts.patid
+            //Patient ID -> cts.patid
             servicerequest -> tgt.data as data then
             {
                 servicerequest.subject as subject then
@@ -87,7 +109,7 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
                         patient -> tgt.patid = evaluate(patient, '$this.split(\'\/\').last()');
                     };
                 };
-            };*/
+            };
 
             //Anforderungsdatum
             servicerequest -> tgt.data as data then 
@@ -104,7 +126,7 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
             //Patient ist zum zeitpunkt der Anforderung 
             servicerequest -> tgt.data as data then
             {
-                servicerequest.extension as aufenthaltsart, aufenthaltsart.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsartBasisangaben'" then
+                servicerequest.extension as aufenthaltsart, aufenthaltsart.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart'" then
                 {
                     aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
                     {
@@ -120,13 +142,78 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
                         servicerequest -> data.itemid  = 'id_1576';
                         code -> data.values as values, values.value = 'ambulant';
                     };
-                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'NA'" then
+                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'UNK'" then
                     {
                         servicerequest -> data.blockindex = 3;
                         servicerequest -> data.groupindex = 0;
                         servicerequest -> data.itemid  = 'id_1576';
                         code -> data.values as values, values.value = 'N/A';
                     };
+                };
+            };
+
+            //Ich wünsche eine Vorstellung des Falls im Tumorboard des nNGM (Zentrum der Anforderung)
+             servicerequest -> tgt.data as data then
+            {
+                servicerequest.requester as requester, requester.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb'" then
+                {
+                    extension.valueBoolean as valueBoolean where "valueBoolean = true" then
+                    {
+                        servicerequest -> data.blockindex = 10;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2296';
+                        valueBoolean -> data.values as values, values.value = 'yes';
+                    };
+
+                    extension.valueBoolean as valueBoolean where "valueBoolean = false" then
+                    {
+                        servicerequest -> data.blockindex = 10;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2296';
+                        valueBoolean -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+            
+            //Ich möchte am Tumorboard perönlich oder per Telefonkonferenz teilnehmen
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.requester as requester, requester.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb'" then
+                {
+                    extension.valueBoolean where "$this.valueBoolean = true" then
+                    {
+                        servicerequest -> data.blockindex = 10;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2297';
+                        extension.valueBoolean -> data.values as values, values.value = 'yes';
+                    };
+
+                    extension.valueBoolean where "$this.valueBoolean = false" then
+                    {
+                        servicerequest -> data.blockindex = 10;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2297';
+                        extension.valueBoolean -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+        };
+        
+        
+        /* ------------------------------ Practitioner ---------------------------- */
+
+
+            entry.resource as practitioner where "resource is Practitioner" then 
+        {   
+            //Email addresse behandler
+            practitioner -> tgt.data as data then 
+            {
+                practitioner.telecom as telecom then
+                {
+                    practitioner -> data.blockindex = 10;
+                    practitioner -> data.groupindex = 0;
+                    practitioner -> data.itemid = 'id_2298';
+                    telecom.value as email -> data.values as values, values.value = email;
                 };
             };
         };
@@ -136,6 +223,7 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
 
         entry.resource as patient where "resource is Patient" then
         {   
+            //GENDER
             patient -> tgt.data as data then 
             {
                 patient.gender as gender where "gender = 'female'" then
@@ -152,7 +240,8 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
                     patient -> data.itemid = 'id_1131';
                     gender -> data.values as values, values.value = 'männlich'; 
                 };
-                patient.gender as gender where "gender = 'X'" then
+
+                patient.extension as gender where "extension.valueCodeableConcept.coding.code = 'X'" then
                 {
                     patient -> data.blockindex = 4;
                     patient -> data.groupindex = 0;
@@ -174,21 +263,36 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
             };
         };
 
+        /* ------------------------------ Coverage ---------------------------- */
+
         entry.resource as coverage where "resource is Coverage" then
         {   
-            //Type.text
+            //Type.text -> Krankenkasse
             coverage -> tgt.data as data then 
             {
-                coverage.type as type, type.text as text then
+                coverage.payor as payor, payor.display as display then
                 {
                     coverage -> data.blockindex = 5;
                     coverage -> data.groupindex = 0;
                     coverage -> data.itemid = 'id_2459';
-                    text -> data.values as values, values.value = text;
+                    display -> data.values as values, values.value = display;
                 };
             };
 
-            //valueCodeableConcept.coding.code
+
+            //type.coding -> TYP
+            coverage -> tgt.data as data then 
+            {
+                coverage.type as type, type.coding as coding then
+                {
+                    coverage -> data.blockindex = 5;
+                    coverage -> data.groupindex = 0;
+                    coverage -> data.itemid = 'id_1269';
+                    coding.code as code -> data.values as values, values.value = code;
+                };
+            };
+
+            //valueCodeableConcept.coding.code -> PKV tariff
             coverage -> tgt.data as data then 
             {
                 coverage.extension as ext, ext.valueCodeableConcept as vcc, vcc.coding as coding then
@@ -196,7 +300,30 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
                     coverage -> data.blockindex = 5;
                     coverage -> data.groupindex = 0;
                     coverage -> data.itemid = 'id_1270';
-                    coding.code as code -> data.values as values, values.value = code; //translate(d, 'http://uk-koeln.de/fhir/ConceptMap/nngm/pkv-tarifformR', 'string');
+                    coding.code as code -> data.values as values, values.value = code;
+                };
+            };
+
+             
+             coverage -> tgt.data as data then 
+            {
+                coverage.extension as ext, ext.valueBoolean as bool then
+                {
+                    coverage -> data.blockindex = 5;
+                    coverage -> data.groupindex = 0;
+                    coverage -> data.itemid = 'id_2460';
+                    bool -> data.values as values, values.value = bool;
+                };
+            };
+
+             coverage -> tgt.data as data then 
+            {
+                coverage.identifier as iden then
+                {
+                    coverage -> data.blockindex = 5;
+                    coverage -> data.groupindex = 0;
+                    coverage -> data.itemid = 'id_1268';
+                    iden.value as value -> data.values as values, values.value = value;
                 };
             };
 
@@ -210,24 +337,6 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
                     coverage -> data.itemid = 'id_1333';
                     coding.code as info -> data.values as values, values.value = info;
                 };
-            };
-
-            coverage -> tgt.data as data then 
-            {
-                
-                    coverage -> data.blockindex = 5;
-                    coverage -> data.groupindex = 0;
-                    coverage -> data.itemid = 'id_1269';
-                    coverage -> data.values as values, values.value = 'GKV';
-            };
-
-            coverage -> tgt.data as data then 
-            {
-                
-                    coverage -> data.blockindex = 5;
-                    coverage -> data.groupindex = 0;
-                    coverage -> data.itemid = 'id_2460';
-                    coverage -> data.values as values, values.value = 'yes';
             };
         };
 
@@ -266,7 +375,7 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
             };
         };
 
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog' and resource.id = 'a6f386ad-fd7e-4c56-8a3a-b153d557aeeb'" then 
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog'" then 
         {   
 
             //Ecog
@@ -282,550 +391,674 @@ group TransformBasisangebenOperation(source src: Bundle, target tgt: BackboneEle
             };
         };
 
-        entry.resource as observation where "resource is Observation and resource.id = 'af213e2c-dfd2-4d93-8d67-ef0d3e0a740b'" then 
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/raucherstatus'" then 
         {   
             //Raucherstatus
             observation -> tgt.data as data then 
             {
-               
+                observation.valueCodeableConcept as vcc, vcc.coding as coding where "coding.code = 'LA18979-7'" then
+                {
                     observation -> data.blockindex = 7;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2292';
-                    observation as raucherstatus -> data.values as values, values.value = 'Ex-Raucher';
- 
+                    coding.code -> data.values as values, values.value = 'Raucher';
+                };
+
+                observation.valueCodeableConcept as vcc, vcc.coding as coding where "coding.code = 'LA15920-4'" then
+                {
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2292';
+                    coding.code -> data.values as values, values.value = 'Ex-Raucher';
+                };
+
+                observation.valueCodeableConcept as vcc, vcc.coding as coding where "coding.code = 'LA18978-9'" then
+                {
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2292';
+                    coding.code -> data.values as values, values.value = 'Nieraucher';
+                };
+
+                observation.valueCodeableConcept as vcc, vcc.coding as coding where "coding.code = 'LA18980-5'" then
+                {
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2292';
+                    coding.code -> data.values as values, values.value = 'N/A';
+                };
             };
 
-            //Nichtraucher seit  cast to dateTime
+            //Nichtraucher seit 
             observation -> tgt.data as data then 
             {
-                
+                observation.component as component, component.code as code where "code.coding.code = '63630-8'" then
+                {
                     observation -> data.blockindex = 7;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2293';
-                    observation as seit -> data.values as values, values.value = '199501'; 
-               
+                    component.valueDateTime as vdt -> data.values as values, values.value = vdt; 
+                };               
             };
             
             //Pack years
             observation -> tgt.data as data then 
             {
-                
+                observation.component as component, component.valueQuantity as valueQuantity where "valueQuantity.code = '{PackYears}'" then
+                {                    
                     observation -> data.blockindex = 7;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2294';
-                    observation -> data.values as values, values.unit = 'count',  values.value = '10';
-                
-            };
-        };
-
-        entry.resource as practitioner where "resource is Practitioner" then 
-        {   
-            //Email addresse behandler
-            practitioner -> tgt.data as data then 
-            {
-                practitioner.telecom as telecom then
-                {
-                    practitioner -> data.blockindex = 10;
-                    practitioner -> data.groupindex = 0;
-                    practitioner -> data.itemid = 'id_2298';
-                    telecom.value as email -> data.values as values, values.value = email;
+                    component.valueQuantity as vq, vq.value as value -> data.values as values, values.unit = 'count',  values.value = value;   
                 };
             };
         };
         
-        
+        /* ------------------------------ Consent ---------------------------- */
+
         entry.resource as consent where "resource is Consent" then 
         {   
             //1a Signed
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/1a' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = '1a'" then
                 {
-                    consent -> data.blockindex = 8;
-                    consent -> data.groupindex = 0;
-                    consent -> data.itemid = 'id_2440';
-                    provision.type -> data.values as values, values.value = 'yes';
-                };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/1a' and provision.type = 'deny'" then
-                {
-                    consent -> data.blockindex = 8;
-                    consent -> data.groupindex = 0;
-                    consent -> data.itemid = 'id_2440';
-                    provision.type -> data.values as values, values.value = 'no';
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2440';
+                        consent -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 8;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2440';
+                        consent -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/1a'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = '1a' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 8;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2441';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            };         
 
             //1b Signed
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/1b' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = '1b'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 8;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2446';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/1b' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = '1b'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 8;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2446';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/1b'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = '1b' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 8;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2447';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            };  
 
             //2 Signed
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/2' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = '2'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 8;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2449';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/2' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = '2'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 8;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2449';
-                    provision.type -> data.values as values, values.value = 'no';
+                    provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/2'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = '2' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 8;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2450';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            };  
 
             //Teilnahme erklarung
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/TE' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'TE'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 9;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2392';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/TE' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'TE'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 9;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2392';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/TE'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'TE' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 9;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2393';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            };  
+
 
             //Datenschutz
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/DS' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'DS'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 9;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2389';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/DS' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'DS'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 9;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2389';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/DS'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'DS' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 9;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2390';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
-            
-            //Tumorboard vorstellung signed 
-            consent -> tgt.data as data then 
-            {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/VO' and provision.type = 'permit'" then
-                {
-                    consent -> data.blockindex = 10;
-                    consent -> data.groupindex = 0;
-                    consent -> data.itemid = 'id_2296';
-                    provision.type -> data.values as values, values.value = 'yes';
-                };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/VO' and provision.type = 'deny'" then
-                {
-                    consent -> data.blockindex = 10;
-                    consent -> data.groupindex = 0;
-                    consent -> data.itemid = 'id_2296';
-                    provision.type -> data.values as values, values.value = 'no';
-                };
-            };
-
-            //Tumorboard telefonkonferenz signed 
-            consent -> tgt.data as data then 
-            {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/TK' and provision.type = 'permit'" then
-                {
-                    consent -> data.blockindex = 10;
-                    consent -> data.groupindex = 0;
-                    consent -> data.itemid = 'id_2297';
-                    provision.type -> data.values as values, values.value = 'yes';
-                };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/TK' and provision.type = 'deny'" then
-                {
-                    consent -> data.blockindex = 10;
-                    consent -> data.groupindex = 0;
-                    consent -> data.itemid = 'id_2297';
-                    provision.type -> data.values as values, values.value = 'no';
-                };
-            };
+            };  
 
             /* -------------------Versorgung------------------------*/
 
             //Molpatho diagnostik signed 
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/MD' and provision.type = 'permit'" then
+               consent.policyRule as policyRule where "policyRule.coding.code = 'MD'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2351';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/MD' and provision.type = 'deny'" then
+                
+                consent.policyRule as policyRule where "policyRule.coding.code = 'MD'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2351';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/MD'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'MD' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2352';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
 
             //Uberregionale Beratung
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/ST' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'ST'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2357';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/ST' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'ST'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2357';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/ST'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'ST' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2358';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
 
              /* -------------------ForschungsZwecke 1------------------------*/
 
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WPI' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WPI'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2361';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WPI' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WPI'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2361';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/WPI'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WPI' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2362';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
 
             /*-----------------------2------------------------*/
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WP' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WP'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2364';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WP' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WP'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2364';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/WP' and %tgt.data.values.where(tgt.data.itemid = 'id_2364' and tgt.data.values.value = 'yes')" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WP' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2365';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
+
 
             /*--------------------3---------------------------*/
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WD' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WD'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2367';
                     provision.type -> data.values as values, values.value = 'yes';
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WD' and provision.type = 'deny'" then
+                };
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WD'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2367';
                     provision.type -> data.values as values, values.value = 'no';
                 };
+                };
             };
-            
-            consent -> tgt.data as data then
+
+             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/WD' and %tgt.data.values.where(tgt.data.itemid = 'id_2367' and tgt.data.values.value = 'yes')" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WD' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2368';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
-
+            }; 
+            
             /*------------------------4-----------------------*/
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WR' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WR'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2370';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WR' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WR'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2370';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/WR' and %tgt.data.values.where(tgt.data.itemid = 'id_2364' and tgt.data.values.value = 'yes')" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WR' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2371';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
 
             /*---------------------5--------------------------*/
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WPK' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WPK'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2373';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WPK' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WPK'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2373';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/WPK' and %tgt.data.values.where(tgt.data.itemid = 'id_2364' and tgt.data.values.value = 'yes')" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WPK' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2374';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
 
             /*----------------------6-------------------------*/
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WK' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WK'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2376';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/WK' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WK'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2376';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/WK' and %tgt.data.where(itemid = 'id_2364' and values.value = 'yes')" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'WK' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2377';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
 
             /*----------------------7-------------------------*/
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/KW' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'KW'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2382';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/KW' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'KW'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2382';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/KW'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'KW' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2383';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
 
             /*------------------------8-----------------------*/
             consent -> tgt.data as data then 
             {
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/KE' and provision.type = 'permit'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'KE'" then
                 {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2379';
                     provision.type -> data.values as values, values.value = 'yes';
+                    };
                 };
-                consent.provision as provision where "policy.uri = 'https://www.nngm.de/KE' and provision.type = 'deny'" then
+
+                consent.policyRule as policyRule where "policyRule.coding.code = 'KE'" then
                 {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2379';
                     provision.type -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
             consent -> tgt.data as data then
             {
-                consent.policy as policy where "policy.uri = 'https://www.nngm.de/KE'" then
+                consent.policyRule as policyRule where "policyRule.coding.code = 'KE' and provision.type = 'permit'" then
                 {
+                    consent.dateTime as dt then 
+                    {
                     consent -> data.blockindex = 11;
                     consent -> data.groupindex = 0;
                     consent -> data.itemid = 'id_2380';
-                    policy.extension as date, date.valueDateTime as value -> data.values as values, values.value = value;
+                    dt -> data.values as values, values.value = dt;
+                    };
                 };
-            };
+            }; 
         };
     };
 }
