@@ -1,18 +1,13 @@
 /// version = 0.1
-/// title = "TherapieMapping"
+/// title = "SonstigeTherapieMapping"
 
 /*
     TODO
-    - Art der Therapie (id_1213): translation function doesn't work. Changed to simple cc()
-    - Should I map bodySite.coding and bodySite.text on the same scope?
-    - Methode (Auswahl) and Methode (Freitext): missing sub-extensions on Simplifier. 
-      Couldn't map code.extension:methode.extension:methode and code.extension:methode.extension:sonstigeMethode respectively.
     - Methode (Freitext): missing valueSet
-    - Bezeichnung / Beschreibung der alternativen Methoden: couldn't map reasonCode.extension:beschreibungAlternativeMethode. Maped reasonCode.extension:beschreibungAlternativeMethode.valueCodeableConcept instead
-    - Grund für keine Therapie / BSC and Maintenance: same situation than Bezeichnung / Beschreibung der alternativen Methoden
+    - Maintenance: missing valueSet
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/TherapieMapping" = TherapieMapping
+map "http://uk-koeln.de/fhir/StructureMap/SonstigeTherapieMapping" = SonstigeTherapieMapping
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
@@ -61,7 +56,6 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         // Art der Therapie
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1213'" then 
         {
-            // values.value as artdertherapie -> tgt.category = cc('https://www.uk-koeln.de/fhir/ValueSet/SonstigeTherapieCategory', translate(artdertherapie, 'http://uk-koeln.de/fhir/ConceptMap/SonstigeTherapieCategory', 'code'));
             values.value as artdertherapie -> tgt.category = cc('https://www.uk-koeln.de/fhir/ValueSet/SonstigeTherapieCategory', artdertherapie);
         };
 
@@ -89,7 +83,7 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
             values.value as value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/ValueSet/cancer-base/icdo-o-3-t', value);
         };
 
-        // LLokalisation (Freitext)
+        // Lokalisation (Freitext)
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1215'" then
         {
             values.value as value -> tgt.bodySite as bodySite, bodySite.text = value;
@@ -99,7 +93,9 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1467'" then
         {
             values.value as value ->    tgt.code as code,
-                                        code.extension = create('BackboneElement') as extensionMethode,
+                                        code.extension = create('BackboneElement') as methode,
+                                        methode.extension = create('BackboneElement') as extensionMethode,
+                                        extensionMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie',
                                         extensionMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/sonstige-therapie-code', value);
         };
 
@@ -107,8 +103,10 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1467'" then
         {
             values.value as value ->    tgt.code as code,
-                                        code.extension = create('BackboneElement') as extensionSonstigeMethode,
-                                        extensionSonstigeMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/dummy', value);
+                                        code.extension = create('BackboneElement') as methode,
+                                        methode.extension = create('BackboneElement') as sonstigeMethode,
+                                        sonstigeMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie',
+                                        sonstigeMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/dummy', value);
         };
 
         // Therapeutische Intention (Auswahl)
@@ -128,7 +126,8 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         {
             values.value as value ->    tgt.reasonCode as reasonCode,
                                         reasonCode.extension = create('BackboneElement') as beschreibungAlternativeMethode,
-                                        beschreibungAlternativeMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/beschreiung-alternativer-methode', value);
+                                        beschreibungAlternativeMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/beschreiung-alternativer-methode',
+                                        beschreibungAlternativeMethode.valueString = value;
         };
 
         // Grund für keine Therapie / BSC
@@ -136,6 +135,7 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         {
             values.value as value ->    tgt.reasonCode as reasonCode,
                                         reasonCode.extension = create('BackboneElement') as grundKeineTherapie,
+                                        grundKeineTherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grund-keine-therapie',
                                         grundKeineTherapie.valueCodeableConcept = cc('http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grund-keine-therapie', value);
         };
 
@@ -143,7 +143,8 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1360'" then
         {
             values.value as value ->    tgt.extension = create('BackboneElement') as maintenance,
-                                        maintenance.valueCodeableConcept = cc('http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/maintenance', value);
+                                        maintenance.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/maintenance',
+                                        maintenance.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/dummy', value);
         };
 
         // Bemerkungen
