@@ -14,22 +14,39 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    //resources
-    src -> bundle.entry as entry, entry.resource = create('EpisodeOfCare') as episodeOfCare then TransformEpisodeOfCare(src, episodeOfCare); 
+    src then CreateSpecimen(src, bundle);
+
     src -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationKrebserkrankung(src, observation);
     src then CreateObservationsResistenztestung(src, bundle);
 }
 
- /* ------------------------------ EpisodeOfCare ---------------------------- */ 
-group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCare) 
+/* ------------------------------ Check whether specimen needs to be created ---------------------------- */ 
+group CreateSpecimen(source src: CTS_Transport, target bundle: Bundle) 
+{
+    // Check whether specimen needs to be created and create it if that is the case
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen); 
+        };
+    };
+}
+
+/* ------------------------------ Specimen ---------------------------- */ 
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
 { 
     src -> tgt.id = uuid(); 
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM'; 
-    src -> tgt.status = 'active'; 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Type
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
  
     // Patient reference 
-    src.patid as patid -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(patid, '\'Patient/\' + $this'); 
- 
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    
     src.operations as operations, operations.data as data then 
     { 
         // Biopsienummer -> tgt.identifier.value 
