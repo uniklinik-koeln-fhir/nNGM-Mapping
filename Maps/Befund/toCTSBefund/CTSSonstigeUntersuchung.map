@@ -1,5 +1,12 @@
 /// version = 0.1
 /// title = "nNGM: Sonstige Therapie - FHIR to CTS"
+/*
+    TODO
+     SERVICEREQUEST ->  Durchfuehrung: No properly transformed, issue with status
+                    Abschluss : No properly transformed, issue with status extension
+                    Datum des Abschlusses : No properly transformed, issue with status extension
+     OBSERVATION -> Repeatindex no implemented SAME ISSUE AS FAST TRACK MAPPING: DISCUSSED ON 20.08.2020 STAND UP MEETING
+*/
 
 
 map "http://uk-koeln.de/fhir/StructureMap/SonstigeTherapieCTS" = SonstigeTherapieCTS
@@ -12,7 +19,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
     src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    src -> tgt.operations as operations collate, operations.crfid = 'SO1';
+    src -> tgt.operations as operations collate, operations.crfid = '5-SU1';
     src -> tgt.operations as operations collate, operations.type = 'save';
 
     src.entry as entry then
@@ -106,8 +113,168 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
-            
+            //Assay -> 3, 0, id_2027
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = 'C60819'"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 3;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2027';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            //Hersteller -> 3, 0, id_2028
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = 'C25392'"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 3;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2028';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            //Gen -> 3, 0, id_2282
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '48018-6'"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 3;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2282';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            //Phaenotyp -> 3, 0, id_2283
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = 'C16977'"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 3;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2283';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            //Ergebnis- -> 3, 0, id_2031
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code then 
+                    {
+                        observation -> data.blockindex = 3;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2031';
+                        code -> data.values as values, values.value = code;
+                    };
+                };
+            };
+        };
 
+        /* --------------- ServiceRequest ---------------------- */
+        entry.resource as serviceRequest where "resource is ServiceRequest" then
+        {
+            //TODO
+            //Durchfuehrung -> 7,0,  id_2520
+            serviceRequest -> tgt.operations as operations collate then
+            {
+                serviceRequest -> operations.data as data then
+                {
+                    serviceRequest.status as status then
+                    {
+                        serviceRequest ->  data.blockindex = 7;
+                        serviceRequest ->  data.groupindex = 0;
+                        serviceRequest ->  data.itemid = 'id_2520';
+                        status -> data.values as values,values.value = status;
+                    };
+                };
+            };
+            //TODO
+            //Abschluss -> 7,0, id_2462
+            serviceRequest -> tgt.operations as operations collate then
+            {
+                serviceRequest -> operations.data as data then
+                {
+                    serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
+                    {
+                        statusextension where "statusextension.url ='status'" then
+                        {
+                            serviceRequest ->  data.blockindex = 7;
+                            serviceRequest ->  data.groupindex = 0;
+                            serviceRequest ->  data.itemid = 'id_2462';
+                            statusextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                        };
+                    };
+                };
+            };
+            //TODO
+            //Datum des Abschlusses -> 7,0, id_2521
+            serviceRequest -> tgt.operations as operations collate then
+            {
+                serviceRequest -> operations.data as data then
+                {
+                    serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+                    {
+                        datumextension where "datumextension.url ='datum'" then
+                        {
+                            serviceRequest ->  data.blockindex = 7;
+                            serviceRequest ->  data.groupindex = 0;
+                            serviceRequest ->  data.itemid = 'id_2521';
+                            datumextension.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code  -> data.values as values,values.value = code;
+                        };
+                    };
+                };
+            };
         };
     };
 }
