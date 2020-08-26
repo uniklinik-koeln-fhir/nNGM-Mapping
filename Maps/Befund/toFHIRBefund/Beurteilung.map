@@ -2,13 +2,13 @@
 /// title = "Beurteilung"
 
 /*
-TO DO:
-- create valueset for version (Diagnosticreport.tgt.status)
-- create vs for durchfuehrung (Servicerequest.tgt.status)
-- create vs for abschluss? (Servicerequest.tgt.category)
+TODO:
+    SERVICEREQUEST -> status-status extension doesn't appear, although there is
+                        data in the CTS
+    Missing Add Beurteilung section implementation
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/FHIRBeurteilung" = FHIRBeurteilung 
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Beurteilung" = nNGM_Mapping_Beurteilung 
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
@@ -56,7 +56,7 @@ group CreatTransformServiceRequest(source src: CTS_Transport, target tgt: Backbo
 group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport)
 {
     src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/Beurteilung';
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/beurteilung';
 
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
@@ -72,7 +72,14 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
 		/*--------------Version------------*/
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'bu_version'" then
          {   
-            values.value as code -> tgt.status = code; //cc('', code);
+            values.value as code where "$this.value = 'vorläufig'" then
+            {
+                code -> tgt.status = 'preliminary'; //cc('', code);
+            };
+            values.value as code where "$this.value = 'final'" then
+            {
+                code -> tgt.status = 'final'; //cc('', code);
+            };
          };   
 
         /*--------------Klinische Information------------*/
@@ -109,7 +116,6 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
 
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    src -> tgt.status = cast('active', 'FHIR.code'); 
     src -> tgt.code as code, 
             code.coding as coding, 
             coding.system as system, 
@@ -120,23 +126,38 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
     src.operations as operations, operations.data as data then
     {
         /*----------------Durchfuehrung------------*/
-         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2523'" then
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2523'" then
         {   
-            values.value as durchfuerung -> tgt.status = durchfuerung; //cc('', durchfuerung);
+            values.value as durchfuerung where "$this.value = 'in Bearbeitung'" then
+            {
+                durchfuerung -> tgt.status = 'active'; //cc('', code);
+            };
+            values.value as durchfuerung where "$this.value = 'abgeschlossen'" then
+            {
+                durchfuerung -> tgt.status = 'completed'; //cc('', code);
+            };
         }; 
 
         /*---------------Abschluss-----------*/
+        //TODO
          data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'bu_closing'" then
         {   
-            values.value as abschluss -> tgt.category = abschluss; //cc('', abschluss);
+            values.value as abschluss -> tgt.status as status, 
+                                            status.extension as statusAbschluss,
+                                            statusAbschluss.extension as statusExtension,
+                                            statusExtension.url = 'status',
+                                            statusExtension.valueCodeable = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',abschluss,abschluss);
+           
         }; 
 
         /*---------------Datum des Abschlusses -----------*/
          data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2524'" then
         {   
-            values.value as datumabschluss -> tgt.extension as datumAbschlusses,
-                                              datumAbschlusses.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumabschluss',
-                                              datumAbschlusses.value = dateOp(datumabschluss, 'dateTime');
+            values.value as datumabschluss -> tgt.status as status, 
+                                            status.extension as statusAbschluss,
+                                            statusAbschluss.extension as datumExtension,
+                                            datumExtension.url = 'datum',
+                                            datumExtension.valueDate = dateOp(datumabschluss, 'dateTime');
         }; 
      
         /*---------------Datum des versands -----------*/
@@ -144,7 +165,7 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
         {   
             values.value as datumversands -> tgt.extension as datumVersands,
                                               datumVersands.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands',
-                                              datumVersands.value = dateOp(datumversands, 'dateTime');
+                                              datumVersands.valueDate = dateOp(datumversands, 'dateTime');
         };   
     };
 }
