@@ -1,7 +1,6 @@
 /// version = 0.1
 /// title = "nNGM: Mapping Stammdaten FHIR"
 
-
 /* To Do 
 Standardtariff passed?
 kooperationsvereinbarung string -> boolean cast requiered
@@ -22,14 +21,33 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.type = 'collection';
 
     //resources
-    src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatientStammdaten(src, patient);
-    src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverageStammdaten(src, coverage);
+    src -> bundle.entry as entry then CreateTransformPatientStammdaten(src, entry);
+    src -> bundle.entry as entry then CreateTransformCoverageStammdaten(src, entry);
     src -> bundle.entry as entry then CreateEpisodeOfCareStammdaten(src, entry);
 }
 
+/* ------------------------------ Check whether the Patient needs to be created ---------------------------- */ 
+group CreateTransformPatientStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1125'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1124'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1126'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1127'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1128'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1129'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1280'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_1298'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2436'" then
+        {
+            src -> tgt.resource = create('Patient') as patient then TransformPatientStammdaten(src, patient);
+        };
+    };
+}
 
 /* ------------------------------ Patient ---------------------------- */
-
 group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
 {
     src -> tgt.id = uuid();
@@ -99,6 +117,21 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
     };
 }
 
+/* ------------------------------ Check whether Coverage needs to be created ---------------------------- */ 
+group CreateTransformCoverageStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2459'
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1269'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_1270'
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2460'
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1268'" then
+        {
+            src -> tgt.resource = create('Coverage') as coverage then TransformCoverageStammdaten(src, coverage);
+        };
+    };
+}
 
 /* ------------------------------ Coverage ---------------------------- */
 group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverage)
