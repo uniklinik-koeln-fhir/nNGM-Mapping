@@ -1,9 +1,9 @@
 /// version = 0.1
 /// title = "nNGM: Mapping Stammdaten FHIR"
+/// CTS -> FHIR
 
 /* To Do 
-Standardtariff passed?
-kooperationsvereinbarung string -> boolean cast requiered
+- Erstdiagnose -> diagnosis.condition.dateOnset . We need to create a reference to a condition for this.
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR" = nNGM_Mapping_StammdatenFHIR
@@ -63,7 +63,7 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
                 values.value as value -> tgt.gender = cast('female', 'FHIR.code');
             };
 
-            values.value as value where "$this.value = 'mÃ¤nnlich'" then
+            values.value as value where "$this.value = 'm\u00e4nnlich' or $this.value = 'männlich'" then
             {
                 values.value as value -> tgt.gender = cast('male', 'FHIR.code');
             };
@@ -73,8 +73,26 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
                 values.value as value -> tgt.gender as gender, 
                                          gender.extension as other, 
                                          other.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de', 
-                                         other.valueCodeableConcept = cc('http://fhir.de/ValueSet/gender-amtlich-de', 'X');
+                                         other.valueCodeableConcept = cc('http://fhir.de/ValueSet/gender-amtlich-de', 'D', 'divers');
             };
+        };
+
+        // Nachname -> name.family
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1125'" then
+        {
+            values.value as value -> tgt.name as name, name.family = value;
+        };
+
+        // Vorname -> name.given
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1124'" then
+        {
+            values.value as value -> tgt.name as name, name.given = value;
+        };
+
+        // Geburtsdatum -> birthDate
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1126'" then
+        {
+            values.value as value -> tgt.birthdate = dateOp(value, 'dateTime');
         };
 
         //Strasse -> address.line
@@ -117,7 +135,7 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
     };
 }
 
-/* ------------------------------ Check whether Coverage needs to be created ---------------------------- */ 
+/* ------------------------------ Check if Coverage needs to be created ---------------------------- */ 
 group CreateTransformCoverageStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -152,36 +170,53 @@ group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverag
     
     src.operations as operations, operations.data as data then
     {
-        //Krankenkasse
+        // Krankenkasse -> coverage.payor.display
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2459'" then
         {
             values.value as value -> tgt.payor as payor, payor.display = value;
         };
 
-        //Typ   
+        // Typ (GKV/PKV) -> type.coding
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1269'" then
         {
-            
             values.value as type -> tgt.type = cc('http://fhir.de/ValueSet/versicherungsart-de-basis', type);
         };
 
-         //Tarriff   
-        
-        /*
-        //kooperationsvereinbarung
+        // PKV Tarif -> extension:pkvTarifform.valueCodeableConcept
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1270'" then
+        {
+            values.value as value -> tgt.extension as pkvTarifform,
+                                        pkvTarifform.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', value);
+        };
+
+        // Kooperationsvereinbarung -> Coverage.extension:kooperationsvereinbarung.valueBoolean
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2460'" then
         {
-            values.value as value -> tgt.extension as koop, 
-                                     koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
-                                     koop.valueBoolean = cast(value, 'FHIR.boolean');
+            values.value as value where "value = 'yes'" then
+            {
+                value -> tgt.extension as koop, 
+                            koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
+                            koop.valueBoolean = cast(true, 'FHIR.boolean');
+            };
+
+            values.value as value where "value = 'no'" then
+            {
+                value -> tgt.extension as koop, 
+                            koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
+                            koop.valueBoolean = cast(false, 'FHIR.boolean');
+            };
         };
-        */
+
+        // Versichertennummer -> identifier.value
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1268'" then
+        {
+            values.value as value -> tgt.identifier as identifier, identifier.value = value;
+        };
     };
 }
 
-/* ------------------------------ EpisodeOfCare ---------------------------- */
-
-/*check if there is a EpisodeOfCare required*/
+/* ------------------------------ Check if EpisodeOfCare needs to be created ---------------------------- */
 group CreateEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -195,26 +230,27 @@ group CreateEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: Backb
     };
 }
 
+/* ------------------------------ EpisodeOfCare ---------------------------- */
 group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: EpisodeOfCare)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
 
-    //status 
-    src -> tgt.status as code, 
-            code.extension as dataAbsentReason, 
+    // Subject
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Status 
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Identifier 
+    src -> tgt.identifier as identifier, 
+            identifier.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    //subject
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //status 
-    src -> tgt.status = cast('active', 'FHIR.code');
-
     src.operations as operations, operations.data as data then
     {
-        //Erstdiagnose -> extension erstdiagnose
+        // Erstdiagnose -> diagnosis.condition.dateOnset
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1297'" then
         {
             values.value as value -> tgt.extension as erstdiagnose, 
@@ -222,8 +258,7 @@ group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: Ep
             erstdiagnose.valueDateTime = dateOp(value, 'dateTime');
         };
     
-    
-        //letzter Kontakt 
+        // Letzter Kontakt -> extension:letzterKontakt.dateTime
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_803'" then
         {
             values.value as value -> tgt.extension as letzterkontakt, 
@@ -231,7 +266,7 @@ group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: Ep
             letzterkontakt.valueDateTime = dateOp(value, 'dateTime');
         };
  
-        //NNGM status
+        // NNGM status -> extension:nngmStatus.valueCodeableConcept
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1139'" then
         {
             values.value as value -> tgt.status as status,
