@@ -1,21 +1,23 @@
 /// version = 0.1
-/// title = "FastTrackFHIR"
+/// title = "nNGM_Mapping_FastTrack"
 
 /*
-   EXCEL FILE 
-    - Biopsie-ID is not mapped on the excel file 
-   ServiceRequest -> Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
+    SPECIMEN -> (type and subject) item from the resource simplifier specified that are needed
+    DIAGNOSTIGREPORT-> it doesn't have Profile URL on excel file, this was used https://simplifier.net/nngm-registrationformr4/befund
+    ServiceRequest -> Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
                     in the CTS structure:Theme discussed on 20.08.2020 stand up meeting
   
 
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/FastTrackFHIR" = FastTrackFHIR
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrack" = nNGM_Mapping_FastTrack
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
+uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
+uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
 
 
 
@@ -24,7 +26,8 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
-    //src -> bundle.entry as entry then CreateTransformEpisodeOfCare(src, entry);
+    src -> bundle.entry as entry then CreateTransformSpecimen(src, entry);
+    src -> bundle.entry as entry then CreateTransformDiagnosticReport(src, entry);
     src -> bundle.entry as entry then CreateTransformOrganization(src, entry);
     src -> bundle.entry as entry then CreateTransformObservationBRAFExon15(src, entry);
     src -> bundle.entry as entry then CreateTransformObservationBRAFExon19(src, entry);
@@ -35,41 +38,67 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     
 }
 
-/* ------------------------------ Episode Of Care ---------------------------- */
-
-/*group CreateTransformEpisodeOfCare(source src: CTS_Transport, target tgt: BackboneElement)
-
+group CreateTransformSpecimen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
         {
-            src -> tgt.resource = create('EpisodeOfCare') as episodeOfCare then TransformEpisodeOfCare(src, episodeOfCare);
-        };          
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+        };
     };
 }
 
-group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCare)
+/* ------------------------------ Specimen ---------------------------- */
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
 {
     src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
-
-    //src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
     src.operations as operations, operations.data as data then
     {
-        src -> tgt.status = cast('active', 'FHIR.code');
-        src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+        /* ------------------------------ Healex Referenzen ---------------------------- */
+        // Biopsy-ID
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            values.value as bid -> tgt.identifier = create('identifier') as biopsieID,
+                                                            biopsieID.system= 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer',
+                                                            biopsieID.value = bid;
+        };
 
-        // ------------------------------ Referenzen ---------------------------- 
-        // Untersuchungs-ID
+    };
+}
+
+group CreateTransformDiagnosticReport(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
         {
-            values.value as value ->    tgt.identifier as identifier,
-                                        identifier.value = value;
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReport(src, diagnosticReport);
         };
     };
-}*/
+}
+
+/* ------------------------------ DiagnosticReport ---------------------------- */
+group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+
+    src.operations as operations, operations.data as data then
+    {
+        /* ------------------------------ Healex Referenzen ---------------------------- */
+        // Biopsy-ID
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as id -> tgt.identifier = create('identifier') as befundNummer,
+                                                            befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                            befundNummer.value = id;
+        };
+
+    };
+}
 
 /* ------------------------------ Organization ---------------------------- */
 group CreateTransformOrganization(source src: CTS_Transport, target tgt: BackboneElement)
@@ -124,12 +153,12 @@ group TransformObservationBRAFExon15(source src: CTS_Transport, target tgt: Obse
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
     
-    //BRAF code
+    //Fast Track code
     src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C158854', 'BRAF Exon 15 Mutation');
 
     
     //Fast track category
-    src then MapfasttrackCategory(src, tgt);
+    src then MapSopNumberCategoryMethodStatus(src, tgt);
 
     src.operations as operations, operations.data as data then
     {
@@ -209,11 +238,11 @@ group TransformObservationBRAFExon19(source src: CTS_Transport, target tgt: Obse
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
-    //BRAF code
+    //Fast Track code
     src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128662','EGFR Exon 19 Mutation');
 
     //Fast track category
-    src then MapfasttrackCategory(src, tgt);
+    src then MapSopNumberCategoryMethodStatus(src, tgt);
 
     src then MapEGFREXO1921(src, tgt);
     
@@ -267,11 +296,11 @@ group TransformObservationBRAFExon20(source src: CTS_Transport, target tgt: Obse
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
-    //EGFR Exon code
+    //Fast Track code
     src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'EGFR Exon 20','EGFR Exon 20');
 
     //Fast track category
-    src then MapfasttrackCategory(src, tgt);
+    src then MapSopNumberCategoryMethodStatus(src, tgt);
 
     src then MapEGFREXO1921(src, tgt);
 
@@ -327,11 +356,11 @@ group TransformObservationBRAFExon21(source src: CTS_Transport, target tgt: Obse
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
-    //EGFR Exon code
+    //Fast Track code
     src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128666','EGFR Exon 21 Mutation');
 
     //Fast track category
-    src then MapfasttrackCategory(src, tgt);
+    src then MapSopNumberCategoryMethodStatus(src, tgt);
 
     src then MapEGFREXO1921(src, tgt);
 
@@ -388,11 +417,11 @@ group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Obser
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
-    //EGFR Exon code
+    //Fast Track code
     src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C135715','KRAS Exon 2 Mutation');
 
     //Fast track category
-    src then MapfasttrackCategory(src, tgt);
+    src then MapSopNumberCategoryMethodStatus(src, tgt);
 
     src.operations as operations, operations.data as data then
     {
@@ -450,8 +479,10 @@ group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Obser
     };
 }
 
-group MapfasttrackCategory(source src: CTS_Transport, target tgt: Observation)
+group MapSopNumberCategoryMethodStatus(source src: CTS_Transport, target tgt: Observation)
 {
+    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C135715','C101293');
+
     // ------------------------------ Netzwerkzentrum ---------------------------- 
     // SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then
@@ -535,7 +566,8 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
             values.value as value -> tgt.status = value;
         };
         //TODO
-        //Abschluss
+        //Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
+        //           in the CTS structure:Theme discussed on 20.08.2020 stand up meeting
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
         {
             values.value as value -> tgt.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusExtension then

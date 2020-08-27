@@ -25,6 +25,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
 
     src.entry as entry then
     {
+
         //---------------Episode Of Care----------------
         /*entry.resource as episodeofcare where "resource is EpisodeOfCare" then
         {
@@ -44,7 +45,46 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
         };*/
-
+        //------------------------ Specimen ------------------------
+        entry.resource as specimen where "resource is Specimen" then
+        {
+            //Biopsy-ID -> 0, 0, id_1601
+            specimen -> tgt.operations as operations collate then
+            {
+                specimen -> operations.data as data then
+                {
+                    specimen.identifier as identifier,
+                     identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'"then
+                    {   
+                        specimen -> data.blockindex = 0;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'id_1601';
+                        identifier.value as value-> data.values as values collate, 
+                                                    values.value = value,
+                                                    values.unit = 'count';
+                    };
+                };                
+            };
+        };
+        //------------------------ DiagnosticReport ------------------------
+        entry.resource as diagnosticReport where "resource is DiagnosticReport" then
+        {
+            //Biopsy-ID -> 1, 0, assessment_id
+            diagnosticReport -> tgt.operations as operations collate then
+            {
+                diagnosticReport -> operations.data as data then
+                {
+                    diagnosticReport.identifier as identifier,
+                     identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'"then
+                    {   
+                        diagnosticReport -> data.blockindex = 1;
+                        diagnosticReport -> data.groupindex = 0;
+                        diagnosticReport -> data.itemid = 'assessment_id';
+                        identifier.value as value-> data.values as values, values.value = value;
+                    };
+                };                
+            };
+        };
         //------------------------ Organization ------------------------
         entry.resource as organization where "resource is Organization" then
         {
