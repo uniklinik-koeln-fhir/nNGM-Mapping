@@ -7,7 +7,7 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCTS" = nNGM_Map
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneElement)
+group TransformStammdatenOperation(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
@@ -18,10 +18,10 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
     src.entry as entry then
     {
         /* ------------------------------- Patient ---------------------------- */
-        entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
+        entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" -> tgt.operations as operations collate then
         {   
             //Patient.gender -> Geschlecht
-            patient -> tgt.operations as operations collate, operations.data as data then 
+            patient -> operations.data as data then 
             {
                 patient.gender as gender where "gender = 'female'" then
                 {
@@ -37,7 +37,7 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                     patient -> data.itemid = 'id_1131';
                     gender -> data.values as values, values.value = 'männlich'; 
                 };
-                patient.gender as gender where "gender = 'D'" then
+                patient.gender as gender where "$this.gender.extension.valueCodeableConcept.coding.code = 'D'" then
                 {
                     patient -> data.blockindex = 0;
                     patient -> data.groupindex = 0;
@@ -47,48 +47,161 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
             };
 
             // Patient.name.family -> 0, 0, 1125
-            patient -> tgt.operations as operations collate, operations.data as data then 
+            patient -> operations.data as data then 
             {
-                patient.name as name, name.family as givenName then
+                patient.name as name, name.family as familyName then
+                {
+                    familyName -> data.blockindex = 0;
+                    familyName -> data.groupindex = 0;
+                    familyName -> data.itemid = 'id_1125';
+                    familyName -> data.values as values, values.value = familyName;
+                };
+            };
+
+             // Patient.name.given -> 0, 0, 1124
+            patient -> operations.data as data then 
+            {
+                patient.name as name, name.given as givenName then
                 {
                     givenName -> data.blockindex = 0;
                     givenName -> data.groupindex = 0;
-                    givenName -> data.itemid = 'id_1125';
+                    givenName -> data.itemid = 'id_1124';
                     givenName -> data.values as values, values.value = givenName;
+                };
+            };
+
+            // birthDate -> 0, 0, 1126
+            patient -> operations.data as data then 
+            {
+                patient.birthDate as birthDate then
+                {
+                    birthDate -> data.blockindex = 0;
+                    birthDate -> data.groupindex = 0;
+                    birthDate -> data.itemid = 'id_1126';
+                    birthDate -> data.values as values, values.value = birthDate;
+                };
+            };
+
+            // address.line -> 0, 0, 1127
+            patient -> operations.data as data then 
+            {
+                patient.address as address, address.line as line then
+                {
+                    line -> data.blockindex = 0;
+                    line -> data.groupindex = 0;
+                    line -> data.itemid = 'id_1127';
+                    line -> data.values as values, values.value = line;
+                };
+            };
+
+            // address.postalCode -> 0, 0, 1128
+            patient -> operations.data as data then 
+            {
+                patient.address as address, address.postalCode as postalCode then
+                {
+                    postalCode -> data.blockindex = 0;
+                    postalCode -> data.groupindex = 0;
+                    postalCode -> data.itemid = 'id_1128';
+                    postalCode -> data.values as values, values.value = postalCode;
+                };
+            };
+
+            // address.city -> 0, 0, 1129
+            patient -> operations.data as data then 
+            {
+                patient.address as address, address.city as city then
+                {
+                    city -> data.blockindex = 0;
+                    city -> data.groupindex = 0;
+                    city -> data.itemid = 'id_1129';
+                    city -> data.values as values, values.value = city;
+                };
+            };
+
+            // address.country -> 0, 0, 1280
+            patient -> operations.data as data then 
+            {
+                patient.address as address, address.country as country then
+                {
+                    country -> data.blockindex = 0;
+                    country -> data.groupindex = 0;
+                    country -> data.itemid = 'id_1280';
+                    country -> data.values as values, values.value = country;
+                };
+            };
+
+            // deceasedDateTime -> 1, 0, 1298
+            patient -> operations.data as data then 
+            {
+                patient.deceasedDateTime as deceasedDateTime then
+                {
+                    deceasedDateTime -> data.blockindex = 1;
+                    deceasedDateTime -> data.groupindex = 0;
+                    deceasedDateTime -> data.itemid = 'id_1298';
+                    deceasedDateTime -> data.values as values, values.value = deceasedDateTime;
+                };
+            };
+
+            // extension:informationsquelleTod.valueString -> 1, 0, 2436
+            patient -> operations.data as data then 
+            {
+                patient.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/izt'",
+                                extension.valueCodeableConcept as vcc, 
+                                vcc.coding as coding,
+                                coding.code as code then
+                {
+                    code -> data.blockindex = 1;
+                    code -> data.groupindex = 0;
+                    code -> data.itemid = 'id_2436';
+                    code -> data.values as values, values.value = code;
                 };
             };
         };
 
-
-
         /* ------------------------------- Coverage ---------------------------- */
-        entry.resource as coverage where "resource is Coverage" then
+        entry.resource as coverage where "resource is Coverage and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM'" -> tgt.operations as operations collate then
         {   
-            //Type.text -> Krankenkasse
-            coverage -> tgt.data as data then 
+            // Coverage.payor.display -> 2, 0, 2459
+            coverage -> operations.data as data then 
             {
-                coverage.type as type, type.text as text then
+                coverage.payor as payor, payor.display as display then
                 {
-                    coverage -> data.blockindex = 2;
-                    coverage -> data.groupindex = 0;
-                    coverage -> data.itemid = 'id_2459';
-                    text -> data.values as values, values.value = text;
+                    display -> data.blockindex = 2;
+                    display -> data.groupindex = 0;
+                    display -> data.itemid = 'id_2459';
+                    display -> data.values as values, values.value = display;
                 };
             };
 
-            //Type.coding.code -> Typ
-            coverage -> tgt.data as data then 
+            // Type.coding.code -> 2, 0 , 1269
+            coverage -> operations.data as data then 
             {
                 coverage.type as type, type.coding as coding, coding.code as code then 
                 {
-                    coverage -> data.blockindex = 2;
-                    coverage -> data.groupindex = 0;
-                    coverage -> data.itemid = 'id_1269';
+                    code -> data.blockindex = 2;
+                    code -> data.groupindex = 0;
+                    code -> data.itemid = 'id_1269';
                     code -> data.values as values, values.value = code;
                 };
             };
 
-            coverage -> tgt.data as data then 
+            // extension:pkvTarifform.valueCodeableConcept -> 1, 0, 1270
+            coverage -> operations.data as data then 
+            {
+                coverage.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform'",
+                                extension.valueCodeableConcept as vcc, 
+                                vcc.coding as coding,
+                                coding.code as code then
+                {
+                    code -> data.blockindex = 1;
+                    code -> data.groupindex = 0;
+                    code -> data.itemid = 'id_1270';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+
+            // extension:kooperationsvereinbarung.valueBoolean -> 2, 0, 2460
+            coverage -> operations.data as data then 
             {
                coverage.extension as ext where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung' and $this.extension.valueBoolean = true" then 
                {
@@ -106,26 +219,40 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                     coverage -> data.values as values, values.value = 'no';
                };
             };
+
+            // Type.coding.code -> 2, 0 , 1268
+            coverage -> operations.data as data then 
+            {
+                coverage.identifier as identifier, identifier.value as value then 
+                {
+                    value -> data.blockindex = 2;
+                    value -> data.groupindex = 0;
+                    value -> data.itemid = 'id_1268';
+                    value -> data.values as values, values.value = value;
+                };
+            };
         };
 
         /* ------------------------------- EpisodeOfCare ---------------------------- */
-        entry.resource as episodeofcare where "resource is EpisodeOfCare and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM'" then
-        {   
-            episodeofcare -> tgt.data as data then 
+        entry.resource as episodeofcare where "resource is EpisodeOfCare and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM'" -> tgt.operations as operations collate then
+        {  
+            // diagnosis.condition.dateOnset -> 1, 0, 1297
+            episodeofcare -> operations.data as data then 
             {
                 episodeofcare.extension as erstdiagnose then
                 {
                     erstdiagnose.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmErstdiagnose'" then 
                     {
-                       episodeofcare -> data.blockindex = 1;
-                       episodeofcare -> data.groupindex = 0;
-                       episodeofcare -> data.itemid = 'id_1297';
+                       erstdiagnose -> data.blockindex = 1;
+                       erstdiagnose -> data.groupindex = 0;
+                       erstdiagnose -> data.itemid = 'id_1297';
                        erstdiagnose -> data.values as values, values.value = value; 
                     };
                 };
             };
-
-            episodeofcare -> tgt.data as data then 
+            
+            // extension:letzterKontakt.dateTime -> 1, 0, 803
+            episodeofcare -> operations.data as data then 
             {
                 episodeofcare.extension as letzterkontakt then
                 {
@@ -139,7 +266,8 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                 };
             };
 
-            episodeofcare -> tgt.data as data then 
+            // extension:nngmStatus.valueCodeableConcept -> 1, 0, 1139
+            episodeofcare -> operations.data as data then 
             {
                 episodeofcare.status as status, status.extension as statusext then
                 {
