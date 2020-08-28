@@ -1,11 +1,17 @@
 /// version = 0.1
-/// title = "nNGM: reverse LiquidBiopsy - FHIR to CTS"
-
-/* TO DO 
-- Biopsy 0, 0, id_1601
+/// title = "nNGM: nNGM_Mapping_LiquidBiopsy"
+/*
+TODO
+    Biopsie-ID: it doesn't correspond to the properly itemID(excel file)
+    OBSERVATION: SOP component doesn't exist in the profile on simplifier
+    OBSERVATION: Assay component doesn't exist in the profile on simplifier
+    OBSERVATION: Hersteller component doesn't exist in the profile on simplifier
+    SERVICEREQUEST ->  Durchfuehrung: No properly transformed, issue with status
+                    Abschluss : No properly transformed, issue with status extension
+                    Datum des Abschlusses : No properly transformed, issue with status extension
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/LiquidBiopsyMappingCTS" = LiquidBiopsyMappingCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCTS" = nNGM_Mapping_LiquidBiopsyCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
@@ -14,313 +20,382 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
-    
-    src.entry as entry then
+
+    src -> tgt.operations as operations collate, operations.crfid = '6-LB1';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+
+     src.entry as entry then
     {
-        /* ------------------------------ Specimen ---------------------------- */
+
+        //------------------------ Specimen ------------------------
         entry.resource as specimen where "resource is Specimen" then
         {
-            /* ------------------------------ Referenzen ---------------------------- */
-            // Specimen
+            //Biopsy-ID -> 0, 0, id_1601
             specimen -> tgt.operations as operations collate then
             {
                 specimen -> operations.data as data then
                 {
-                    specimen.identifier as identifier, identifier.value as value then
-                    {
-                        specimen -> data.blockindex = 1;
-                        specimen -> data.groupindex = 0;
-                        specimen -> data.itemid = 'assessment_id';
-                        value -> data.values as values, values.value = value;
-                    };
-                };
-            };
-
-            //Biopsie-ID
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.identifier as biopsieID then
+                    specimen.identifier as identifier,
+                     identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'"then
                     {   
-                        biopsieID.value as bid then
-                        {
-                            specimen -> data.blockindex = 0;
-                            specimen -> data.groupindex = 0;
-                            specimen -> data.itemid = 'id_1601';
-                            biopsieID -> data.values as values, values.value = bid;
-                        };
+                        specimen -> data.blockindex = 0;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid = 'id_1601';
+                        identifier.value as value-> data.values as values collate, 
+                                                    values.value = value,
+                                                    values.unit = 'count';
                     };
-                };
+                };                
             };
         };
-
-        /* ------------------------------ Organization ---------------------------- */
-        entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site'" then
+        //------------------------ Organization ------------------------
+        entry.resource as organization where "resource is Organization" then
         {
-            /* ------------------------------ Netzwerkzentrum ---------------------------- */
-            // Standort
+            //Standort -> 2, 0, id_2435
             organization -> tgt.operations as operations collate then
             {
                 organization -> operations.data as data then
                 {
                     organization.name as name then
-                    {
+                    {   
                         organization -> data.blockindex = 2;
                         organization -> data.groupindex = 0;
                         organization -> data.itemid = 'id_2435';
                         name -> data.values as values, values.value = name;
                     };
+                };                
+            };
+        };
+        //------------------------ Observation ------------------------
+        //TODO
+        /*
+        entry.resource as observation where "resource is Observation" then
+        {
+            //NetzwerkZentrum
+            //SOP-Versionsnummer des Standorts -> 2, 0, id_2614
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then 
+                    {
+                       component.code where "code.coding.code = '' and %tgt.operations.data.where(itemid = 'id_2614').exists().not()" then
+                       {
+                            observation ->  data.blockindex = 2;
+                            observation ->  data.groupindex = 0;
+                            observation ->  data.itemid = 'id_2614';
+                            component.valueString as valueString -> data.values as values, values.value = valueString;
+                       };
+                    };
                 };
             };
-
-            /* ------------------------------ Netzwerkzentrum ---------------------------- */
-            // SOP-Versionsnummer des Standorts
-            organization -> tgt.operations as operations collate then
+        };*/
+        entry.resource as observation where "resource is Observation" then
+        {
+            //Assay -> 3, 0, id_2601
+            //TODO
+            /*observation -> tgt.operations as operations collate then
             {
-                organization -> operations.data as data then
+                observation -> operations.data as data then
                 {
-                    organization.type as type, type.text as text then
+                    observation.component as component then
                     {
-                        organization -> data.blockindex = 2;
-                        organization -> data.groupindex = 0;
-                        organization -> data.itemid = 'id_2614';
-                        text -> data.values as values, values.value = text;
+                        component.code where "code.coding.code = ''"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 3;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2601';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };*/
+            //TODO
+            //Hersteller -> 3, 0, id_2602
+            /*observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = ''"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 3;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2602';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };*/
+            //Date of Assessment 4, 0, id_2528
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.effectiveDateTime as effectiveDateTime then
+                    {
+                        observation ->  data.blockindex = 4;
+                        observation ->  data.groupindex = 0;
+                        observation ->  data.itemid = 'id_2528';
+                        effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
+                    };
+                };
+            };
+            //Phaenotyp -> 4, 0, id_1929
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = 'C16977'"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_1929';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            // Gen 4, 0, id_1928
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '48018-6'"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_1928';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            // Exon des 5' Gens 4, 0, id_1931
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = 'C13231'"then
+                        {
+                            component.valueInteger as valueInteger then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_1931';
+                                valueInteger -> data.values as values, values.value = valueInteger;
+                            };
+                        };
+                    };
+                };
+            };
+            // Referenztranskript 5' Gen -> 4, 0, lb_referencetranscript_5_end_gene
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '51958-7'"then
+                        {
+                            component.valueString as valueString then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'lb_referencetranscript_5_end_gene';
+                                valueString -> data.values as values, values.value = valueString;
+                            };
+                        };
+                    };
+                };
+            };
+            //3' Gen der Fusion (2.Gen) -> 4, 0, lb_3_end_gene
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '2ndGen'"then
+                        {
+                            component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'lb_3_end_gene';
+                                code -> data.values as values, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+            // Exon des 3' Gens-> 4, 0, lb_exon_3_end_gen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '2ndGenExon'"then
+                        {
+                            component.valueInteger as valueInteger then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'lb_exon_3_end_gen';
+                                valueInteger -> data.values as values, values.value = valueInteger;
+                            };
+                        };
+                    };
+                };
+            };
+            // Referenztranskript 3' Gen:n -> 4, 0, lb_referencetranscript_3_end_gen
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '2ndGenTranskript'"then
+                        {
+                            component.valueString as valueString then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'lb_referencetranscript_3_end_gen';
+                                valueString -> data.values as values, values.value = valueString;
+                            };
+                        };
+                    };
+                };
+            };
+            // Referenztranskript 5' Gen -> 4, 0, id_1930
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '48004-6'"then
+                        {
+                            component.valueString as valueString then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_1930';
+                                valueString -> data.values as values, values.value = valueString;
+                            };
+                        };
+                    };
+                };
+            };
+            // HGVS p. (Mutation Protein) -> 4, 0, id_1932
+            observation -> tgt.operations as operations collate then
+            {
+                observation -> operations.data as data then
+                {
+                    observation.component as component then
+                    {
+                        component.code where "code.coding.code = '48005-3'"then
+                        {
+                            component.valueString as valueString then 
+                            {
+                                observation -> data.blockindex = 4;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_1932';
+                                valueString -> data.values as values, values.value = valueString;
+                            };
+                        };
                     };
                 };
             };
         };
-
-        /* ------------------------------ Observation ---------------------------- */
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+        /* --------------- ServiceRequest ---------------------- */
+        entry.resource as serviceRequest where "resource is ServiceRequest" then
         {
-            /* ------------------------------ Methodik ---------------------------- */
-            // Assay
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'Assay'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2601';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            /* ------------------------------ Methodik ---------------------------- */
-            // Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'Hersteller'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2602';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // Date of Assessment
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.valueDateTime as vdt then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2528';
-                        vdt -> data.values as values, values.value = vdt;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // Phaenotyp
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.valueCodeableConcept as vcc, vcc.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/phenotypes'" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1929';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // Gen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then 
-                {
-                    observation.component as component, component.valueCodeableConcept as vcc, vcc.coding as coding where "coding.system = 'http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc'" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1928';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // Exon des 5' Gens
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.code as code, code.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1931';
-                        component.valueInteger as integer -> data.values as values, values.value = integer;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // Referenztranskript 5' Gen
-            // component:exon.valueInteger	1_LB1__4_0__lb_referencetranscript_5_end_gene
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.valueInteger as integer then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'lb_referencetranscript_5_end_gene';
-                        integer -> data.values as values, values.value = integer;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // Exon des 3' Gens
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.code as code, code.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'lb_3_end_gene';
-                        component.valueInteger as integer -> data.values as values, values.value = integer;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // Referenztranskript 3' Gen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.valueInteger as integer then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'lb_referencetranscript_3_end_gen';
-                        integer -> data.values as values, values.value = integer;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // HGVS c. (Mutation cDNA)
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.valueString as valueStr then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1930';
-                        valueStr -> data.values as values, values.value = valueStr;
-                    };
-                };
-            };
-
-            /* ------------------------------ Primaermutation/Ressistenztestung ---------------------------- */
-            // HGVS p. (Mutation Protein)
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component, component.valueString as valueStr then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1932';
-                        valueStr -> data.values as values, values.value = valueStr;
-                    };
-                };
-            };
-        };
-
-        entry.resource as serviceRequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
-        {
-            /* ------------------------------ Status der Untersuchungen ---------------------------- */
-            //Durchfuehrung
+            //TODO
+            //Durchfuehrung -> 5,0,  id_2520
             serviceRequest -> tgt.operations as operations collate then
             {
                 serviceRequest -> operations.data as data then
                 {
                     serviceRequest.status as status then
                     {
-                        serviceRequest -> data.blockindex = 5;
-                        serviceRequest -> data.groupindex = 0;
-                        serviceRequest -> data.itemid = 'id_2520';
-                        status -> data.values as values, values.value = status;
+                        serviceRequest ->  data.blockindex = 5;
+                        serviceRequest ->  data.groupindex = 0;
+                        serviceRequest ->  data.itemid = 'id_2520';
+                        status -> data.values as values,values.value = status;
                     };
                 };
             };
-
-            /* ------------------------------ Status der Untersuchungen ---------------------------- */
-            //Abschluss
+            //TODO
+            //Abschluss -> 5,0, id_2462
             serviceRequest -> tgt.operations as operations collate then
             {
                 serviceRequest -> operations.data as data then
                 {
-                    serviceRequest.category as category, category.coding as coding, coding.code as code then
+                    serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
                     {
-                        serviceRequest -> data.blockindex = 5;
-                        serviceRequest -> data.groupindex = 0;
-                        serviceRequest -> data.itemid = 'id_2462';
-                        code -> data.values as values, values.value = code;
+                        statusextension where "statusextension.url ='status'" then
+                        {
+                            serviceRequest ->  data.blockindex = 5;
+                            serviceRequest ->  data.groupindex = 0;
+                            serviceRequest ->  data.itemid = 'id_2462';
+                            statusextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                        };
                     };
                 };
             };
-
-            /* ------------------------------ Status der Untersuchungen ---------------------------- */
-            //Datum des Abschlusses
+            //TODO
+            //Datum des Abschlusses -> 5,0, id_2521
             serviceRequest -> tgt.operations as operations collate then
             {
                 serviceRequest -> operations.data as data then
                 {
-                    serviceRequest.occurrenceDateTime as vdt then
+                    serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
                     {
-                        serviceRequest -> data.blockindex = 5;
-                        serviceRequest -> data.groupindex = 0;
-                        serviceRequest -> data.itemid = 'id_2521';
-                        vdt -> data.values as values, values.value = vdt;
+                        datumextension where "datumextension.url ='datum'" then
+                        {
+                            serviceRequest ->  data.blockindex = 5;
+                            serviceRequest ->  data.groupindex = 0;
+                            serviceRequest ->  data.itemid = 'id_2521';
+                            datumextension.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code  -> data.values as values,values.value = code;
+                        };
                     };
                 };
             };
         };
     };
+
 }
