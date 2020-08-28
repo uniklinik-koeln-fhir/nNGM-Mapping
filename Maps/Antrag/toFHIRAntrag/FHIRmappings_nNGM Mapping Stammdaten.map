@@ -2,7 +2,8 @@
 /// title = "nNGM: Mapping Stammdaten FHIR"
 /// CTS -> FHIR
 
-/* To Do 
+/* 
+TODO 
 - Erstdiagnose -> diagnosis.condition.dateOnset . We need to create a reference to a condition for this.
 */
 
@@ -16,11 +17,11 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {   
-    //metadata
+    // Metadata
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    //resources
+    // Resources
     src -> bundle.entry as entry then CreateTransformPatientStammdaten(src, entry);
     src -> bundle.entry as entry then CreateTransformCoverageStammdaten(src, entry);
     src -> bundle.entry as entry then CreateEpisodeOfCareStammdaten(src, entry);
@@ -55,7 +56,7 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
 
     src.operations as operations, operations.data as data then
     {
-        //Geschlecht -> Gender
+        // Geschlecht -> Gender
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'" then
         {
             values.value as value where "$this.value = 'weiblich'" then
@@ -95,37 +96,37 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
             values.value as value -> tgt.birthdate = dateOp(value, 'dateTime');
         };
 
-        //Strasse -> address.line
+        // Strasse -> address.line
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1127'" then
         {
             values.value as line -> tgt.address as tgtAddress, tgtAddress.line = line;
         };
 
-        //PLZ -> address.postalcode
+        // PLZ -> address.postalcode
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1128'" then
         {
             values.value as plz -> tgt.address as tgtAddress, tgtAddress.postalCode = plz;
         };
 
-        //Wohnort -> address.city
+        // Wohnort -> address.city
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1129'" then
         {
             values.value as city -> tgt.address as tgtAddress, tgtAddress.city = city;
         };
 
-        //Country
+        // Country
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1280'" then
         {
             values.value as country -> tgt.address as tgtAddress, tgtAddress.country = country;
         };
 
-        //deceasedDateTime
+        // DeceasedDateTime
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1298'" then
         {
             values.value as ddt -> tgt.deceasedDateTime = dateOp(ddt, 'dateTime');
         };
 
-        //informationsquelleTod
+        // InformationsquelleTod
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2436'" then
         {
             values.value as value -> tgt.extension as infoq, 
@@ -250,10 +251,11 @@ group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: Ep
 
     src.operations as operations, operations.data as data then
     {
+        // TODO
         // Erstdiagnose -> diagnosis.condition.dateOnset
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1297'" then
         {
-            values.value as value -> tgt.extension as erstdiagnose, 
+            values.value as value -> tgt.extension as erstdiagnose,
             erstdiagnose.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmErstdiagnose',
             erstdiagnose.valueDateTime = dateOp(value, 'dateTime');
         };

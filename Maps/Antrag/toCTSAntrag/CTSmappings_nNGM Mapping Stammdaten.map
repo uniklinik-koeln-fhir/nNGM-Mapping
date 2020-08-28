@@ -9,16 +9,19 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneElement)
 {
-    src -> tgt.type = 'save';
-    src -> tgt.crfid = 'SD';
+    src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    src -> tgt.operations as operations collate, operations.crfid = '*-RT1';
+    src -> tgt.operations as operations collate, operations.type = 'save';
 
     src.entry as entry then
     {
         /* ------------------------------- Patient ---------------------------- */
-        entry.resource as patient where "resource is Patient" then
+        entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
         {   
             //Patient.gender -> Geschlecht
-            patient -> tgt.data as data then 
+            patient -> tgt.operations as operations collate, operations.data as data then 
             {
                 patient.gender as gender where "gender = 'female'" then
                 {
@@ -32,9 +35,9 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                     patient -> data.blockindex = 0;
                     patient -> data.groupindex = 0;
                     patient -> data.itemid = 'id_1131';
-                    gender -> data.values as values, values.value = 'mÃ¤nnlich'; 
+                    gender -> data.values as values, values.value = 'männlich'; 
                 };
-                patient.gender as gender where "gender = 'X'" then
+                patient.gender as gender where "gender = 'D'" then
                 {
                     patient -> data.blockindex = 0;
                     patient -> data.groupindex = 0;
@@ -42,7 +45,21 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                     gender -> data.values as values, values.value = 'divers'; 
                 };
             };
+
+            // Patient.name.family -> 0, 0, 1125
+            patient -> tgt.operations as operations collate, operations.data as data then 
+            {
+                patient.name as name, name.family as givenName then
+                {
+                    givenName -> data.blockindex = 0;
+                    givenName -> data.groupindex = 0;
+                    givenName -> data.itemid = 'id_1125';
+                    givenName -> data.values as values, values.value = givenName;
+                };
+            };
         };
+
+
 
         /* ------------------------------- Coverage ---------------------------- */
         entry.resource as coverage where "resource is Coverage" then
