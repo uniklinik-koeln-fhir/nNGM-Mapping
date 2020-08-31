@@ -20,72 +20,32 @@ uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 /* ------------------------------ Bundle ---------------------------- */
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {
-    // Structure: Source Content -> Target Transform then Dependent Rules
-    // Source Content: Specifies one or more elements from the source that contribute to the mapping
-    // Target Transform: Specifications of how to use the source content to create the target content
-    // Dependent Rules: (Optional) Specifies a group or set of child rules to apply within the scope of the rule
-
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
     src -> bundle.entry as entry then CreateSpecimenHistologie(src, entry);
+    src -> bundle.entry as entry then CreateTransformDiagnosticReportHistologie(src, entry);
     src -> bundle.entry as entry then CreateObservationHistologie(src, entry);
-    src -> bundle.entry as entry then CreateEpisodeOfCareHistologie(src, entry);
     src -> bundle.entry as entry then CreateServiceRequestHistologie(src, entry);
-
 }
 
-/* ------------------------------ EpisodeOfCare ---------------------------- */
-
-/*check if there is a EpisodeOfCare required*/
-group CreateEpisodeOfCareHistologie(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            src -> tgt.resource = create('EpisodeOfCare') as episodeofcare then TransformEpisodeOfCareHistologie(src, episodeofcare);
-        };
-        
-    };
-}
-
-group TransformEpisodeOfCareHistologie(source src: CTS_Transport, target tgt: EpisodeOfCare)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
-
-
-    //subject
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //status 
-    src -> tgt.status = cast('active', 'FHIR.code');
-
-    src.operations as operations, operations.data as data then
-    {
-        //Pathologie-Fall-ID
-         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            values.value as value -> tgt.identifier = create('Identifier') as untersuchungsid, untersuchungsid.system = cast('http://uk-koeln.de/fhir/NamingSystem/nNGM/fallnummer', 'FHIR.uri'), untersuchungsid.value = value;
-        };
-
-    };
-}
-
-/* ------------------------------ Specimen ---------------------------- */
+/* ------------------------------ Check if Specimen is required ---------------------------- */
 group CreateSpecimenHistologie(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'
+                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
+                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2516'
+                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
         {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenHistologie(src, specimen);
         };
     };
 }
 
-group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+/* ------------------------------ Specimen ---------------------------- */
+group TransformSpecimenHistologie(source src: CTS_Transport, target tgt: Specimen) 
 {
     // Metadata
     src -> tgt.id = uuid();
@@ -96,39 +56,67 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
 
     src.operations as operations, operations.data as data then 
     {
-        //Biopsy-ID
+        // Biopsy-ID -> biopsyId.value
          data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
         {
             values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
         };
 
-        //Eingang des Tumormaterials in der Pathologie
+        // Eingang des Tumormaterials in der Pathologie -> receivedTime
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
         {
             values.value as value -> tgt.receivedTime = dateOp(value, 'dateTime');
         };
 
-        //Eingangsnummer des Tumormaterials in der Pathologie
+        // Eingangsnummer des Tumormaterials in der Pathologie -> accessionIdentifier:eingangsnummerPatho
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2516'" then
         {
-            values.value as value -> tgt.accessionIdentifier as identifier, identifier.value = value;
+            values.value as value -> tgt.accessionIdentifier as identifier, identifier.system = cast('http://uk-koeln.de/NamingSystem/nNGM/eingangPathoNummer', 'FHIR.uri'), identifier.value = value;
         };
 
-        //Tumormaterial
+        // Tumormaterial -> type.text
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
         {
-           values.value as value -> tgt.type as type, type.text = value;
+           values.value as value -> tgt.type as type, type.text = value, type.coding = create('Coding') as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                                        snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                                        snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason,
+                                                                                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                                                                                        dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
         };
     };
-
-    //Type (1..1)
-    src -> tgt.type as type, type.coding = create('Coding') as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
-                                                                                        snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                    snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                                                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 }
 
+/* ------------------------------ Check if DiagnosticReport is required ---------------------------- */
+group CreateTransformDiagnosticReportHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id' or 
+                                    blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
+        {
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportHistologie(src, diagnosticReport);
+        };
+    };
+}
 
+/* ------------------------------ DiagnosticReport ---------------------------- */
+group TransformDiagnosticReportHistologie(source src: CTS_Transport, target tgt: DiagnosticReport)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+
+    src.operations as operations, operations.data as data then
+    {
+        /* ------------------------------ Healex Referenzen ---------------------------- */
+        // Biopsy-ID
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as id -> tgt.identifier = create('identifier') as befundNummer,
+                                                            befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                            befundNummer.value = id;
+        };
+    };
+}
 
 /* ------------------------------ Observation ---------------------------- */
 group CreateObservationHistologie(source src: CTS_Transport, target tgt: BackboneElement)
