@@ -91,7 +91,7 @@ group CreateTransformDiagnosticReportHistologie(source src: CTS_Transport, targe
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id' or 
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id' or 
                                     blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
         {
             src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportHistologie(src, diagnosticReport);
@@ -102,18 +102,36 @@ group CreateTransformDiagnosticReportHistologie(source src: CTS_Transport, targe
 /* ------------------------------ DiagnosticReport ---------------------------- */
 group TransformDiagnosticReportHistologie(source src: CTS_Transport, target tgt: DiagnosticReport)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
+    // Status
+    src -> tgt.status as status, status.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Status
+    src -> tgt.code as code, code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
     src.operations as operations, operations.data as data then
     {
-        /* ------------------------------ Healex Referenzen ---------------------------- */
-        // Biopsy-ID
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        // Untersuchungs-ID -> identifier:befundNummer.value
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
         {
             values.value as id -> tgt.identifier = create('identifier') as befundNummer,
                                                             befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
                                                             befundNummer.value = id;
+        };
+
+        // Pathologie-Fall-ID -> identifier:externePathoBefundNummer.value
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
+        {
+            values.value as id -> tgt.identifier = create('identifier') as externePathoBefundNummer,
+                                                            externePathoBefundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/externePathoBefundnummer',
+                                                            externePathoBefundNummer.value = id;
         };
     };
 }
