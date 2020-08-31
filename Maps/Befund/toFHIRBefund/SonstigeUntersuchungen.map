@@ -2,9 +2,6 @@
 /// title = "SonstigeUntersuchungenMap"
 /*
     TODO
-    - Biopsie-ID is not mapped on the excel file 
-    DIAGNOSTICREPORT ->  perfil on simplifier specified the "status" and "code" item as required
-                         in the excel file does not specify this items, What values should be there?
     OBSERVATION -> to create the observation resource the  "repeatindex = 0" to the condition where
     SERVICEREQUEST -> Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
                     in the CTS structure (SAME ISSUE AS FAST TRACK MAPPING: DISCUSSED ON 20.08.2020 STAND UP MEETING)
@@ -23,6 +20,9 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
+    //Check if any fields are filled in before creating the Speciment
+    src -> bundle.entry as entry then CreateTransformSpecimen(src, entry);
+
     //Check if any fields are filled in before creating the DiagnosticReport
     src -> bundle.entry as entry then CreateTransformDiagnosticReport(src, entry);
 
@@ -36,8 +36,48 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.entry as entry then CreateTransformServiceRequest(src, entry);
 }
 
+group CreateTransformSpecimen(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+        };
+    };
+}
+
+/* ------------------------------ Specimen ---------------------------- */
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Type
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
+
+    // Patient reference 
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    src.operations as operations, operations.data as data then
+    {
+        /* ------------------------------ Healex Referenzen ---------------------------- */
+        // Biopsy-ID
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            values.value as bid -> tgt.identifier = create('identifier') as biopsieID,
+                                                            biopsieID.system= 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer',
+                                                            biopsieID.value = bid;
+        };
+
+    };
+}
+
 group CreateTransformDiagnosticReport(source src: CTS_Transport, target tgt: BackboneElement)
 {
+
     src.operations as operations, operations.data as data then
     {   
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
@@ -51,9 +91,16 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
-    //TODO
-    //src -> tgt.status = 'active';
-    //src -> tgt.code = cc();
+
+    src ->  tgt.status as status, 
+            status.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src ->  tgt.code as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     src.operations as operations, operations.data as data then
     {
@@ -122,12 +169,25 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/weitere-untersuchung';
+    
+    src ->  tgt.status as status, 
+            status.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src then MapObservation(src, tgt);
+    src -> tgt.method = cc('http://loinc.org','69548-6');
 
     src.operations as operations, operations.data as data then
     {
-        //Untersuchung
+        // SOP-Versionsnummer des Standorts
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2618'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
+            {
+                sop -> componentSop.valueString = sop;
+                sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
+            };
+        };
         // Date of Assessment
         data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2527'" then
         {
@@ -176,36 +236,59 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
         //Phaenotyp
         data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2283'" then
         {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            
+            values.value as phaenotyp where "$this.value = 'Expression'" then 
             {
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                phaenotyp -> componentPhaenotyp.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
+                phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+                {
+                    phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                    phaenotyp -> componentPhaenotyp.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', 'C80488');
+                };
+            };
+            values.value as phaenotyp where "$this.value = 'Fusion Gene'" then 
+            {
+                phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+                {
+                    phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                    phaenotyp -> componentPhaenotyp.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', 'C28510');
+                };
+            };
+            values.value as phaenotyp where "$this.value = 'Amplification'" then 
+            {
+                phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+                {
+                    phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                    phaenotyp -> componentPhaenotyp.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', 'C25418');
+                };
+            };
+            values.value as phaenotyp where "$this.value != 'Amplification' and $this.value != 'Expression' and $this.value != 'Fusion Gene'" then 
+            {
+                phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+                {
+                    phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                    phaenotyp -> componentPhaenotyp.valueString = phaenotyp;
+                };
             };
         };
         // Ergebnis
         data.values as values where "blockindex = 3 and groupindex = 0  and repeatindex = 0 and itemid = 'id_2031'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis);
-        };
-    };
-}
-
-group MapObservation(source src: CTS_Transport, target tgt: Observation)
-{
-    // ------------------------------ Netzwerkzentrum ---------------------------- 
-    // SOP-Versionsnummer des Standorts
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2618'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
+            values.value as ergebnis where "$this.value = 'positiv'" then 
             {
-                sop -> componentSop.valueString = sop;
-                sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
+                ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', 'aktivierende-Mutation');
+            };
+            values.value as ergebnis where "$this.value = 'negativ'" then 
+            {
+                ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', 'keine-aktivierende-Mutation');
+            };
+            values.value as ergebnis where "$this.value = 'nicht auswertbar'" then 
+            {
+                ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', 'nicht-auswertbar');
             };
         };
     };
 }
+
 
 /* -------------------------------------- Service Request -------------------------------------------- */
 group CreateTransformServiceRequest(source src: CTS_Transport, target tgt: BackboneElement)
@@ -226,14 +309,22 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
+    src -> tgt.intent = 'proposal';
     src.operations as operations, operations.data as data then
     {
         //Status der Untersuchungen
         //Durchfuehrung
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
         {
-            values.value as value -> tgt.status = value;
+            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            {
+                value -> tgt.status = 'active';
+            };
+            values.value as value where "$this.value = 'abgeschlossen'" then 
+            {
+                value -> tgt.status = 'completed';
+            };
+            
         };
         //TODO
         //Abschluss
