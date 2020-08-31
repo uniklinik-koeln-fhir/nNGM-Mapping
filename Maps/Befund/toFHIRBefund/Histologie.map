@@ -1,11 +1,9 @@
 /// version = 0.1
 /// title = "nNGM: Mapping Histologie FHIR"
 
-/*TODO
-
-- statusabschluss status extension of extension 
-- Wachstumsmuster stuff apperently not in form anymore
-
+/*
+TODO
+- Double extension for element 'status' is not working
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR" = nNGM_Mapping_HistologieFHIR
@@ -279,7 +277,7 @@ group MapPercentageValue(source src: string, target tgt: Quantity)
             tgt.code = '%';
 }
 
-/* ------------------------------ ServiceRequest ---------------------------- */
+/* ------------------------------ Check if ServiceRequest is required ---------------------------- */
 group CreateServiceRequestHistologie(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -293,17 +291,20 @@ group CreateServiceRequestHistologie(source src: CTS_Transport, target tgt: Back
     };
 }
 
+/* ------------------------------ ServiceRequest ---------------------------- */
 group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
 {
     // Resource information
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
-
-    //intent
+    // intent
     src -> tgt.intent = 'proposal';
 
-    //Category
+     // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Category
     src -> tgt.category as category, 
             category.coding as coding,
             coding.code as code,
@@ -311,26 +312,15 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
                 
-    //code
-    src -> tgt.code as category, 
-            category.coding as coding,
-            coding.code as code,
-            code.extension as dataAbsentReason, 
+    // code
+    src -> tgt.code as code, 
+            code.coding as coding,
+            coding.code as actualCode,
+            actualCode.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src -> tgt.code as category collate, 
-            category.coding as coding,
-            coding.system as code,
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-
-    // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //authoredOn
+    // authoredOn
     src -> tgt.authoredOn as code, 
             code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
@@ -338,38 +328,30 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
     
     src.operations as operations, operations.data as data then 
     {
-
-        //status
+        // Status
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
         {
             values.value as value -> tgt.status = cast(value, 'FHIR.code');
         };
-
         
-        //ext statusabschluss
-        //Abwesenheit oder Vorhandensein von Metastasen
+        // Extension statusabschluss
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
         {
-            values.value as value -> tgt.status as status, status.extension as ext collate,
-            ext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss' collate,
-            ext.extension as statusabschluss collate,
-                         statusabschluss.url = 'status',
-                         statusabschluss.valueCodeableConcept as vcc, vcc.coding as coding, coding.code = value then
-                         {
-                            
-                            src.operations as operations, operations.data as data then 
-                            {
-                                //abschluss datum
-                                data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
-                                {
-                                    values.value as value -> tgt.status as status, status.extension as ext collate,
-                                    ext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss' collate,
-                                    ext.extension as statusabschluss collate,
-                                                     statusabschluss.url = 'datum',
-                                                      statusabschluss.valueDate = value;
-                                };  
-                            };
-                         };
+            values.value as value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.extension as statusExtension then 
+            {
+                value -> statusExtension.url = 'status';
+                value -> statusExtension.valueCodeableConcept as vcc, vcc.coding = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss', value);
+            };
+        };
+
+        // Extension datumAbschluss
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            values.value as value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.extension as datumExtension then 
+            {
+                value -> datumExtension.url = 'datum';
+                value -> datumExtension.valueDate = dateOp(value, 'dateTime');
+            };
         };
     };
 }
