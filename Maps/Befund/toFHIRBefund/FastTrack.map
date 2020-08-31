@@ -2,12 +2,8 @@
 /// title = "nNGM_Mapping_FastTrack"
 
 /*
-    SPECIMEN -> (type and subject) item from the resource simplifier specified that are needed
-    DIAGNOSTIGREPORT-> it doesn't have Profile URL on excel file, this was used https://simplifier.net/nngm-registrationformr4/befund
     ServiceRequest -> Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
                     in the CTS structure:Theme discussed on 20.08.2020 stand up meeting
-  
-
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrack" = nNGM_Mapping_FastTrack
@@ -55,6 +51,14 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
+    // Type
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
+
+    // Patient reference 
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
     src.operations as operations, operations.data as data then
     {
         /* ------------------------------ Healex Referenzen ---------------------------- */
@@ -88,8 +92,7 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
 
     src.operations as operations, operations.data as data then
     {
-        /* ------------------------------ Healex Referenzen ---------------------------- */
-        // Biopsy-ID
+        // Untersuchungs ID
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
         {
             values.value as id -> tgt.identifier = create('identifier') as befundNummer,
@@ -297,7 +300,7 @@ group TransformObservationBRAFExon20(source src: CTS_Transport, target tgt: Obse
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
     //Fast Track code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'EGFR Exon 20','EGFR Exon 20');
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128663','EGFR Exon 20 Mutation');
 
     //Fast track category
     src then MapSopNumberCategoryMethodStatus(src, tgt);
@@ -481,7 +484,16 @@ group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Obser
 
 group MapSopNumberCategoryMethodStatus(source src: CTS_Transport, target tgt: Observation)
 {
-    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C135715','C101293');
+    src -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
+    src ->  tgt.method as method, 
+            method.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src ->  tgt.status as status, 
+            status.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // ------------------------------ Netzwerkzentrum ---------------------------- 
     // SOP-Versionsnummer des Standorts
@@ -502,6 +514,8 @@ group MapSopNumberCategoryMethodStatus(source src: CTS_Transport, target tgt: Ob
         src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
                                                                 coding.code = 'laboratory';                                                    
     };
+    
+
 }
 
 group MapEGFREXO1921(source src: CTS_Transport, target tgt: Observation)
