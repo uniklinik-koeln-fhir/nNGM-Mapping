@@ -7,22 +7,19 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS" = nN
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport)
+group TransformResistenztestungCTS(source src: Bundle, target tgt: BackboneElement)
 {
-    src -> tgt.version = '1.1';
-    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
-
-    src -> tgt.operations as operations collate, operations.crfid = '*-RT1';
-    src -> tgt.operations as operations collate, operations.type = 'save';
+    src -> tgt.crfid = '*-RT1';
+    src -> tgt.type = 'save';
 
     src.entry as entry, entry.resource as observations then
     {
         // EpisodeOfCare
         src.entry as entry, entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
         {
-            specimen.identifier as identifier -> tgt.operations as operations collate then
+            specimen.identifier as identifier then
             {
-                identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer' and %tgt.operations.data.where(itemid = 'id_1601').exists().not()" -> operations.data as data then
+                identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer' and %tgt.data.where(itemid = 'id_1601').exists().not()" -> tgt.data as data then
                 {
                     specimen -> data.blockindex = 2;
                     specimen -> data.groupindex = 0;
@@ -33,10 +30,10 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
         };
 
         // Progress/Reizidiv Krebserkrankung Observation
-        observations as observation where "$this.code.coding.code = 'C25630'" -> tgt.operations as operations collate then
+        observations as observation where "$this.code.coding.code = 'C25630'" then
         {
             // Observation.valueBoolean -> 0, 0, 1573
-            observation -> operations.data as data then
+            observation -> tgt.data as data then
             {
                 // Rezidiv = True
                 observation.valueBoolean as rezidivprogress where "$this.valueBoolean = true" then
@@ -58,7 +55,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
             };
 
             // Observation.effectiveDateTime -> 0, 0, 2397
-            observation -> operations.data as data then
+            observation -> tgt.data as data then
             {
                 observation.effectiveDateTime as effectiveDateTime where "$this.effectiveDateTime.empty() = false" then
                 {
@@ -71,7 +68,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
         };
 
         // Observation EGFR
-        observations as observation where "$this.code.coding.code = 'C134501'" -> tgt.operations as operations collate then
+        observations as observation where "$this.code.coding.code = 'C134501'" then
         {
             // Observation.effectiveDateTime -> 1, 0, 2502
             observation then TransformEffectiveDateTimeObservation(observation, tgt);
@@ -80,10 +77,10 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
             observation then TransformMutationsCTSResistenztestung(observation, tgt);
 
             // Therapy components
-            observation.component as components -> operations.data as data then 
+            observation.component as components -> tgt.data as data then 
             {
                 // 1. Therapie
-                components as component where "$this.extension.valueInteger = 1" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -92,7 +89,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 2. Therapie
-                components as component where "$this.extension.valueInteger = 2" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -101,7 +98,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 3. Therapie
-                components as component where "$this.extension.valueInteger = 3" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -110,7 +107,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 4. Therapie
-                components as component where "$this.extension.valueInteger = 4" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -121,7 +118,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
         };
 
         // Observation ALK
-        observations as observation where "$this.code.coding.code = 'C142114'" -> tgt.operations as operations collate then
+        observations as observation where "$this.code.coding.code = 'C142114'" then
         {
             // Observation.effectiveDateTime -> 1, 0, 2502
             observation then TransformEffectiveDateTimeObservation(observation, tgt);
@@ -130,10 +127,10 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
             observation then TransformMutationsCTSResistenztestung(observation, tgt);
 
             // Therapies and fusionPartner
-            observation.component as components -> operations.data as data then 
+            observation.component as components -> tgt.data as data then 
             {
                 // Observation.Fusionpartner -> 1, 0, 2504
-                components as component where "$this.code.coding.code = 'C28510'" -> operations.data as data then
+                components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -142,7 +139,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 1. Therapie
-                components as component where "$this.extension.valueInteger = 1" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -151,7 +148,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 2. Therapie
-                components as component where "$this.extension.valueInteger = 2" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -160,7 +157,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 3. Therapie
-                components as component where "$this.extension.valueInteger = 3" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -169,7 +166,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 4. Therapie
-                components as component where "$this.extension.valueInteger = 4" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -180,7 +177,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
         };
 
         // Observation ROS1
-        observations as observation where "$this.code.coding.code = 'C131071'" -> tgt.operations as operations collate then
+        observations as observation where "$this.code.coding.code = 'C131071'" then
         {
             // Observation.effectiveDateTime -> 1, 0, 2502
             observation then TransformEffectiveDateTimeObservation(observation, tgt);
@@ -189,10 +186,10 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
             observation then TransformMutationsCTSResistenztestung(observation, tgt);
 
             // Therapies and fusionPartner
-            observation.component as components -> operations.data as data then 
+            observation.component as components -> tgt.data as data then 
             {
                 // Observation.Fusionpartner -> 1, 0, 2506
-                components as component where "$this.code.coding.code = 'C28510'" -> operations.data as data then
+                components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -201,7 +198,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 1. Therapie
-                components as component where "$this.extension.valueInteger = 1" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -210,7 +207,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 2. Therapie
-                components as component where "$this.extension.valueInteger = 2" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -219,7 +216,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 3. Therapie
-                components as component where "$this.extension.valueInteger = 3" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -228,7 +225,7 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
                 };
 
                 // 4. Therapie
-                components as component where "$this.extension.valueInteger = 4" -> operations.data as data then
+                components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
                 {   
                     component -> data.blockindex = 1;
                     component -> data.groupindex = 0;
@@ -240,11 +237,11 @@ group TransformResistenztestungCTS(source src: Bundle, target tgt: CTS_Transport
     };
 }
 
-group TransformEffectiveDateTimeObservation(source observation: Observation, target tgt: CTS_Transport)
+group TransformEffectiveDateTimeObservation(source observation: Observation, target tgt: BackboneElement)
 {
-    observation -> tgt.operations as operations collate, operations.data as data then 
+    observation -> tgt.data as data then 
     {
-        observation.effectiveDateTime as effectiveDateTime where "$this.effectiveDateTime.empty() = false and %tgt.operations.data.where(itemid = 'id_2502').exists().not()" then
+        observation.effectiveDateTime as effectiveDateTime where "$this.effectiveDateTime.empty() = false and %tgt.data.where(itemid = 'id_2502').exists().not()" then
         {
             effectiveDateTime -> data.blockindex = 1;
             effectiveDateTime -> data.groupindex = 0;
@@ -254,17 +251,17 @@ group TransformEffectiveDateTimeObservation(source observation: Observation, tar
     };
 }
 
-group TransformMutationsCTSResistenztestung(source observation: Observation, target tgt: CTS_Transport)
+group TransformMutationsCTSResistenztestung(source observation: Observation, target tgt: BackboneElement)
 {
-    observation -> tgt.operations as operations collate then
+    observation then
     {
         // Mutations 
         // Observation.component.exon -> 1, 0, 1436
-        observation.component as components where "%tgt.operations.data.where(itemid = 'id_1436').exists().not()" then 
+        observation.component as components where "%tgt.data.where(itemid = 'id_1436').exists().not()" then 
         {
             components as component where "$this.code.coding.code = 'C13231'" then
             {
-                component -> operations.data as data then
+                component -> tgt.data as data then
                 {   
                     observation -> data.blockindex = 1;
                     observation -> data.groupindex = 0;
@@ -275,11 +272,11 @@ group TransformMutationsCTSResistenztestung(source observation: Observation, tar
         };
 
         // Observation.component.hgvsc -> 1, 0, 1437
-        observation.component as components where "%tgt.operations.data.where(itemid = 'id_1437').exists().not()" then 
+        observation.component as components where "%tgt.data.where(itemid = 'id_1437').exists().not()" then 
         {
             components as component where "$this.code.coding.code = '48004-6'" then 
             {
-                component -> operations.data as data then
+                component -> tgt.data as data then
                 {   
                     observation -> data.blockindex = 1;
                     observation -> data.groupindex = 0;
@@ -290,11 +287,11 @@ group TransformMutationsCTSResistenztestung(source observation: Observation, tar
         };
 
         // Observation.component.hgvsp -> 1, 0, 1438
-        observation.component as components where "%tgt.operations.data.where(itemid = 'id_1438').exists().not()" then 
+        observation.component as components where "%tgt.data.where(itemid = 'id_1438').exists().not()" then 
         {
             components as component where "$this.code.coding.code = '48005-3'" then 
             {
-                component -> operations.data as data then
+                component -> tgt.data as data then
                 {   
                     observation -> data.blockindex = 1;
                     observation -> data.groupindex = 0;

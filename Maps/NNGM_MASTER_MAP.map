@@ -7,17 +7,21 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AntragCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BefundCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TherapieCTS"
-
 
 group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
-    src -> tgt.patid = 'ZK82KVLQ-2';
+
+    //mapping patientID
+    src.entry as entry then
+    {
+        entry.resource as patient where "resource is Patient" then
+        {
+            patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
+
+        };
+    };
 
     src then MapAntragToCDS(src, tgt);
-    src then MapBefundToCDS(src, tgt);
-    src then MapTherapieToCDS(src, tgt);
 }
