@@ -10,12 +10,6 @@ uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
 uses "http://hl7.org/fhir/StructureDefinition/Practitioner" as target
 
-/*
-    TODO
-    - FHIR-resource of Pathologe is ServiceRequest, but the profile URL is about Practitioner. There is not element performer.reference.display,
-    it should be performer.display or performer.reference
-*/
-
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {
     src -> bundle.id = uuid();
@@ -55,8 +49,12 @@ group TransformSpecimenAnforderung(source src: CTS_Transport, target tgt: Specim
     // Mapped subject, which is obligatory element on Simplifier, with a Patient
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    // Mapped type, which is obligatory element on Simplifier, with CodeableConcept using system and code
-    src -> tgt.type = cc('http://snomed.info/sct', 'TISS');
+    // Mapped type, which is obligatory element on Simplifier, with no fixed value
+    src ->  tgt.type as type,
+            type.extension as dataAbsentReason,
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
 
     src.operations as operations, operations.data as data then
     {
@@ -432,7 +430,7 @@ group TransformObservationAnforderung(source src: CTS_Transport, target tgt: Obs
     src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'laboratory');
     src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
 
-    /*src.operations as operations, operations.data as data then
+    src.operations as operations, operations.data as data then
     {
         // Histologie des vorbefunds - valueCodeableConcept
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_836'" then 
@@ -443,16 +441,14 @@ group TransformObservationAnforderung(source src: CTS_Transport, target tgt: Obs
                          coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
         };
 
-        // Histologie des vorbefunds - valueCodeableConcept
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" then 
         {
-            values.value as valuecc ->  tgt.valueCodeableConcept as vcc,
-                                        vcc.coding as coding,
-                                        coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/histologie-klassifikation',
-                                        coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()'),
-                                        coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
+            values.value as valuecc ->  tgt.valueCodeableConcept as vcc, vcc.coding as coding,
+                         coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/histologie-klassifikation',
+                         coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()'),
+                         coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
         };
-    };*/
+    };
 }
 
 /* ------------------------------ Organization ---------------------------- */
