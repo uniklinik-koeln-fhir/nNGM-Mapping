@@ -4,10 +4,6 @@
 TODO
  OBSERVATION -> Fast Track -> 3, 0, id_2512, it missing implement the logic for grouping all entries made for each Observation
                 in one single entry.
- SERVICEREQUEST ->  Durchfuehrung: No properly transformed, issue with status
-                    Abschluss : No properly transformed, issue with status extension
-                    Datum des Abschlusses : No properly transformed, issue with status extension
-
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS" = nNGM_Mapping_FastTrackCTS
@@ -34,8 +30,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 specimen -> operations.data as data then
                 {
-                    specimen.identifier as identifier,
-                     identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'"then
+                    specimen.identifier as identifier then
                     {   
                         specimen -> data.blockindex = 0;
                         specimen -> data.groupindex = 0;
@@ -108,7 +103,6 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         };
         entry.resource as observation where "resource is Observation " then
         {
-            //TODO
             //Untersuchungen
             //Fast Track -> 3, 0, id_2512
             observation -> tgt.operations as operations collate then
@@ -322,7 +316,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             };
         };
         /* --------------- Observation EGFR Exon 20 ---------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'EGFR Exon 20'" then
+        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C128663'" then
         {
             observation then TransformEGFREXO1921(observation, tgt);
             //Ergebnis -> 5, 0, id_1954
@@ -567,22 +561,27 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         /* --------------- ServiceRequest ---------------------- */
         entry.resource as serviceRequest where "resource is ServiceRequest" then
         {
-            //TODO
             //Durchfuehrung -> 7,0,  id_2520
             serviceRequest -> tgt.operations as operations collate then
             {
                 serviceRequest -> operations.data as data then
                 {
-                    serviceRequest.status as status then
+                    serviceRequest.status as status where "$this.status = 'active'" then
                     {
                         serviceRequest ->  data.blockindex = 7;
                         serviceRequest ->  data.groupindex = 0;
                         serviceRequest ->  data.itemid = 'id_2520';
-                        status -> data.values as values,values.value = status;
+                        status -> data.values as values,values.value = 'in Bearbeitung';
+                    };
+                    serviceRequest.status as status where "$this.status = 'completed'" then
+                    {
+                        serviceRequest ->  data.blockindex = 7;
+                        serviceRequest ->  data.groupindex = 0;
+                        serviceRequest ->  data.itemid = 'id_2520';
+                        status -> data.values as values,values.value = 'abgeschlossen';
                     };
                 };
             };
-            //TODO
             //Abschluss -> 7,0, id_2462
             serviceRequest -> tgt.operations as operations collate then
             {
@@ -602,7 +601,6 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
-            //TODO
             //Datum des Abschlusses -> 7,0, id_2521
             serviceRequest -> tgt.operations as operations collate then
             {
