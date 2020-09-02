@@ -1,12 +1,9 @@
 /// version = 0.1
-/// title = "nNGM: Anforderung - FHIR to CTS"
+/// title = "nNGM_Mapping_AnforderungCTS"
 
 /*
     TODO
-    - ids id_2457 and id_1601 override themselves
-    - Missing validation on id_2320 regarding %tgt.resource.resourceType.category.coding.where(code = 'C12434')
-    - Modified id_836 because using 'coding.code -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');', the server returned that the function resulted in empty result set
-    - id_2314 (Grund fur fehlende Tumorbiopsie), id_2313 (Liquid Biopsy), id_2476 (Tumorblockanforderung) and id_2319 ( Histologie des vorbefunds (freitext?)) don't map anything
+    - id_2319 ( Histologie des vorbefunds (freitext?)) doesn't map anything
 */
 
 /*
@@ -49,7 +46,7 @@ The following will cause duplicates because cant check on ids and uses same valu
 
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/AnforderungCTS" = AnforderungCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCTS" = nNGM_Mapping_AnforderungCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
@@ -104,24 +101,6 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
 
-            //Zu untersuchendes Material
-            specimen -> tgt.operations as operations collate then
-            {
-                specimen -> operations.data as data then
-                {
-                    specimen.identifier as biopsieID then
-                    {   
-                        biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/zuuntersuchendesmaterial'" then
-                        {
-                            specimen -> data.blockindex = 0;
-                            specimen -> data.groupindex = 0;
-                            specimen -> data.itemid = 'id_2457';
-                            biopsieID -> data.values as values, values.value = bid;
-                        };
-                    };
-                };
-            };
-
             // Entnahmedatum
             specimen -> tgt.operations as operations collate then
             {
@@ -145,7 +124,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 specimen -> operations.data as data then
                 {
-                    specimen.extension as entnahmeKontext then 
+                    specimen.extension as entnahmeKontext where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart'" then 
                     {
                         entnahmeKontext.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
                         {
@@ -194,7 +173,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 specimen -> operations.data as data then
                 {
-                    specimen.extension as entnahmeKontext then 
+                    specimen.extension as entnahmeKontext where "$this.resource.resourceType.category.coding.code = 'C12434'" then 
                     {
                         entnahmeKontext.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
                         {
@@ -237,7 +216,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                         observation -> data.blockindex = 1;
                         observation -> data.groupindex = 0;
                         observation -> data.itemid = 'id_836';
-                        coding.code as code -> data.values as values, values.value = code;
+                        coding.code -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');
                     };
                 };
             };
@@ -249,12 +228,10 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 {
                     observation.valueCodeableConcept as vcc, vcc.coding as coding where "$this.valueCodeableConcept.coding.code = 'CUP'" then
                     {
-                        vcc.text as text then {
-                            observation -> data.blockindex = 2;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2319';
-                            coding.code -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');
-                        };
+                        observation -> data.blockindex = 2;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2319';
+                        coding.code -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');
                     };
                 };
             };
@@ -298,7 +275,6 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         /* ------------------------------ ServiceRequest ---------------------------- */
         entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then 
         {
-
             // Diagnostik Typ
             servicerequest -> tgt.operations as operations collate then
             {
@@ -352,15 +328,12 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 servicerequest -> operations.data as data then
                 {
-                    servicerequest.extension as liquidbiopsy then 
+                    servicerequest.orderDetail as orderDetail, orderDetail.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-orderDetails'" then 
                     {
-                        liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/LiquidBiopsy'" then 
-                        {
-                            servicerequest -> data.blockindex = 3;
-                            servicerequest -> data.groupindex = 0;
-                            servicerequest -> data.itemid = 'id_2313';
-                            liquidbiopsy -> data.values as values, values.value = value;
-                        };
+                        servicerequest -> data.blockindex = 3;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2313';
+                        coding.code as code -> data.values as values, values.value = code;
                     };
                 };
             };
@@ -382,35 +355,39 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
+        };
 
+        /* ------------------------------ ServiceRequest ---------------------------- */
+        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then 
+        {
             // Tumorblockanforderung
-            // servicerequest -> tgt.operations as operations collate then
-            // {
-            //     servicerequest -> operations.data as data then
-            //     {
-            //         servicerequest.doNotPerform as dnp where "doNotPerform = true" then
-            //         {
-            //             servicerequest -> data.blockindex = 4;
-            //             servicerequest -> data.groupindex = 0;
-            //             servicerequest -> data.itemid  = 'id_2476';
-            //             dnp -> data.values as values, values.value = 'no';
-            //         };
-            //     };
-            // };
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.doNotPerform as dnp where "doNotPerform = true" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2476';
+                        dnp -> data.values as values, values.value = 'yes';
+                    };
+                };
+            };
 
-            // servicerequest -> tgt.operations as operations collate then
-            // {
-            //     servicerequest -> operations.data as data then
-            //     {
-            //         servicerequest.doNotPerform as dnp where "doNotPerform = false" then
-            //         {
-            //             servicerequest -> data.blockindex = 4;
-            //             servicerequest -> data.groupindex = 0;
-            //             servicerequest -> data.itemid  = 'id_2476';
-            //             dnp -> data.values as values, values.value = 'yes';
-            //         };
-            //     };
-            // };
+            servicerequest -> tgt.operations as operations collate then
+            {
+                servicerequest -> operations.data as data then
+                {
+                    servicerequest.doNotPerform as dnp where "doNotPerform = false" then
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid  = 'id_2476';
+                        dnp -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
 
             //Grund zum entfallen der Tumorblockanforderung
             servicerequest -> tgt.operations as operations collate then
