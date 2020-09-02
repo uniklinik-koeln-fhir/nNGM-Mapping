@@ -1,15 +1,7 @@
 /// version = 0.1
-/// title = "OperationTherapieMapping"
+/// title = "nNGM_Mapping_Operation_Therapie"
 
-/*
-    TODO
-    - Operative Intention: missing valueSet, used the one on Simplifier
-    - Resektionsstatus: missing FHIR element
-    - Lymphadenektomie: couldn't understand FHIR element
-
-*/
-
-map "http://uk-koeln.de/fhir/StructureMap/OperationTherapieMapping" = OperationTherapieMapping
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Operation_Therapie" = nNGM_Mapping_Operation_Therapie
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
@@ -24,7 +16,7 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.entry as entry then CreateTransformPatient(src, entry);
 }
 
-/* ------------------------------ Procedure ---------------------------- */
+/* ------------------------------ Check whether Procedure needs to be created ---------------------------- */
 group CreateTransformProcedure(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -45,15 +37,23 @@ group CreateTransformProcedure(source src: CTS_Transport, target tgt: BackboneEl
     };
 }
 
+/* ------------------------------ Procedure ---------------------------- */
 group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
 {
+    // Mapped id with an universally unique identifier for Specimen
     src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/OP';
+
+    // Mapped subject, which is obligatory element on Simplifier, with a Patient
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Mapped code, which is obligatory element on Simplifier, using the system and code already defined
+    src -> tgt.code as code, code.coding = c('http://ncit.nci.nih.gov', 'C15329');
 
     src.operations as operations, operations.data as data then
     {
-        src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
         // Operationsdatum - performed.performedDateTime
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_842'" then
         {
@@ -69,7 +69,35 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         // Operative Intention - reasonCode
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1167'" then
         {
-            values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/adt/intention-op', value);
+            values.value where "$this.value = 'Kurativ'" then 
+            {
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/adt/intention-op', 'K');
+            };
+
+            values.value where "$this.value = 'Palliativ'" then 
+            {
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/adt/intention-op', 'P');
+            };
+            
+            values.value where "$this.value = 'Diagnostisch'" then 
+            {
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/adt/intention-op', 'D');
+            };
+
+            values.value where "$this.value = 'Revision\/Komplikation' or $this.value = 'Revision/Komplikation'" then 
+            {
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/adt/intention-op', 'R');
+            };
+
+            values.value where "$this.value = 'Sonstiges'" then 
+            {
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/adt/intention-op', 'S');
+            };
+
+            values.value where "$this.value = 'N\/A' or $this.value = 'N/A'" then 
+            {
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/adt/intention-op', 'X');
+            };
         };
 
         // Art des Eingriffs - code.extension:artDesEingriffs
@@ -83,19 +111,27 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         // Lokalisation (Auswahl) - bodySite.coding
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2335'" then
         {
-            values.value as value -> tgt.bodySite as bodySite, bodySite.coding = c('https://simplifier.net/nngm-therapy-form/vs-operationlokalisationunk', value);
+            values.value as value where "$this.value = 'Lunge' or $this.value = 'Leber' or $this.value = 'Gehirn' or $this.value = 'Nebenniere' or $this.value = 'N/A' or $this.value = 'other'" then 
+            {
+                value -> tgt.bodySite as bodySite, bodySite.coding = c('https://simplifier.net/nngm-therapy-form/vs-operationlokalisationunk', value);
+            };
         };
 
         // Lokalisation (Freitext) - bodySite.text
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2335'" then
         {
-            values.value as value -> tgt.bodySite as bodySite, bodySite.text = value;
+            values.value as value where "($this.value = 'Lunge').not() and ($this.value = 'Leber').not() and ($this.value = 'Gehirn').not() and ($this.value = 'Nebenniere').not() and ($this.value = 'N/A').not() and ($this.value = 'other').not()" then 
+            {
+                value -> tgt.bodySite as bodySite, bodySite.text = value;
+            };
         };
 
         // Seitenlokalisation - extension:seitenlokalisation
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2400'" then
         {
-            values.value as value ->    tgt.extension = create('BackboneElement') as seitenLokalisation,
+            values.value as value ->    tgt.bodySite as bodySite,
+                                        bodySite.extension = create('BackboneElement') as seitenLokalisation,
+                                        seitenLokalisation.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/seitenlokalisation',
                                         seitenLokalisation.valueCodeableConcept = cc('https://simplifier.net/nngm-therapy-form/vs-operationseitenlokalisation', value);
         };
 
@@ -105,15 +141,43 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
             values.value as value ->    tgt.code as code,
                                         code.extension = create('BackboneElement') as resektion,
                                         resektion.extension = create('BackboneElement') as resektionsart,
+                                        resektionsart.url = 'resektionsart',
                                         resektionsart.valueCodeableConcept = cc('https://simplifier.net/nngm-therapy-form/vs-operationartderresektion', value);
         };
 
-        // Lymphadenektomie - extension:lymphadenektomie bzw. data-absent-reason
-        /*data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1362'" then
+        // Resektionsstatus - code.extension:resektion.extension:resektionsstatus
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1353'" then
         {
-            values.value as value ->    tgt.extension = create('BackboneElement') as lymphadenektomie,
-                                        
-        };*/
+            values.value as value ->    tgt.code as code,
+                                        code.extension = create('BackboneElement') as resektion,
+                                        resektion.extension = create('BackboneElement') as resektionsstatus,
+                                        resektionsstatus.url = 'resektionsstatus',
+                                        resektionsstatus.valueCodeableConcept = cc('https://simplifier.net/nngm-therapy-form/Resektion', value);
+
+        };
+
+        // Lymphadenektomie - extension:lymphadenektomie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1362'" then
+        {
+            values.value where "$this.value = 'Ja'" then
+            {
+                values.value as value ->    tgt.extension = create('BackboneElement') as lymphadenektomie,
+                                            lymphadenektomie.valueBoolean = true;
+            };
+            
+            values.value where "$this.value = 'Nein'" then
+            {
+                values.value as value ->    tgt.extension = create('BackboneElement') as lymphadenektomie,
+                                            lymphadenektomie.valueBoolean = false;
+            };
+
+            values.value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
+            {
+                values.value as value ->    tgt.extension = create('BackboneElement') as lymphadenektomie,
+                                            lymphadenektomie.extension as dataAbsentReason,
+                                            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+            };
+        };
 
         // Bemerkungen - note.text
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1472'" then
@@ -123,7 +187,7 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
     };
 }
 
-/* ------------------------------ Patient ---------------------------- */
+/* ------------------------------ Check whether Patient needs to be created ---------------------------- */
 group CreateTransformPatient(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -135,10 +199,23 @@ group CreateTransformPatient(source src: CTS_Transport, target tgt: BackboneElem
     };
 }
 
+/* ------------------------------ Patient ---------------------------- */
 group TransformPatient(source src: CTS_Transport, target tgt: Patient)
 {
+    // Mapped id with an universally unique identifier for Specimen
     src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
+
+    // Mapped name, which is a mandatory field without fixed value
+    src -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Mapped gender, which is a mandatory field without fixed value
+    src -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Mapped birthDate, which is a mandatory field without fixed value
+    src -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     src.operations as operations, operations.data as data then
     {
