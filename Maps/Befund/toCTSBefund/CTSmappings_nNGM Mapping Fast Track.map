@@ -11,6 +11,8 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS" = nNGM_Mapp
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrack_checkboxesCTS"
+
 group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.version = '1.1';
@@ -100,38 +102,13 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
         };
-        entry.resource as observation where "resource is Observation " then
+
+        // Checkboxes
+        src -> tgt.operations as operations collate then
         {
-            //Untersuchungen
-            //Fast Track -> 3, 0, id_2512
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.code as code,code.coding where "coding.code = 'C158854'" then
-                    {
-                        observation ->  data.blockindex = 3;
-                        observation ->  data.groupindex = 0;
-                        observation ->  data.itemid = 'id_2512';
-                        observation ->  data.values as values,values.value = 'BRAF Exon 15';
-                    };
-                    observation.code as code,code.coding where "coding.code = 'C128662'" then
-                    {
-                        observation ->  data.blockindex = 3;
-                        observation ->  data.groupindex = 0;
-                        observation ->  data.itemid = 'id_2512';
-                        observation ->  data.values as values,values.value = 'EGFR Exon 19-21';
-                    };
-                    observation.code as code,code.coding where "coding.code = 'C135715'" then
-                    {
-                        observation ->  data.blockindex = 3;
-                        observation ->  data.groupindex = 0;
-                        observation ->  data.itemid = 'id_2512';
-                        observation ->  data.values as values,values.value = 'KRAS Exon 2';
-                    };
-                };
-            };
+            src then TransformFastTrackCheckboxes(src, operations);
         };
+        
         /* --------------- Observation BRAF Exon 15 ---------------------- */
         entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C158854'" then
         {
@@ -171,6 +148,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
+
             //Hersteller -> 4, 0, id_1913
             observation -> tgt.operations as operations collate then
             {
@@ -193,6 +171,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
+
             //Ergebnis -> 4, 0, id_1946
             observation -> tgt.operations as operations collate then
             {
@@ -209,6 +188,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
+
             //Change DNA -> 4, 0, id_1947
             observation -> tgt.operations as operations collate then
             {
@@ -229,6 +209,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
+
             //Change Protein -> 4, 0, id_1948
             observation -> tgt.operations as operations collate then
             {
@@ -256,6 +237,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C128662'" then
         {
             observation then TransformEGFREXO1921(observation, tgt);
+            
             //Ergebnis -> 5, 0, id_1950
             observation -> tgt.operations as operations collate then
             {
@@ -620,8 +602,6 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
         };
     };
 }
-
-
 
 group TransformEGFREXO1921(source src:Observation, target tgt: CTS_Transport)
 {
