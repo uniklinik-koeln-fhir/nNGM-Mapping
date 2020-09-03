@@ -2,19 +2,15 @@
 /// title = "nNGM_Mapping_LiquidBiopsy"
 /*
     TODO
-    Biopsie-ID: it doesn't correspond to the properly itemID(excel file)
-    Untersuchungs-ID: it missing add in the excel file, 
     OBSERVATION: SOP component doesn't exist in the profile on simplifier
     OBSERVATION: Assay component doesn't exist in the profile on simplifier
     OBSERVATION: Hersteller component doesn't exist in the profile on simplifier
     OBSERVARION: (Exon des 5' Gens) when the exon item script is mapped the server returns "Oops! Something went wrong :("
-                 Excel file specifies that the item that must be mapped is valueInteger but the value
-                 from the CTS is string
+                 Excel file specifies that the item must be mapped is valueInteger but the value
+                 from the CTS is a string
     OBSERVARION: (Exon des 3' Gens) when the 2ndGenExon item script is mapped the server returns "Oops! Something went wrong :("
                  Excel file specifies that the item that must be mapped is valueInteger but the value
-                 from the CTS is string
-    ServiceRequest -> Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
-                    in the CTS structure:Theme discussed on 20.08.2020 stand up meeting
+                 from the CTS is a string
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsy" = nNGM_Mapping_LiquidBiopsy
@@ -31,6 +27,7 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.type = 'collection';
 
     src -> bundle.entry as entry then CreateTransformSpecimen(src, entry);
+    src -> bundle.entry as entry then CreateTransformDiagnosticReport(src, entry);
     src -> bundle.entry as entry then CreateTransformOrganization(src, entry);
     src -> bundle.entry as entry then CreateTransformObservation(src, entry);
     src -> bundle.entry as entry then CreateTransformServiceRequest(src, entry);
@@ -69,6 +66,46 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
             values.value as value ->    tgt.identifier as identifier,
                                         identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer',
                                         identifier.value = value;
+        };
+    };
+}
+
+group CreateTransformDiagnosticReport(source src: CTS_Transport, target tgt: BackboneElement)
+{
+
+    src.operations as operations, operations.data as data then
+    {   
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReport(src, diagnosticReport);
+        };
+    };
+}
+
+group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+
+    src ->  tgt.status as status, 
+            status.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src ->  tgt.code as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        //Referenzen
+        //Untersuchungs-ID
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as id -> tgt.identifier = create('Identifier') as befundNummer,
+                                                          befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                          befundNummer.value = id;
         };
     };
 }
@@ -130,6 +167,18 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
     src -> tgt.id = uuid();
 
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/liquid-biopsy';
+
+    src ->  tgt.status as status, 
+            status.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    
+    src ->  tgt.code as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+     src -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
 
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
@@ -300,27 +349,48 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
         //Durchfuehrung
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2520'" then
         {
-            values.value as status -> tgt.status = status;
+            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            {
+                value -> tgt.status = 'active';
+            };
+            values.value as value where "$this.value = 'abgeschlossen'" then 
+            {
+                value -> tgt.status = 'completed';
+            };
         };
-        //TODO
-        //Abschluss: the status extension don't properly work, it doesn't appear although there is data in the
-        //           in the CTS structure:Theme discussed on 20.08.2020 stand up meeting
+         // Extensions
+        src then TransformLiquidBiopseStatusExtension(src, tgt);
+    };
+}
+
+/* -------------------------------------- Create double extensions for Status -------------------------------------------- */
+group TransformLiquidBiopseStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Status des Abschlusses
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2462'" then
         {
-            values.value as value -> tgt.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusExtension then
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
             {
-                value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
-                value -> statusExtension.url = 'status';
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
             };
         };
 
         //Datum des Abschlusses
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2521'" then
         {
-            values.value as value -> tgt.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumExtension then
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
             {
-                value -> datumExtension.valueDate = dateOp(value, 'date');
-                value -> datumExtension.url = 'datum';
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
             };
         };
     };
