@@ -2,9 +2,6 @@
 /// title = "Beurteilung"
 
 /*
-TODO:
-    SERVICEREQUEST -> status-status extension doesn't appear, although there is
-                        data in the CTS
     Missing Add Beurteilung section implementation
 */
 
@@ -28,12 +25,12 @@ group CreateTransformDiagnosticReport(source src: CTS_Transport, target tgt: Bac
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1352'
-        or blockindex = 0 and groupindex = 0 and itemid ='bu_creation_date'
-        or blockindex = 0 and groupindex = 0 and itemid ='bu_vesion'
-        or blockindex = 0 and groupindex = 0 and itemid ='id_2405'" then
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid ='bu_creation_date'
+                                    or blockindex = 0 and groupindex = 0 and itemid ='bu_vesion'
+                                    or blockindex = 0 and groupindex = 0 and itemid ='id_1352'
+                                    or blockindex = 0 and groupindex = 0 and itemid ='id_2405'" then
         {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReport (src, diagnosticreport);
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReport(src, diagnosticreport);
         };
     };
 }
@@ -47,7 +44,7 @@ group CreatTransformServiceRequest(source src: CTS_Transport, target tgt: Backbo
         or blockindex = 1 and groupindex = 0 and itemid ='id_2524' 
         or blockindex = 1 and groupindex = 0 and itemid ='id_2525'" then
         {
-            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequest (src, servicerequest);
+            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequest(src, servicerequest);
         };
     };
 }
@@ -58,18 +55,15 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/beurteilung';
 
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-
     src.operations as operations, operations.data as data then
     {
-        /*--------------Erstelldatum------------*/
+        //Erstelldatum
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'bu_creation_date'" then
          {
             values.value as date -> tgt.effectiveDateTime = dateOp(date, 'dateTime');
          };
 
-		/*--------------Version------------*/
+		//Version
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'bu_version'" then
          {   
             values.value as code where "$this.value = 'vorläufig'" then
@@ -82,13 +76,13 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
             };
          };   
 
-        /*--------------Klinische Information------------*/
+        //Klinische Information
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1352'" then
         {  
             values.value as value -> tgt.conclusion = value;
         };
 
-        /*----------------Empfehlung einer systemischen Therapie------------*/
+        //Empfehlung einer systemischen Therapie
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2405'" then
         {   
             values.value as signature where "$this.value = 'Ja'" then
@@ -138,27 +132,9 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
             };
         }; 
 
-        /*---------------Abschluss-----------*/
-        //TODO
-         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'bu_closing'" then
-        {   
-            values.value as abschluss -> tgt.status as status, 
-                                            status.extension as statusAbschluss,
-                                            statusAbschluss.extension as statusExtension,
-                                            statusExtension.url = 'status',
-                                            statusExtension.valueCodeable = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',abschluss,abschluss);
-           
-        }; 
-
-        /*---------------Datum des Abschlusses -----------*/
-         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2524'" then
-        {   
-            values.value as datumabschluss -> tgt.status as status, 
-                                            status.extension as statusAbschluss,
-                                            statusAbschluss.extension as datumExtension,
-                                            datumExtension.url = 'datum',
-                                            datumExtension.valueDate = dateOp(datumabschluss, 'dateTime');
-        }; 
+        // Extensions
+        src then TransformBeurteilungExtension(src, tgt);
+       
      
         /*---------------Datum des versands -----------*/
          data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2525'" then
@@ -167,5 +143,53 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
                                               datumVersands.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands',
                                               datumVersands.valueDate = dateOp(datumversands, 'dateTime');
         };   
+    };
+}
+
+/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
+group TransformBeurteilungExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Status des Abschlusses
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'bu_closing' and values.isother.exists().not()" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
+            };
+        };
+        // Status des Abschlusses
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'bu_closing' and values.isother = true" then
+        {
+            values.value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                values.value as value where "$this.isother = true" then
+                {
+                    value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                    {
+                        value -> statusExtension.valueString = value;
+                        value -> statusExtension.url = 'status';
+                    };
+                };
+            };
+        };
+
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2524'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
+            };
+        };
     };
 }

@@ -1,11 +1,11 @@
-/// version = 0.1
-/// title = "CTSBeurteilung"
+// version = 0.1
+/// title = "nNGM_Mapping_BeurteilungCTS"
 
 /* TO DO
 - Missing repeat sections
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/CTSBeurteilung" = CTSBeurteilung
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCTS" = nNGM_Mapping_BeurteilungCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
@@ -14,160 +14,171 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/'; 
-    src -> tgt.operations as operations collate, operations.crfid = '1-BU';
+    src -> tgt.operations as operations collate, operations.crfid = '6-BU';
     src -> tgt.operations as operations collate, operations.type = 'save';
     
-    //Observation
     src.entry as entry then 
     {
-
-    /* ------------------------------ DiagnosticReport ---------------------------- */
-    entry.resource as diagnosticreport where "resource is DiagnosticReport" then
-    {
-        //Erstelldatum
-        diagnosticreport -> tgt.operations as operations collate then
+        /* ------------------------------ DiagnosticReport ---------------------------- */
+        entry.resource as diagnosticreport where "resource is DiagnosticReport" then
         {
-            diagnosticreport -> operations.data as data then
+            //Erstelldatum -> 0, 0, bu_creation_date
+            diagnosticreport -> tgt.operations as operations collate then
             {
-                diagnosticreport.effectiveDateTime as dt then
-                {   
-                    diagnosticreport -> data.blockindex = 0;
-                    diagnosticreport -> data.groupindex = 0;
-                    diagnosticreport -> data.itemid = 'bu_creation_date';
-                    dt -> data.values as values, values.value = dt;
-                };
-            };
-        };
-
-        //Version
-        diagnosticreport -> tgt.operations as operations collate then
-        {
-            diagnosticreport -> operations.data as data then
-            {
-                diagnosticreport.status as status then
-                {   
-                    diagnosticreport -> data.blockindex = 0;
-                    diagnosticreport -> data.groupindex = 0;
-                    diagnosticreport -> data.itemid = 'bu_version';
-                    status -> data.values as values, values.value = status;
-                };
-            };
-        };
-
-
-        //Klinische Information
-        diagnosticreport -> tgt.operations as operations collate then
-        {
-            diagnosticreport -> operations.data as data then
-            {
-                diagnosticreport.conclusion as conclusion then
-                {   
-                    diagnosticreport -> data.blockindex = 0;
-                    diagnosticreport -> data.groupindex = 0;
-                    diagnosticreport -> data.itemid = 'id_1352';
-                    conclusion -> data.values as values, values.value = conclusion;
-                };
-            };
-        };
-
-        //Empfehlung einer systemischen Therapie
-        diagnosticreport -> tgt.operations as operations collate then
-        {
-            diagnosticreport -> operations.data as data then
-            {
-                diagnosticreport.conclusionCode as conclusionCode, conclusionCode.extension as beurteilung, beurteilung.valueBoolean as empfehlung where "$this.value = true" then
-                {   
-                    diagnosticreport -> data.blockindex = 0;
-                    diagnosticreport -> data.groupindex = 0;
-                    diagnosticreport -> data.itemid = 'id_2405';
-                    empfehlung -> data.values as values, values.value = 'Ja';
-                };
-
-                diagnosticreport.conclusionCode as conclusionCode, conclusionCode.extension as beurteilung, beurteilung.valueBoolean as empfehlung where "$this.value = false" then
-                {   
-                    diagnosticreport -> data.blockindex = 0;
-                    diagnosticreport -> data.groupindex = 0;
-                    diagnosticreport -> data.itemid = 'id_2405';
-                    empfehlung -> data.values as values, values.value = 'Nein';
-                };
-            };
-        };
-    };
-    
-    /* ------------------------------ ServiceRequest ----------------------------*/ 
-    entry.resource as servicerequest where "resource is ServiceRequest" then
-    {   
-            //Patient ID -> cts.patid
-             servicerequest -> tgt.operations as operations collate then
-            {
-                servicerequest -> operations.data as data then
+                diagnosticreport -> operations.data as data then
                 {
-                    servicerequest.subject as subject then
+                    diagnosticreport.effectiveDateTime as dt then
                     {   
-                        subject.reference as patient then
+                        diagnosticreport -> data.blockindex = 0;
+                        diagnosticreport -> data.groupindex = 0;
+                        diagnosticreport -> data.itemid = 'bu_creation_date';
+                        dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };
+            //Version -> 0, 0 ,bu_version
+            diagnosticreport -> tgt.operations as operations collate then
+            {
+                diagnosticreport -> operations.data as data then
+                {
+                    diagnosticreport.status as status where "$this.status = 'preliminary'" then
+                    {   
+                        diagnosticreport -> data.blockindex = 0;
+                        diagnosticreport -> data.groupindex = 0;
+                        diagnosticreport -> data.itemid = 'bu_version';
+                        status -> data.values as values, values.value = 'vorläufig';
+                    };
+
+                    diagnosticreport.status as status where "$this.status = 'final'" then
+                    {   
+                        diagnosticreport -> data.blockindex = 0;
+                        diagnosticreport -> data.groupindex = 0;
+                        diagnosticreport -> data.itemid = 'bu_version';
+                        status -> data.values as values, values.value = 'final';
+                    };
+                };
+            };
+            //Klinische Information -> 0, 0, id_1352
+            diagnosticreport -> tgt.operations as operations collate then
+            {
+                diagnosticreport -> operations.data as data then
+                {
+                    diagnosticreport.conclusion as conclusion then
+                    {   
+                        diagnosticreport -> data.blockindex = 0;
+                        diagnosticreport -> data.groupindex = 0;
+                        diagnosticreport -> data.itemid = 'id_1352';
+                        conclusion -> data.values as values, values.value = conclusion;
+                    };
+                };
+            };
+            //Empfehlung einer systemischen Therapie -> 0,0, id_2405
+            diagnosticreport -> tgt.operations as operations collate then
+            {
+                diagnosticreport -> operations.data as data then
+                {
+                    diagnosticreport.conclusionCode as conclusionCode, 
+                    conclusionCode.extension as beurteilung,
+                    beurteilung.valueBoolean as empfehlung where "$this.value = true" then
+                    {   
+                        diagnosticreport -> data.blockindex = 0;
+                        diagnosticreport -> data.groupindex = 0;
+                        diagnosticreport -> data.itemid = 'id_2405';
+                        empfehlung -> data.values as values, values.value = 'Ja';
+                    };
+
+                    diagnosticreport.conclusionCode as conclusionCode, 
+                    conclusionCode.extension as beurteilung, 
+                    beurteilung.valueBoolean as empfehlung where "$this.value = false" then
+                    {   
+                        diagnosticreport -> data.blockindex = 0;
+                        diagnosticreport -> data.groupindex = 0;
+                        diagnosticreport -> data.itemid = 'id_2405';
+                        empfehlung -> data.values as values, values.value = 'Nein';
+                    };
+                };
+            };
+        };
+        /* ------------------------------ ServiceRequest ----------------------------*/ 
+        entry.resource as serviceRequest where "resource is ServiceRequest" then
+        {
+            //Durchfuerung -> 1, 0, id_2523
+            serviceRequest -> tgt.operations as operations collate then
+            {
+                serviceRequest -> operations.data as data then 
+                {
+                    serviceRequest.status as durchfuerung where "$this.status = 'active'" then
+                    {
+                        serviceRequest -> data.blockindex = 1;
+                        serviceRequest -> data.groupindex = 0;
+                        serviceRequest -> data.itemid = 'id_2523';
+                        durchfuerung -> data.values as values, values.value = 'in Bearbeitung';
+                    };
+                    serviceRequest.status as durchfuerung where "$this.status = 'completed'" then
+                    {
+                        serviceRequest -> data.blockindex = 1;
+                        serviceRequest -> data.groupindex = 0;
+                        serviceRequest -> data.itemid = 'id_2523';
+                        durchfuerung -> data.values as values, values.value = 'abgeschlossen';
+                    };
+                };
+            };
+            //Abschluss -> 1, 0, bu_closing
+            serviceRequest -> tgt.operations as operations collate then
+            {
+                serviceRequest -> operations.data as data then 
+                {
+                    serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
+                    {
+                        statusextension where "$this.url ='status'" then
                         {
-                            patient -> tgt.patid = evaluate(patient, '$this.split(\'\/\').last()');
+                            statusextension.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding then 
+                            {
+                                serviceRequest ->  data.blockindex = 1;
+                                serviceRequest ->  data.groupindex = 0;
+                                serviceRequest ->  data.itemid = 'bu_closing';
+                                coding.code as code  -> data.values as values,values.value = code;
+                            };
+                            statusextension.valueString as valueString then 
+                            {
+                                serviceRequest ->  data.blockindex = 1;
+                                serviceRequest ->  data.groupindex = 0;
+                                serviceRequest ->  data.itemid = 'bu_closing';
+                                valueString    ->  data.values as values , values.value = valueString, values.isother = true;
+                                valueString    ->  data.values as values , values.value = 'other';
+                            };
                         };
                     };
                 };
             };
-
-            //Durchfuerung
-            servicerequest -> tgt.operations as operations collate then
+            //Datum des abschlusses -> 1, 0, id_2524
+            serviceRequest -> tgt.operations as operations collate then
             {
-                servicerequest -> operations.data as data then 
+                serviceRequest -> operations.data as data then 
                 {
-                    servicerequest.status as durchfuerung then
+                    serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
                     {
-                        servicerequest -> data.blockindex = 1;
-                        servicerequest -> data.groupindex = 0;
-                        servicerequest -> data.itemid = 'id_2523';
-                        durchfuerung -> data.values as values, values.value = durchfuerung;
+                        datumextension where "$this.url ='datum'" then
+                        {
+                            serviceRequest ->  data.blockindex = 1;
+                            serviceRequest ->  data.groupindex = 0;
+                            serviceRequest ->  data.itemid = 'id_2524';
+                            datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                        };
                     };
                 };
             };
-
-            //Abschluss 
-            servicerequest -> tgt.operations as operations collate then
+            //Datum des versands -> 1, 0, id_2525
+            serviceRequest -> tgt.operations as operations collate then
             {
-                servicerequest -> operations.data as data then 
+                serviceRequest -> operations.data as data then 
                 {
-                    servicerequest.category as abschluss, abschluss.category as category, category.coding as coding, coding.code as abschluss then
+                    serviceRequest.extension as extension, extension.valueDate as datumVersands where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands'" then
                     {
-                        servicerequest -> data.blockindex = 1;
-                        servicerequest -> data.groupindex = 0;
-                        servicerequest -> data.itemid = 'bu_closing';
-                        abschluss -> data.values as values, values.value = abschluss;
-                    };
-                };
-            };
-            
-
-            //Datum des abschlusses 
-            servicerequest -> tgt.operations as operations collate then
-            {
-                servicerequest -> operations.data as data then 
-                {
-                    servicerequest.extension as extension, extension.valueDateTime as datumAbschlusses  where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumabschluss'" then
-                    {
-                        servicerequest -> data.blockindex = 1;
-                        servicerequest -> data.groupindex = 0;
-                        servicerequest -> data.itemid = 'id_2524';
-                        datumAbschlusses -> data.values as values, values.value = datumAbschlusses;
-                    };
-                };
-            };
-
-            //Datum des versands 
-            servicerequest -> tgt.operations as operations collate then
-            {
-                servicerequest -> operations.data as data then 
-                {
-                    servicerequest.extension as extension, extension.valueDateTime as datumVersands where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands'" then
-                    {
-                        servicerequest -> data.blockindex = 1;
-                        servicerequest -> data.groupindex = 0;
-                        servicerequest -> data.itemid = 'id_2525';
+                        serviceRequest -> data.blockindex = 1;
+                        serviceRequest -> data.groupindex = 0;
+                        serviceRequest -> data.itemid = 'id_2525';
                         datumVersands -> data.values as values, values.value = datumVersands;
                     };
                 };
