@@ -205,6 +205,8 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
            reference.extension as dataAbsentReason, 
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    
+    src then TransformServiceRequestRequesterExtension(src, tgt);
 
     src.operations as operations, operations.data as data then
     {
@@ -217,7 +219,7 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
         // Zeitpunkt anforderung -> aufenthaltsart extension
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1576'" then
         {
-             values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
+            values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
             {
                 values.value as za -> tgt.encounter as encounter, encounter.extension as aufenthaltsart, 
                                     aufenthaltsart.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
@@ -238,57 +240,54 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
                                     aufenthaltsart.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
             };
         };
+    };
+}
 
-        /*
-       
-        // vorstellung tumorboard
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296'" then
+/* -------------------------------------- Create double extension for ServiceRequest.Requester -------------------------------------------- */
+group TransformServiceRequestRequesterExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Vorstellung tumorboard -> requester.extension:vorstellungTmb
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296' and %tgt.requester.extension.where(url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme').exists().not()" then
         {
-            values.value as vorstellung where "$this.value = 'yes'" then
+            values -> tgt.requester as requester collate, requester.extension as persoenlicheTeilnahme, persoenlicheTeilnahme.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme' then
             {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               requester.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
-                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
-            };
+                values.value as value where "$this.value = 'yes'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(true, 'FHIR.boolean');
+                };
 
-            values.value as vorstellung where "$this.value = 'no'" then
-            {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               vorstellung.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
-                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
+                values.value as value where "$this.value = 'no'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(false, 'FHIR.boolean');
+                };
             };
         };
 
-        // vorstellung telefonkonferenz
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
+        // Vorstellung tumorboard -> requester.extension:vorstellungTmb
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297' and %tgt.requester.extension.where(url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb').exists().not()" then
         {
-            values.value as vorstellung where "$this.value = 'yes'" then
+            values -> tgt.requester as requester collate, requester.extension as persoenlicheTeilnahme, persoenlicheTeilnahme.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb' then
             {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               requester.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
-                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
-            };
+                values.value as value where "$this.value = 'yes'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(true, 'FHIR.boolean');
+                };
 
-            values.value as vorstellung where "$this.value = 'no'" then
-            {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               requester.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
-                                               vorstellung.valueBoolean = vorstellung; //cast('deny', 'FHIR.Boolean');
+                values.value as value where "$this.value = 'no'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(false, 'FHIR.boolean');
+                };
             };
         };
-
-        */
     };
 }
 
 /* ------------------------------ Coverage ---------------------------- */
 group TransformCoverage(source src: CTS_Transport, target tgt: Coverage)
 { 
-
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
 
@@ -307,7 +306,6 @@ group TransformCoverage(source src: CTS_Transport, target tgt: Coverage)
         // Krankenkasse
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'" then
         {
-            
             values.value as kkasse -> tgt.payor as payor, payor.display = kkasse;
         };
         
