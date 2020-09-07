@@ -33,7 +33,7 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.entry as entry then CreatePatient(src, entry);
 
     // Tumorboard
-    src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestTumorboard(src, servicerequest);
+    src -> bundle.entry as entry then CreateServiceRequest(src, entry);
     
     // Coverage
     src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
@@ -130,6 +130,7 @@ group CreatePatient(source src: CTS_Transport, target tgt: BackboneElement)
 /* ------------------------------ Patient ---------------------------- */
 group TransformPatient(source src: CTS_Transport, target tgt: Patient)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
 
@@ -164,37 +165,41 @@ group TransformPatient(source src: CTS_Transport, target tgt: Patient)
     };
 }
 
-/* ------------------------------ ServiceRequest ---------------------------- */
-group TransformServiceRequestTumorboard(source src: CTS_Transport, target tgt: ServiceRequest)
+/* ------------------------------ Check if ServiceRequest needs to be created ---------------------------- */
+group CreateServiceRequest(source src: CTS_Transport, target tgt: BackboneElement)
 {
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1576'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2296'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
+        {
+            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequest(src, servicerequest);
+        };
+    };
+}
+
+/* ------------------------------ ServiceRequest ---------------------------- */
+group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
-    // status
+    // Status
     src -> tgt.status = cast('active', 'FHIR.code'); 
     
-    // intent
+    // Intent
     src -> tgt.intent = 'proposal';
 
-    // code required, not in form
-    src -> tgt.code as code, 
-            code.coding as coding, 
-            coding.system as system, 
-            system.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // Code
+    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
     
-    src -> tgt.code as code1, 
-            code1.coding as coding, 
-            coding.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-    
-    // subject required
+    // Subject
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    // requester not available
+    // Requester not available
     src -> tgt.requester as requester, 
            requester.reference as reference, 
            reference.extension as dataAbsentReason, 
@@ -203,13 +208,13 @@ group TransformServiceRequestTumorboard(source src: CTS_Transport, target tgt: S
 
     src.operations as operations, operations.data as data then
     {
-        // anforderungsdatum -> authoredOn
+        // Anforderungsdatum -> authoredOn
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'" then
         {
             values.value as datum -> tgt.authoredOn = dateOp(datum, 'dateTime');
         };
     
-        // zeitpunkt anforderung -> aufenthaltsart extension
+        // Zeitpunkt anforderung -> aufenthaltsart extension
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1576'" then
         {
              values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
