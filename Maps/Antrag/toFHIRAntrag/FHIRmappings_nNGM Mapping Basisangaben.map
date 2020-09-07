@@ -29,11 +29,11 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     // Organization
     src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
 
+    // Patient
+    src -> bundle.entry as entry then CreatePatient(src, entry);
+
     // Tumorboard
     src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestTumorboard(src, servicerequest);
-    
-    // Patient
-    src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatient(src, patient);
     
     // Coverage
     src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
@@ -104,6 +104,25 @@ group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Org
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
         {
             values.value as value -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = value;
+        };
+    };
+}
+
+/* ------------------------------ Check if Patient needs to be created ---------------------------- */
+group CreatePatient(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1131'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1125'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1124'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1126'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1127'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1128'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1129'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1280'" then
+        {
+            src -> tgt.resource = create('Patient') as patient then TransformPatient(src, patient);
         };
     };
 }
