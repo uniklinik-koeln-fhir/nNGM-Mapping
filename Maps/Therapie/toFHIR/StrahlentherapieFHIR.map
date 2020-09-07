@@ -2,14 +2,6 @@
 /// title = "StrahlentherapieMap"
 /*
     TODO
-    PROCEDURE -> Link profile that specify in Excel file, it doesn't exist 
-                https://simplifier.net/nngm-therapy-form/procedurenngmstrahlentherapie
-    PROCEDURE -> it was taken https://simplifier.net/nngm-therapy-form/procedurenngmstrahlentherapie-duplicate-2
-    PROCEDURE -> BodySie https://simplifier.net/nngm-therapy-form/cs-StrahlentherapieBestrahlungsziel "Brustwand rechts" is duplicated 
-    PROCEDURE -> BodySie check the value set http://uk-koeln.de/fhir/ValueSet/ngnm/Bestrahlungsziel 
-    PROCEDURE -> reasonCode http://uk-koeln.de/fhir/ValueSet/nngm/intention-strahlentherapie N/A value does not exist 
-    PROCEDURE -> code http://uk-koeln.de/fhir/ValueSet/ngnm/StrahlentherapieArtDerBestrahlung N/A value does not exist 
-    PROCEDURE -> status+ status Reason(Ende der Bestrahlung)Check statusReason, is it rigth?,THIS ARE SECONDARY EFFECTS
     PROCEDURE -> Boost durchgeführt validate if is it rigth the extension logic
     3_0__id_1190 -> it missing specify in the excel file this item from the form 
 */
@@ -85,22 +77,44 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
         
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1181'" then
         {
-            //TODO
-            values.value as value -> tgt.bodySite = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/Strahlentherapie_Bestrahlungsziel',value,value);
+            values.value as value where "value =  'N/A'" then 
+            {
+               value -> tgt.bodySite = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/Strahlentherapie_Bestrahlungsziel','not-applicable','Not Applicable');
+            };
+            values.value as value where "value !=  'N/A'" then 
+            {
+                value -> tgt.bodySite = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/Strahlentherapie_Bestrahlungsziel',value,value);
+            };
+            
         };
         //Therapeutische Intention
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1183'" then
         {
-            //TODO
-            values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-strahlentherapie',value,value);
+            values.value as value where "value =  'N/A'" then 
+            {
+               value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-strahlentherapie','unknown','Unknown');
+            };
+            values.value as value where "value !=  'N/A'" then 
+            {
+                value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-strahlentherapie',value,value);
+            };
+            
         };
         //Art der Bestrahlung
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1196'" then
         {
-            //TODO
-            values.value as value -> tgt.code as code,
-                                     code.extension as artDerBestrahlung,
-                                     artDerBestrahlung.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/StrahlentherapieArtDerBestrahlung',value,value);
+             values.value as value where "value =  'N/A'" then 
+            {
+                value -> tgt.code as code,
+                        code.extension as artDerBestrahlung,
+                        artDerBestrahlung.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/StrahlentherapieArtDerBestrahlung','unknown','Unknown');
+            };
+            values.value as value where "value !=  'N/A'" then 
+            {
+                 value -> tgt.code as code,
+                        code.extension as artDerBestrahlung,
+                        artDerBestrahlung.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/StrahlentherapieArtDerBestrahlung',value,value);
+            };           
         };
 
         //Dosis
@@ -192,41 +206,37 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
             };
             values.value as value where "value = 'Abbruch wegen Nebenwirkungen'" then
             {
-                src -> tgt.status = 'aborted';
-                //SEE TODO
-                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','ae','ae');
+                src -> tgt.status = 'stopped';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','nebenwirkungen','nebenwirkungen');
             };
             values.value as value where "value = 'Pause wegen Nebenwirkungen'" then
             {
-                src -> tgt.status = 'suspended';
-                //SEE TODO
-                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','ae','ae');
+                src -> tgt.status = 'on-hold';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','nebenwirkungen','nebenwirkungen');
             };
             values.value as value where "value = 'Abbruch wegen Progress'" then
             {
-                src -> tgt.status = 'aborted';
-                //SEE TODO
+                src -> tgt.status = 'stopped';
                 src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','progress','Progress');
             };
             values.value as value where "value = 'Ablehnung durch den Patienten'" then
             {
-                src -> tgt.status = 'aborted';
-                //SEE TODO
-                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','patient-request','Patient-request');
+                src -> tgt.status = 'not-done';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','ablehnungPatient','ablehnungPatient');
             };
             values.value as value where "value = 'Patient verstorben'" then
             {
-                src -> tgt.status = 'aborted';
-                //SEE TODO
-                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','death','death');
+                src -> tgt.status = 'stopped';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','verstorben','verstorben');
             };
             values.value as value where "value = 'Sonstiges'" then
             {
-                src -> tgt.status = 'aborted';
+                src -> tgt.status = 'unknown';
             };
             values.value as value where "value = 'N/A'" then
             {
                 src -> tgt.status = 'unknown';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','not-applicable','not-applicable');
             };
         };
     };
