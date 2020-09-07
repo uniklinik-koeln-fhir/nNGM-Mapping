@@ -10,6 +10,7 @@ TODO
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR" = nNGM_Mapping_BasisangabenFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
@@ -25,6 +26,9 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
+    // Specimen
+    src then CreateSpecimen(src, bundle);
+
     // Organization
      src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
 
@@ -37,7 +41,7 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
      //coverage
      src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
      
-     /Observation
+     //Observation
      src -> bundle.entry as entry then CreateObservationHeight(src, entry);
      src -> bundle.entry as entry then CreateObservationWeight(src, entry);
      src -> bundle.entry as entry then CreateObservationECOG(src, entry);
@@ -65,8 +69,45 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
      src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung8(src, consent);
 }
 
-/* ------------------------------ Organization ---------------------------- */
+/* ------------------------------ Check whether specimen needs to be created ---------------------------- */ 
+group CreateSpecimen(source src: CTS_Transport, target bundle: Bundle) 
+{
+    // Check whether specimen needs to be created and create it if that is the case
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen); 
+        };
+    };
+}
 
+/* ------------------------------ Specimen ---------------------------- */ 
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+{ 
+    // Metadata
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Type
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
+ 
+    // Patient reference 
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    
+    src.operations as operations, operations.data as data then 
+    { 
+        // Biopsienummer -> tgt.identifier.value 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then 
+        { 
+            values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value); 
+        }; 
+    }; 
+} 
+
+/* ------------------------------ Organization ---------------------------- */
 group CreateOrganizationReferenzen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -133,7 +174,7 @@ group TransformPatient(source src: CTS_Transport, target tgt: Patient)
         // Geschlecht
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1131'" then
         {
-             values.value where "$this.value = 'männlich' or $this.value = ''m\u00e4nnlich'" then 
+             values.value where "$this.value = 'männlich' or $this.value = 'm\u00e4nnlich'" then 
             {
                 values.value as za -> tgt.gender = cast('male', 'FHIR.code');
             };
