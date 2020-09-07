@@ -22,92 +22,50 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {   
-    // metadata
+    // Metadata
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    // Specimen
-    src then CreateSpecimen(src, bundle);
-
     // Organization
-     src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
+    src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
 
-     // tumorboard
-     src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestTumorboard(src, servicerequest);
-     
-     //patient
-     src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatient(src, patient);
-     
-     //coverage
-     src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
-     
-     //Observation
-     src -> bundle.entry as entry then CreateObservationHeight(src, entry);
-     src -> bundle.entry as entry then CreateObservationWeight(src, entry);
-     src -> bundle.entry as entry then CreateObservationECOG(src, entry);
-     src -> bundle.entry as entry then CreateObservationSmoking(src, entry);
-
-
-    //Practitioner
-    src -> bundle.entry as entry then CreatePractitioner(src, entry);
-     
-     //Consent
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1a(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1b(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung2(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung1(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung2(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung1(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung2(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung3(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung4(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung5(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung6(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung7(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung8(src, consent);
-}
-
-/* ------------------------------ Check whether specimen needs to be created ---------------------------- */ 
-group CreateSpecimen(source src: CTS_Transport, target bundle: Bundle) 
-{
-    // Check whether specimen needs to be created and create it if that is the case
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
-        {
-            src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen); 
-        };
-    };
-}
-
-/* ------------------------------ Specimen ---------------------------- */ 
-group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
-{ 
-    // Metadata
-    src -> tgt.id = uuid(); 
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // Type
-    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
-                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
- 
-    // Patient reference 
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Tumorboard
+    src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestTumorboard(src, servicerequest);
     
-    src.operations as operations, operations.data as data then 
-    { 
-        // Biopsienummer -> tgt.identifier.value 
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then 
-        { 
-            values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value); 
-        }; 
-    }; 
-} 
+    // Patient
+    src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatient(src, patient);
+    
+    // Coverage
+    src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
+    
+    // Observations
+    src -> bundle.entry as entry then CreateObservationHeight(src, entry);
+    src -> bundle.entry as entry then CreateObservationWeight(src, entry);
+    src -> bundle.entry as entry then CreateObservationECOG(src, entry);
+    src -> bundle.entry as entry then CreateObservationSmoking(src, entry);
 
-/* ------------------------------ Organization ---------------------------- */
+    // Practitioner
+    src -> bundle.entry as entry then CreatePractitioner(src, entry);
+    
+    // Consent
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1a(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1b(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung2(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung1(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung2(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung1(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung2(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung3(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung4(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung5(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung6(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung7(src, consent);
+    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung8(src, consent);
+}
+
+/* ------------------------------ Check whether Organization needs to be created ---------------------------- */
 group CreateOrganizationReferenzen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -121,6 +79,7 @@ group CreateOrganizationReferenzen(source src: CTS_Transport, target tgt: Backbo
     };
 }
 
+/* ------------------------------ Organization ---------------------------- */
 group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Organization)
 {
     src -> tgt.id = uuid();
