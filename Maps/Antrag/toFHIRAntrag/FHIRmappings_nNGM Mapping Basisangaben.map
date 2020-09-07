@@ -71,8 +71,8 @@ group CreateOrganizationReferenzen(source src: CTS_Transport, target tgt: Backbo
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'
-                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2326'
-                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2458'" then
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2435'
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
         {
             src -> tgt.resource = create('Organization') as organization then TransformOrganizationReferenzen(src, organization);
         };
@@ -82,10 +82,10 @@ group CreateOrganizationReferenzen(source src: CTS_Transport, target tgt: Backbo
 /* ------------------------------ Organization ---------------------------- */
 group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Organization)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
-    /*check if there is a OrganizationReferenzen required*/
     src.operations as operations, operations.data as data then
     {
         // Netzwerkzentrum-id -> tgt.identifier
@@ -93,30 +93,17 @@ group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Org
         {
             values.value as netzwerkzentrumid -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGMnetzwerkzentrumid', netzwerkzentrumid);
         };
-    
-        // Netzwerkpartnernummer -> tgt.identifier
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2326'" then
-        {
-            values.value as netzwerkpartnernr -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGM/netzwerkpartnerid', netzwerkpartnernr);
-        };
-        
-        // Kontakt -> tgt.address
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
-        {
-            values.value as kontakt -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = kontakt;
-        };
        
-
-        // Netzwerkzentrum-id -> tgt.identifier
+        // Standort -> tgt.name
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
         {
-            values.value as netzwerkzentrumid -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGMnetzwerkzentrumid', netzwerkzentrumid);
+            values.value as value -> tgt.name = value;
         };
     
-        // Kontakt -> tgt.address
+        // Kontakt -> tgt.contact.address.text
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
         {
-            values.value as kontakt -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = kontakt;
+            values.value as value -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = value;
         };
     };
 }
@@ -613,7 +600,9 @@ group CreatePractitioner(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2326'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
         {
             src -> tgt.resource = create('Practitioner') as pracitioner then TransformPractitioner(src, pracitioner);
         };
@@ -635,6 +624,20 @@ group TransformPractitioner(source src: CTS_Transport, target tgt: Practitioner)
 
     src.operations as operations, operations.data as data then
     {
+        // Netzwerkpartnernummer -> tgt.identifier
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2326'" then
+        {
+            values.value as netzwerkpartnernr -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGM/netzwerkpartnerid', netzwerkpartnernr);
+        };
+        
+        // Kontakt -> tgt.address
+        /*
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
+        {
+            values.value as kontakt -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = kontakt;
+        };
+        */
+
         // Anforderer email address -> telecom:email.system, telecom:email.value
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'" then
         {
