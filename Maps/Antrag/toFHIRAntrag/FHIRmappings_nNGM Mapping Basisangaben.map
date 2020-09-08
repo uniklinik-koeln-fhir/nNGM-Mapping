@@ -43,8 +43,8 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.entry as entry then CreatePractitioner(src, entry);
     
     // Consent
-    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
-    src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
+    src -> bundle.entry as entry then CreateConsentTeilnahme(src, entry);
+    src -> bundle.entry as entry then CreateConsentDatenschutz(src, entry);
     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1a(src, consent);
     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1b(src, consent);
     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung2(src, consent);
@@ -645,7 +645,7 @@ group CreatePractitioner(source src: CTS_Transport, target tgt: BackboneElement)
                                         or blockindex = 1 and groupindex = 0 and itemid = 'id_2326'
                                         or blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
         {
-            src -> tgt.resource = create('Practitioner') as pracitioner then TransformPractitioner(src, pracitioner);
+            src -> tgt.resource = create('Practitioner') as practitioner then TransformPractitioner(src, practitioner);
         };
     };
 }
@@ -685,7 +685,20 @@ group TransformPractitioner(source src: CTS_Transport, target tgt: Practitioner)
     };
 }
 
-/* ------------------------------ Consent ---------------------------- */
+/* ------------------------------ Check if Consent Teilnahme is required ---------------------------- */
+group CreateConsentTeilnahme(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2392'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2393'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Teilnahme ---------------------------- */
 group TransformConsentTeilnahme(source src: CTS_Transport, target tgt: Consent)
 {
     // Metadata
@@ -734,6 +747,20 @@ group TransformConsentTeilnahme(source src: CTS_Transport, target tgt: Consent)
     }; 
 }
 
+/* ------------------------------ Check if Consent Datenschutz is required ---------------------------- */
+group CreateConsentDatenschutz(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2389'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2390'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Datenschutz ---------------------------- */
 group TransformConsentDatenschutz(source src: CTS_Transport, target tgt: Consent)
 {
     // Metadata
