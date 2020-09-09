@@ -4,130 +4,20 @@
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung" = nNGM_Mapping_Anforderung
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
-uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
+uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
-uses "http://hl7.org/fhir/StructureDefinition/Practitioner" as target
 
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    src -> bundle.entry as entry then CreateTransformSpecimenAnforderung(src, entry);
     src -> bundle.entry as entry then CreateTransformServiceRequestAnforderung(src, entry);
+    src -> bundle.entry as entry then CreateTransformSpecimenAnforderung(src, entry);
     src -> bundle.entry as entry then CreateTransformObservationAnforderung(src, entry);
     src -> bundle.entry as entry then CreateTransformOrganizationAnforderung(src, entry);
-}
-
-/* ------------------------------ Check whether Specimen needs to be created ---------------------------- */
-group CreateTransformSpecimenAnforderung(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1551'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1589'
-        or blockindex = 2 and groupindex = 0 and itemid = 'id_2316'
-        or blockindex = 2 and groupindex = 0 and itemid = 'id_2320'" then
-        {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenAnforderung(src, specimen);
-        };
-    };
-}
-
-/* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimenAnforderung(source src: CTS_Transport, target tgt: Specimen)
-{
-    // Mapped id with an universally unique identifier for Specimen
-    src -> tgt.id = uuid();
-
-    // Mapped profile with profile URL
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // Mapped subject, which is obligatory element on Simplifier, with a Patient
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // Mapped type, which is obligatory element on Simplifier, with no fixed value
-    src ->  tgt.type as type,
-            type.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-
-    src.operations as operations, operations.data as data then
-    {
-        //Identifier:biopsieID.value
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
-        {
-            values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
-                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
-                                      identifier.value = value;
-        };
-
-        // collection.collectedDateTime
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1551'" then
-        {
-            values.value as value -> tgt.collection as collection, collection.collectedDateTime = dateOp(value, 'date');
-        };
-
-        // extension:entnahmeKontext.valueCodeableConcept
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1589' and %tgt.resource.resourceType.category.coding.where(code = 'C12801')" then
-        {
-            values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
-            {
-                values.value as za -> tgt.extension as entnahmeKontext, 
-                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'IMP', 'inpatient encounter');
-            };
-
-            values.value where "$this.value = 'ambulant'" then 
-            {
-                values.value as za -> tgt.extension as entnahmeKontext, 
-                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'AMB', 'ambulatory');
-            };
-            
-            values.value where "$this.value = 'UNK'" then 
-            {
-                values.value as za -> tgt.extension as entnahmeKontext, 
-                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
-            };
-        };
-
-        // collection.collectedDateTime
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_2316'" then
-        {
-            values.value as value -> tgt.collection as collection, collection.collectedDateTime = dateOp(value, 'date');
-        };
-
-        // extension:entnahmeKontext.valueCodeableConcept
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2320' and %tgt.resource.resourceType.category.coding.where(code = 'C12434')" then
-        {
-            values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
-            {
-                values.value as za -> tgt.extension as entnahmeKontext, 
-                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'IMP', 'inpatient encounter');
-            };
-
-            values.value where "$this.value = 'ambulant'" then 
-            {
-                values.value as za -> tgt.extension as entnahmeKontext, 
-                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'AMB', 'ambulatory');
-            };
-            
-            values.value where "$this.value = 'UNK'" then 
-            {
-                values.value as za -> tgt.extension as entnahmeKontext, 
-                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
-            };
-        };
-    };
 }
 
 /* ------------------------------ Check whether ServiceRequest needs to be created ---------------------------- */
@@ -135,19 +25,9 @@ group CreateTransformServiceRequestAnforderung(source src: CTS_Transport, target
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid ='id_1368'
-        or blockindex = 3 and groupindex = 0 and itemid = 'id_2473'
-        or blockindex = 3 and groupindex = 0 and itemid = 'id_2474'
-        or blockindex = 3 and groupindex = 0 and itemid = 'id_2313'
-        or blockindex = 3 and groupindex = 0 and itemid = 'id_2314'" then
-        {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestAnforderung(src, serviceRequest);
-        };
-    };
-
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2476'
+        // Resource elements displayed just when "Gewediagnostik" was selected
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Gewebediagnostik'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_2476'
         or blockindex = 4 and groupindex = 0 and itemid = 'id_2490'
         or blockindex = 4 and groupindex = 0 and itemid = 'id_2477'
         or blockindex = 4 and groupindex = 0 and itemid = 'id_2478'
@@ -155,13 +35,123 @@ group CreateTransformServiceRequestAnforderung(source src: CTS_Transport, target
         or blockindex = 4 and groupindex = 0 and itemid = 'id_2480'
         or blockindex = 4 and groupindex = 0 and itemid = 'id_1560'" then
         {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestTumorblock(src, serviceRequest);
+            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformGewebeDiagnstikServiceRequest(src, serviceRequest);
+        };
+
+        // Resource elements displayed just when "Blutdiagnostik" was selected
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Blutdiagnostik'
+        or blockindex = 3 and groupindex = 0 and itemid = 'id_2473'
+        or blockindex = 3 and groupindex = 0 and itemid = 'id_2474'
+        or blockindex = 3 and groupindex = 0 and itemid = 'id_2313'
+        or blockindex = 3 and groupindex = 0 and itemid = 'id_2314'" then
+        {
+            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformBlutDiagnostikServiceRequest(src, serviceRequest);
+        };
+
+    };
+}
+
+/* ------------------------------ ServiceRequest - GewebeDiagnostik ---------------------------- */
+group TransformGewebeDiagnstikServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    // Mapped id with an universally unique identifier for ServiceRequest
+    src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock';
+    
+    // Mapped subject, which is obligatory element on Simplifier, with a Patient
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Mapped status, which is obligatory element on Simplifier, with an absent extension
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Mapped intent, which is obligatory element on Simplifier
+    src -> tgt.intent = cast('proposal', 'FHIR.code');
+
+    // Mapped code, which is obligatory element on Simplifier, using system and code values
+    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C18202');
+
+    src.operations as operations, operations.data as data then
+    {
+        // category
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368'" then
+        {
+            values.value as value -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-kategorie', value);
+        };
+
+        // doNotPerform
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2476'" then 
+        {
+            values.value where "value = 'no'" then 
+            {
+                values.value as value -> tgt.doNotPerform = cast(false, 'FHIR.boolean');
+            };
+
+            values.value where "value = 'yes'" then
+            {
+                values.value as value -> tgt.doNotPerform = cast(true, 'FHIR.boolean');
+            };
+        };
+
+        // extension:grundEntfallBlockAnforderung
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2490'" then
+        {
+            values.value where "$this.value = 'Tumormaterial bereits unterwegs'" then
+            {
+                values.value as value -> tgt.extension as tgtExtension,
+                                        tgtExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung',
+                                        tgtExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/grundEntfallBlockAnforderung', 'bereitsUnterwegs');
+            };
+
+            values.value where "$this.value = 'Antrag interne Pathologie'" then
+            {
+                values.value as value -> tgt.extension as tgtExtension,
+                                        tgtExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung',
+                                        tgtExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/grundEntfallBlockAnforderung', 'innerePathologie');
+            };
+        };
+
+        // occurrenceDateTime
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2477'" then
+        {
+            values.value as value ->  tgt.occurrenceDateTime =  dateOp(value, 'date');
+        };
+
+        // extension:wiederholungAnforderung.valueInteger
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2478'" then
+        {
+             values.value as value -> tgt.extension as wiederholung, 
+                                       wiederholung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/wiederholung', 
+                                       wiederholung.valueInteger = cast(value, 'FHIR.integer');
+        };
+
+        // extension:stornierungBlockAnforderung,valueDateTIme
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2479'" then
+        {
+            values.value as value -> tgt.extension as storno, 
+                                  storno.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/stornierungBlockAnforderung', 
+                                  storno.valueDateTime = dateOp(value, 'date');
+        };
+
+        // extension:versandDatum.valueDateTime
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2480'" then
+        {
+            values.value as value -> tgt.extension as versandmaterial, 
+                                  versandmaterial.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/versandDatumBlockAnforderung', 
+                                  versandmaterial.valueDateTime = dateOp(value, 'date');
+        };
+
+        // performer.reference.display
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1560'" then
+        {
+            values.value as value -> tgt.performer as performer, performer.display = value, performer.reference = value;
         };
     };
 }
 
-/* ------------------------------ ServiceRequest ---------------------------- */
-group TransformServiceRequestAnforderung(source src: CTS_Transport, target tgt: ServiceRequest)
+/* ------------------------------ ServiceRequest - BlutDiagnostik ---------------------------- */
+group TransformBlutDiagnostikServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
 {
     // Mapped id with an universally unique identifier for ServiceRequest
     src -> tgt.id = uuid();
@@ -238,183 +228,179 @@ group TransformServiceRequestAnforderung(source src: CTS_Transport, target tgt: 
                                         tgtExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/grundfehlendeBiopsie', 'Ablehnung seitens Patient(in)');
             };
         };
+    };
+}
 
-        // doNotPerform
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2476'" then 
+/* ------------------------------ Check whether Specimen needs to be created ---------------------------- */
+group CreateTransformSpecimenAnforderung(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Resource elements displayed just when "Gewediagnostik" was selected
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Gewebediagnostik'
+        or blockindex = 1 and groupindex = 0 and itemid ='id_1551'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_1589'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
         {
-            values.value where "value = 'no'" then 
-            {
-                values.value as value -> tgt.doNotPerform = cast(false, 'FHIR.boolean');
-            };
-
-            values.value where "value = 'yes'" then
-            {
-                values.value as value -> tgt.doNotPerform = cast(true, 'FHIR.boolean');
-            };
+            src -> tgt.resource = create('Specimen') as specimen then TransformGewebeDiagnstikSpecimen(src, specimen);
         };
 
-        // extension:grundEntfallBlockAnforderung
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2490'" then
+        // Resource elements displayed just when "Blutdiagnostik" was selected
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Blutdiagnostik'
+        or blockindex = 2 and groupindex = 0 and itemid ='id_2316'
+        or blockindex = 2 and groupindex = 0 and itemid = 'id_2320'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
         {
-            values.value where "$this.value = 'Tumormaterial bereits unterwegs'" then
-            {
-                values.value as value -> tgt.extension as tgtExtension,
-                                        tgtExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung',
-                                        tgtExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/grundEntfallBlockAnforderung', 'bereitsUnterwegs');
-            };
-
-            values.value where "$this.value = 'Antrag interne Pathologie'" then
-            {
-                values.value as value -> tgt.extension as tgtExtension,
-                                        tgtExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung',
-                                        tgtExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/grundEntfallBlockAnforderung', 'innerePathologie');
-            };
-        };
-
-        // occurrenceDateTime
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2477'" then
-        {
-            values.value as value ->  tgt.occurrenceDateTime =  dateOp(value, 'date');
-        };
-
-        // extension:wiederholungAnforderung.valueInteger
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2478'" then
-        {
-             values.value as value -> tgt.extension as wiederholung, 
-                                       wiederholung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/wiederholung', 
-                                       wiederholung.valueInteger = cast(value, 'FHIR.integer');
-        };
-
-        // extension:stornierungBlockAnforderung,valueDateTIme
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2479'" then
-        {
-            values.value as value -> tgt.extension as storno, 
-                                  storno.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/stornierungBlockAnforderung', 
-                                  storno.valueDateTime = dateOp(value, 'date');
-        };
-
-        // extension:versandDatum.valueDateTime
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2480'" then
-        {
-            values.value as value -> tgt.extension as versandmaterial, 
-                                  versandmaterial.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/versandDatumBlockAnforderung', 
-                                  versandmaterial.valueDateTime = dateOp(value, 'date');
-        };
-
-        // performer.reference.display
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1560'" then
-        {
-            values.value as value -> tgt.performer as performer, performer.display = value, performer.reference = value;
+            src -> tgt.resource = create('Specimen') as specimen then TransformBlutDiagnstikSpecimen(src, specimen);
         };
     };
 }
 
-group TransformServiceRequestTumorblock(source src: CTS_Transport, target tgt: ServiceRequest)
+/* ------------------------------ Specimen - GewebeDiagnostik ---------------------------- */
+group TransformGewebeDiagnstikSpecimen(source src: CTS_Transport, target tgt: Specimen)
 {
-    // Mapped id with an universally unique identifier for ServiceRequest
+    // Mapped id with an universally unique identifier for Specimen
     src -> tgt.id = uuid();
 
     // Mapped profile with profile URL
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock';
-    
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
     // Mapped subject, which is obligatory element on Simplifier, with a Patient
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    // Mapped status, which is obligatory element on Simplifier, with an absent extension
-    src -> tgt.status = cast('active', 'FHIR.code');
-
-    // Mapped intent, which is obligatory element on Simplifier
-    src -> tgt.intent = cast('proposal', 'FHIR.code');
-
-    // Mapped code, which is obligatory element on Simplifier, using system and code values
-    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C18202');
-
+    // Mapped type, which is obligatory element on Simplifier, with no fixed value
+    src ->  tgt.type as type,
+            type.extension as dataAbsentReason,
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    
     src.operations as operations, operations.data as data then
     {
-        // doNotPerform
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2476'" then 
+        // collection.collectedDateTime
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1551'" then
         {
-            values.value where "value = 'no'" then 
+            values.value as value -> tgt.collection as collection, collection.collectedDateTime = dateOp(value, 'date');
+        };
+
+        // extension:entnahmeKontext.valueCodeableConcept
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1589'" then
+        {
+            values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
             {
-                values.value as value -> tgt.doNotPerform = cast(false, 'FHIR.boolean');
+                values.value as za -> tgt.extension as entnahmeKontext, 
+                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
+                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'IMP', 'inpatient encounter');
             };
 
-            values.value where "value = 'yes'" then
+            values.value where "$this.value = 'ambulant'" then 
             {
-                values.value as value -> tgt.doNotPerform = cast(true, 'FHIR.boolean');
+                values.value as za -> tgt.extension as entnahmeKontext, 
+                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
+                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'AMB', 'ambulatory');
+            };
+            
+            values.value where "$this.value = 'UNK'" then 
+            {
+                values.value as za -> tgt.extension as entnahmeKontext, 
+                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
+                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
             };
         };
 
-        // extension:grundEntfallBlockAnforderung
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2490'" then
+        //Identifier:biopsieID.value
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
         {
-            values.value where "$this.value = 'Tumormaterial bereits unterwegs'" then
-            {
-                values.value as value -> tgt.extension as tgtExtension,
-                                        tgtExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung',
-                                        tgtExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/grundEntfallBlockAnforderung', 'bereitsUnterwegs');
-            };
-
-            values.value where "$this.value = 'Antrag interne Pathologie'" then
-            {
-                values.value as value -> tgt.extension as tgtExtension,
-                                        tgtExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung',
-                                        tgtExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/grundEntfallBlockAnforderung', 'innerePathologie');
-            };
-        };
-
-        // occurrenceDateTime
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2477'" then
-        {
-            values.value as value ->  tgt.occurrenceDateTime =  dateOp(value, 'date');
-        };
-
-        // extension:wiederholungAnforderung.valueInteger
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2478'" then
-        {
-             values.value as value -> tgt.extension as wiederholung, 
-                                       wiederholung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/wiederholung', 
-                                       wiederholung.valueInteger = cast(value, 'FHIR.integer');
-        };
-
-        // extension:stornierungBlockAnforderung,valueDateTIme
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2479'" then
-        {
-            values.value as value -> tgt.extension as storno, 
-                                  storno.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/stornierungBlockAnforderung', 
-                                  storno.valueDateTime = dateOp(value, 'date');
-        };
-
-        // extension:versandDatum.valueDateTime
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2480'" then
-        {
-            values.value as value -> tgt.extension as versandmaterial, 
-                                  versandmaterial.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/versandDatumBlockAnforderung', 
-                                  versandmaterial.valueDateTime = dateOp(value, 'date');
-        };
-
-        // performer.reference.display
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1560'" then
-        {
-            values.value as value -> tgt.performer as performer, performer.display = value, performer.reference = value;
+            values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
+                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
+                                      identifier.value = value;
         };
     };
 }
 
-/* ------------------------------ Observation ---------------------------- */
+/* ------------------------------ Specimen - BlutDiagnostik ---------------------------- */
+group TransformBlutDiagnstikSpecimen(source src: CTS_Transport, target tgt: Specimen)
+{
+    // Mapped id with an universally unique identifier for Specimen
+    src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Mapped subject, which is obligatory element on Simplifier, with a Patient
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Mapped type, which is obligatory element on Simplifier, with no fixed value
+    src ->  tgt.type as type,
+            type.extension as dataAbsentReason,
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        // collection.collectedDateTime
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_2316'" then
+        {
+            values.value as value -> tgt.collection as collection, collection.collectedDateTime = dateOp(value, 'date');
+        };
+
+        // extension:entnahmeKontext.valueCodeableConcept
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2320'" then
+        {
+            values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
+            {
+                values.value as za -> tgt.extension as entnahmeKontext, 
+                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
+                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'IMP', 'inpatient encounter');
+            };
+
+            values.value where "$this.value = 'ambulant'" then 
+            {
+                values.value as za -> tgt.extension as entnahmeKontext, 
+                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
+                                    entnahmeKontext.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'AMB', 'ambulatory');
+            };
+            
+            values.value where "$this.value = 'UNK'" then 
+            {
+                values.value as za -> tgt.extension as entnahmeKontext, 
+                                    entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
+                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
+            };
+        };
+
+        //Identifier:biopsieID.value
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
+        {
+            values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
+                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
+                                      identifier.value = value;
+        };
+    };
+}
+
+/* ------------------------------ Check whether Observation needs to be created ---------------------------- */
 group CreateTransformObservationAnforderung(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_836'
+        // Resource elements displayed just when "Gewediagnostik" was selected
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Gewebediagnostik'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_836'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationGeweDiagnostikAnforderung(src, observation);
+        };
+
+        // Resource elements displayed just when "Blutdiagnostik" was selected
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Blutdiagnostik'
         or blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationAnforderung(src, observation);
+            src -> tgt.resource = create('Observation') as observation then TransformObservationBlutDiagnostikAnforderung(src, observation);
         };
     };
 }
 
-group TransformObservationAnforderung(source src: CTS_Transport, target tgt: Observation)
+/* ------------------------------ Observation - GewebeDiagnostik ---------------------------- */
+group TransformObservationGeweDiagnostikAnforderung(source src: CTS_Transport, target tgt: Observation)
 {
     // Mapped id with an universally unique identifier for ServiceRequest
     src -> tgt.id = uuid();
@@ -440,32 +426,56 @@ group TransformObservationAnforderung(source src: CTS_Transport, target tgt: Obs
                          coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()'),
                          coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
         };
-
-        // Histologie des vorbefunds - valueCodeableConcept
-        // data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" then 
-        // {
-        //     values.value as valuecc ->  tgt.valueCodeableConcept as vcc, vcc.coding as coding collate,
-        //                  coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/histologie-klassifikation',
-        //                  coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()'),
-        //                  coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
-        // };
     };
 }
 
-/* ------------------------------ Organization ---------------------------- */
-group CreateTransformOrganizationAnforderung(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Observation - BlutDiagnostik ---------------------------- */
+group TransformObservationBlutDiagnostikAnforderung(source src: CTS_Transport, target tgt: Observation)
 {
+    // Mapped id with an universally unique identifier for ServiceRequest
+    src -> tgt.id = uuid();
+    
+    // Mapped profile with profile URL
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histo-vorbefund';
+    
+    // Mapped subject, which is obligatory element on Simplifier, with a Patient
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Obligatory fields
+    src -> tgt.status = cast('final', 'FHIR.code');
+    src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'laboratory');
+    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
+
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1563'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1562'" then
+        // Histologie des vorbefunds - valueCodeableConcept
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" then 
         {
-            src -> tgt.resource = create('Organization') as organization then TransformOrganizationAnforderung(src, organization);
+            values.value as valuecc ->  tgt.valueCodeableConcept as vcc, vcc.coding as coding collate,
+                         coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/histologie-klassifikation',
+                         coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()'),
+                         coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
         };
     };
 }
 
-group TransformOrganizationAnforderung(source src: CTS_Transport, target tgt: Organization)
+/* ------------------------------ Check whether Organization needs to be created ---------------------------- */
+group CreateTransformOrganizationAnforderung(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Resource elements displayed just when "Gewediagnostik" was selected
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Gewebediagnostik'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_1563'
+        or blockindex = 4 and groupindex = 0 and itemid = 'id_1562'" then
+        {
+            src -> tgt.resource = create('Organization') as organization then TransformOrganizationGeweDiagnostikAnforderung(src, organization);
+        };
+    };
+}
+
+/* ------------------------------ Organization - GewebeDiagnostik ---------------------------- */
+group TransformOrganizationGeweDiagnostikAnforderung(source src: CTS_Transport, target tgt: Organization)
 {
     // Mapped id with an universally unique identifier for ServiceRequest
     src -> tgt.id = uuid();
@@ -488,3 +498,4 @@ group TransformOrganizationAnforderung(source src: CTS_Transport, target tgt: Or
         };
     };
 }
+
