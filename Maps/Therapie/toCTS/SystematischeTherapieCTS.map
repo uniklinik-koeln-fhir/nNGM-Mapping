@@ -1,420 +1,657 @@
 /// version = 0.1
-/// title = "nNGM: Sonstige Therapie - FHIR to CTS"
+/// title = "SystemischeTherapieCTS"
 /*
-    TODO
-     PROCEDURE ->  status+ status Reason(Ende der Bestrahlung)Check statusReason, is it rigth?,THIS ARE SECONDARY EFFECTS
-    3_0__id_1190 -> it missing specify in the excel file this item from the form 
+TODO
+
+MEDICALADMINISTRATION -> Status(Art des Therapieendes)- How to make the reverse CTS with this logic, due we can not differenciate 
+                         when the code is Status Reason is 'nebenwirkungen'
+3_0__id_1190 -> it missing specify in the excel file this item from the form 
 */
 
-
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCST" = nNGM_Mapping_StrahlentherapieCST
+map "http://uk-koeln.de/fhir/StructureMap/SystemischeTherapieCTS" = SystemischeTherapieCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
 {
-    src -> tgt.version = '1.1';
-    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
-    
-    src -> tgt.operations as operations collate, operations.crfid = 'ST2';
+	src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/'; 
+    src -> tgt.operations as operations collate, operations.crfid = '*-LP1';
     src -> tgt.operations as operations collate, operations.type = 'save';
 
-    src.entry as entry then
+    src.entry as entry, entry.resource as medicationAdministration where "resource is MedicationAdministration and resource.category.coding.code = 'C85582'" then
     {
-        //----------------------   EpisodeOfCare   --------------------
-        entry.resource as procedure where "resource is Procedure" then
+
+        /* ------------------------------ MedicationAdministration ---------------------------- */
+        medicationAdministration -> tgt.operations as operations collate then
         {
-            //------------[DURCHFÜHRUNG]------------
-            //Therapiebeginn
-            procedure -> tgt.operations as operations collate then
+            //REFERENZEN
+            //Diagnostikfall-ID -> 0, 0, 1600
+            medicationAdministration-> operations.data as data then
             {
-                procedure -> operations.data as data then
+                medicationAdministration -> data.blockindex = 0;
+                medicationAdministration -> data.groupindex = 0;
+                medicationAdministration -> data.itemid = 'id_1600';
+                medicationAdministration -> data.values as values collate, values.unit = 'count';
+                medicationAdministration.context as context,
+                context.identifier as identifier, 
+                identifier.value as value -> data.values as values collate, values.value = value;
+            };    
+        };
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            //Therapieinformation
+            //Therapieinformationen  -> 1, 0, 2336
+            medicationAdministration-> operations.data as data then
+            {
+                
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'therapieInformationen'" then 
                 {
-                    procedure.performedPeriod as performedPeriod, 
-                        performedPeriod.start as start then
-                    {
-                        procedure -> data.blockindex = 0;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1185';
-                        start -> data.values as values, values.value = start;
-                    };
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2336';
+                    extensionInformation.valueString as value -> data.values as values collate, values.value = value;
                 };
             };
-            //Therapieende
-            procedure -> tgt.operations as operations collate then
+        };
+        
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            //Therapieinformation war hilfreich -> 1, 0, 2337
+            medicationAdministration-> operations.data as data then
             {
-                procedure -> operations.data as data then
+                
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'hilfreich' and $this.valueBoolean = true " then 
                 {
-                    procedure.performedPeriod as performedPeriod, 
-                        performedPeriod.end as end then
-                    {
-                        procedure -> data.blockindex = 0;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1186';
-                        end -> data.values as values, values.value = end;
-                    };
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2337';
+                    extensionInformation -> data.values as values collate, values.value = 'Ja';
+                };
+
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'hilfreich' and $this.valueBoolean = false " then 
+                {
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2337';
+                    extensionInformation -> data.values as values collate, values.value = 'Nein';
+                };
+                
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'hilfreich' and $this.valueString = 'N/A' " then 
+                {
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2337';
+                    extensionInformation -> data.values as values collate, values.value = 'N/A';
                 };
             };
-            //Durchführende Einrichtung
-            procedure -> tgt.operations as operations collate then
+        };
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            //Therapieinformationen wurde umgesetzt -> 1, 0, 2338
+            medicationAdministration-> operations.data as data then
             {
-                procedure -> operations.data as data then
+                
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'umgesetzt' and $this.valueBoolean = true " then 
                 {
-                    procedure.performer as performer, 
-                        performer.actor as actor,
-                        actor.display as display then
-                    {
-                        procedure -> data.blockindex = 0;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1182';
-                        display -> data.values as values, values.value = display;
-                    };
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2338';
+                    extensionInformation -> data.values as values collate, values.value = 'Ja';
+                };
+
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'umgesetzt' and $this.valueBoolean = false " then 
+                {
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2338';
+                    extensionInformation -> data.values as values collate, values.value = 'Nein';
+                };
+                
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'umgesetzt' and $this.valueString = 'N/A' " then 
+                {
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2338';
+                    extensionInformation -> data.values as values collate, values.value = 'N/A';
                 };
             };
-            //------------[THERAPIEMERKMALE]------------
-            //Bestrahlungsziel
-            procedure -> tgt.operations as operations collate then
+        };
+
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            //Grund für die Nichtumsetzung -> 1, 0, 2339
+            medicationAdministration-> operations.data as data then
             {
-                procedure -> operations.data as data then
+                medicationAdministration.supportingInformation as supportingInformation,
+                supportingInformation.extension as extension,
+                extension.extension as extensionInformation,
+                extensionInformation.url as url where "url = 'nichtumsetzungGrund'" then 
                 {
-                    procedure.bodySite as bodySite, 
-                        bodySite.coding as coding,
-                        coding.code as code then
-                    {
-                        procedure -> data.blockindex = 1;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1181';
-                        code -> data.values as values, values.value = code;
-                    };
+                    medicationAdministration -> data.blockindex = 1;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2339';
+                    extensionInformation.valueString as  value  -> data.values as values collate, values.value = value;
                 };
             };
-            //Therapeutische Intention
-            procedure -> tgt.operations as operations collate then
+        };
+
+        //Therapiemerkmale
+        //Therapiebeginn -> 2, 0, 1246
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
             {
-                procedure -> operations.data as data then
+                medicationAdministration.effectivePeriod as effectivePeriod,
+                effectivePeriod.start as start then 
                 {
-                    procedure.reasonCode as reasonCode, 
-                        reasonCode.coding as coding,
-                        coding.code as code then
-                    {
-                        procedure -> data.blockindex = 1;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1183';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-            //Art der Bestrahlung
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure -> operations.data as data then
-                {
-                    procedure.code as code, 
-                        code.extension as extension,
-                        extension.valueCodeableConcept as valueCodeableConcept, 
-                        valueCodeableConcept.coding as coding, 
-                        coding.code as code then
-                    {
-                        procedure -> data.blockindex = 1;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1196';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-            //Dosis
-            //Einzeldosis (Gy)
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure -> operations.data as data then
-                {
-                    procedure.extension as dosis, 
-                        dosis.extension as einzeldosis,
-                        einzeldosis.url as url where "url = 'einzeldosis'" then
-                    {
-                        einzeldosis.valueQuantity as valueQuantity, 
-                        valueQuantity.value as value then
-                        {
-                            procedure -> data.blockindex = 1;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1198';
-                            value -> data.values as values, values.value = value;
-                        };
-                        einzeldosis.valueQuantity as valueQuantity, 
-                        valueQuantity.code as unit then
-                        {
-                            unit -> data.values as values collate, values.unit = unit;
-                        };
-                    };
-                };
-            };
-            //Gesamtdosis (Gy)
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure -> operations.data as data then
-                {
-                    procedure.extension as dosis, 
-                        dosis.extension as gesamtdosis,
-                        gesamtdosis.url as url where "url = 'gesamtdosis'" then
-                    {
-                        gesamtdosis.valueQuantity as valueQuantity, 
-                        valueQuantity.value as value then
-                        {
-                            procedure -> data.blockindex = 1;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1199';
-                            value -> data.values as values, values.value = value;
-                        };
-                        gesamtdosis.valueQuantity as valueQuantity, 
-                        valueQuantity.code as unit then
-                        {
-                            unit -> data.values as values collate, values.unit = unit;
-                        };
-                    };
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1246';
+                    start  -> data.values as values collate, values.value = start;
                 };
             };
 
-            //Boost
-            //Boost durchgeführt
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure -> operations.data as data then
-                {
-                    procedure.extension as dosis, 
-                        dosis.extension as boost,
-                        boost.url as url where "url = 'boost'" then
-                    {
-                        boost.valueBoolean as valueBoolean where "valueBoolean = true" then
-                        {
-                            procedure -> data.blockindex = 1;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1363';
-                            procedure -> data.values as values, values.value = 'ja';
-                        };
-                        boost.valueBoolean as valueBoolean where "valueBoolean = false" then
-                        {
-                            procedure -> data.blockindex = 1;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1363';
-                            procedure -> data.values as values, values.value = 'nein';
-                        };
-                    };
-                     procedure.extension as dosis, 
-                        dosis.extension as boost,
-                        boost.url as url where "url = 'boostdosisInGesamtdosis'" then
-                    {
-                        boost.valueBoolean as valueBoolean where "valueBoolean = true" then
-                        {
-                            procedure -> data.blockindex = 1;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1363';
-                            procedure -> data.values as values, values.value = 'ja, Boostdosis in Gesamtdosis enthalten';
-                        };
-                    };
-                };
-            };
-            //Boostdosis (Gy)
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure -> operations.data as data then
-                {
-                    procedure.extension as dosis, 
-                        dosis.extension as boostdosis,
-                        boostdosis.url as url where "url = 'gesamtdosis'" then
-                    {
-                        boostdosis.valueQuantity as valueQuantity, 
-                        valueQuantity.value as value then
-                        {
-                            procedure -> data.blockindex = 1;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1364';
-                            value -> data.values as values, values.value = value;
-                        };
-                        boostdosis.valueQuantity as valueQuantity, 
-                        valueQuantity.code as unit then
-                        {
-                            unit -> data.values as values collate, values.unit = unit;
-                        };
-                    };
-                };
-            };
-            //------------[Ende der Therapie]------------
-            //Status 
-            //TODO
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure-> operations.data as data then
-                {
-                    //status = completed
-                    //code   = 
-                    //value  = Reguläres Ende
-                    procedure.status as status where "status = 'completed'" then
-                    {
-                        procedure -> data.blockindex = 2;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1211';
-                        procedure  -> data.values as values , values.value = 'Reguläres Ende';
-                    };
-                    
-                    //status = aborted
-                    //code   = ae
-                    //value  = Abbruch wegen Nebenwirkungen
-                    procedure-> operations.data as data then
-                    {
-                        procedure.status as status where "status = 'aborted'" then
-                        {
-                            procedure.statusReason as statusReason,
-                            statusReason.coding as coding,
-                            coding.code as code where "code = 'ae'" then 
-                            {
-                                procedure -> data.blockindex = 2;
-                                procedure -> data.groupindex = 0;
-                                procedure -> data.itemid = 'id_1211';
-                                code  -> data.values as values , values.value = 'Abbruch wegen Nebenwirkungen';
-                            };
-                        };
-                    };
-                    //status = suspended
-                    //code   = ae
-                    //value  = Pause wegen Nebenwirkungen
-                    procedure-> operations.data as data then
-                    {
-                        procedure.status as status where "status = 'suspended'" then
-                        {
-                            procedure.statusReason as statusReason,
-                            statusReason.coding as coding,
-                            coding.code as code where "code = 'ae'" then 
-                            {
-                                procedure -> data.blockindex = 2;
-                                procedure -> data.groupindex = 0;
-                                procedure -> data.itemid = 'id_1211';
-                                code  -> data.values as values , values.value = 'Pause wegen Nebenwirkungen';
-                            };
-                        };
-                    };
-                    //status = aborted
-                    //code   = progress
-                    //value  = Abbruch wegen Progress
-                    procedure-> operations.data as data then
-                    {
-                        procedure.status as status where "status = 'stopped'" then
-                        {
-                            procedure.statusReason as statusReason,
-                            statusReason.coding as coding,
-                            coding.code as code where "code = 'progress'" then 
-                            {
-                                procedure -> data.blockindex = 2;
-                                procedure -> data.groupindex = 0;
-                                procedure -> data.itemid = 'id_1211';
-                                code  -> data.values as values , values.value = 'Abbruch wegen Progres';
-                            };
-                        };
-                    };
-                    //status = aborted
-                    //code   = patient-request
-                    //value  = Ablehnung durch den Patienten
-                    procedure-> operations.data as data then
-                    {
-                        procedure.status as status where "status = 'aborted'" then
-                        {
-                            procedure.statusReason as statusReason,
-                            statusReason.coding as coding,
-                            coding.code as code where "code = 'patient-request'" then 
-                            {
-                                procedure -> data.blockindex = 2;
-                                procedure -> data.groupindex = 0;
-                                procedure -> data.itemid = 'id_1211';
-                                code  -> data.values as values , values.value = 'Ablehnung durch den Patienten';
-                            };
-                        };
-                    };
-                    //status = aborted
-                    //code   = death
-                    //value  = Patient verstorben
-                    procedure-> operations.data as data then
-                    {
-                        procedure.status as status where "status = 'aborted'" then
-                        {
-                            procedure.statusReason as statusReason,
-                            statusReason.coding as coding,
-                            coding.code as code where "code = 'death'" then 
-                            {
-                                procedure -> data.blockindex = 2;
-                                procedure -> data.groupindex = 0;
-                                procedure -> data.itemid = 'id_1211';
-                                code  -> data.values as values , values.value = 'Patient verstorben';
-                            };
-                        };
-                    };
-                    //status = aborted
-                    //code   = 
-                    //value  = Sonstiges
-                    procedure-> operations.data as data then
-                    {
-                        procedure.status as status where "status = 'unknown'" then
-                        {
-                            procedure -> data.blockindex = 2;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1211';
-                            procedure  -> data.values as values, values.value = 'Sonstiges';
-                        };
-                    };
-                    //status = unknown
-                    //code   = 
-                    //value  = N/A
-                    procedure-> operations.data as data then
-                    {
-                        procedure.status as status where "status = 'unknown'" then
-                        {
+        };
 
-                            procedure -> data.blockindex = 2;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1211';
-                            procedure  -> data.values as values , values.value = 'N/A';
+        //Therapieende -> 2, 0, 1247
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.effectivePeriod as effectivePeriod,
+                effectivePeriod.end as end then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1247';
+                    end  -> data.values as values collate, values.value = end;
+                };
+            };
+        };
+
+        //Durchführende Einrichtung -> 2, 0, 1242
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.performer as performer,
+                performer.actor as actor,
+                actor.display as display then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1242';
+                    display  -> data.values as values collate, values.value = display;
+                };
+            };
+        };
+        //Therapeutische Intention -> 2, 0, 1243
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.reasonCode as reasonCode,
+                reasonCode.coding as coding,
+                coding.code as code then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1243';
+                    code  -> data.values as values collate, values.value = code;
+                };
+            };
+        };
+
+        //Off-Label-Behandlung -> 2, 0, 2341
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                
+                medicationAdministration.extension as extension,
+                extension.url as url where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/OffLabelTherapie' and $this.valueBoolean = true " then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2341';
+                    extension -> data.values as values collate, values.value = 'Ja';
+                };
+
+                medicationAdministration.extension as extension,
+                extension.url as url where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/OffLabelTherapie' and $this.valueBoolean = false " then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2341';
+                    extension -> data.values as values collate, values.value = 'Nein';
+                };
+                
+            };
+        };
+        //Therapie innerhalb einer klinischen Studie -> 2, 0, 1245
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.extension as studientherapieExtenion,
+                studientherapieExtenion.extension as teilnahmeExtension,
+                teilnahmeExtension.url as url where "url = 'teilnahme' and $this.valueBoolean = true " then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1245';
+                    teilnahmeExtension -> data.values as values collate, values.value = 'Ja';
+                };
+
+                medicationAdministration.extension as studientherapieExtenion,
+                studientherapieExtenion.extension as teilnahmeExtension,
+                teilnahmeExtension.url as url where "url = 'teilnahme' and $this.valueBoolean = false " then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1245';
+                    teilnahmeExtension -> data.values as values collate, values.value = 'Nein';
+                };
+            };
+        };
+
+        //Studienname -> 2, 0, 1244
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.extension as studientherapieExtenion,
+                studientherapieExtenion.extension as studieExtension,
+                studieExtension.url as url where "url = 'studie'" then 
+                {
+                    medicationAdministration -> data.blockindex = 2;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1244';
+                    studieExtension.valueReference as valueReference,
+                    valueReference.display as display -> data.values as values collate, values.value = display;
+                };
+            };
+        };
+        //THERAPIESCHEMA
+        //Therapieschema -> 3, 0, 1241
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.medicationCodeableConcept as medicationCodeableConcept,
+                medicationCodeableConcept.coding as coding,
+                coding.system as system where "system = 'http://uk-koeln.de/fhir/ValueSet/SystemischeTherapieMedikation'" then 
+                {
+                    medicationAdministration -> data.blockindex = 3;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1241';
+                    coding.code as code  -> data.values as values collate, values.value = code;
+                };
+            };
+        };
+        //Anzahl der Zyklen (ohne Erhaltung) -> 3, 0, 1250
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.dosage as dosage,
+                dosage.rateQuantity as rateQuantity,
+                rateQuantity.system as system where "system = 'http://unitsofmeasure.org'" then 
+                {
+                    medicationAdministration -> data.blockindex = 3;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1250';
+                    rateQuantity.value as value  -> data.values as values collate, values.value = value;
+                };
+            };
+        };
+        //ERHALTUNGSTHERAPIE
+        //Erhaltungtherapie als Option -> 4, 0, 1357
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                
+                medicationAdministration.extension as erhaltungstherapieExtension,
+                erhaltungstherapieExtension.extension as medikamentExtension,
+                medikamentExtension.url as url where "url = 'option' and $this.valueBoolean = true " then 
+                {
+                    medicationAdministration -> data.blockindex = 4;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1357';
+                    medikamentExtension -> data.values as values collate, values.value = 'Ja';
+                };
+
+                medicationAdministration.extension as erhaltungstherapieExtension,
+                erhaltungstherapieExtension.extension as medikamentExtension,
+                medikamentExtension.url as url where "url = 'option' and $this.valueBoolean = false " then 
+                {
+                    medicationAdministration -> data.blockindex = 4;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1357';
+                    medikamentExtension -> data.values as values collate, values.value = 'Nein';
+                };
+                
+            };
+        };
+        //Für die Erhaltungstherapie verabreichtes Medikament -> 4, 0, 2342
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.extension as erhaltungstherapieExtension,
+                erhaltungstherapieExtension.extension as medikamentExtension,
+                medikamentExtension.url as url where "url = 'medikament' " then 
+                {
+                    medicationAdministration -> data.blockindex = 4;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2342';
+                    medikamentExtension.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code -> data.values as values collate, values.value = code;
+                };   
+            };
+        };
+        //Status 
+        //TODO
+        //Art des Therapieendes -> 6, 0, 1356
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                //status = completed
+                //code   = 
+                //value  = Reguläres Ende
+                medicationAdministration.status as status where "status = 'completed'" then
+                {
+                    medicationAdministration -> data.blockindex = 6;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1356';
+                    medicationAdministration  -> data.values as values , values.value = 'Reguläres Ende';
+                };
+                //status = stopped
+                //code   = nebenwirkungen
+                //value  = Abbruch wegen Nebenwirkungen
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'stopped'" then
+                    {
+                        medicationAdministration.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'nebenwirkungen'" then 
+                        {
+                            medicationAdministration -> data.blockindex = 6;
+                            medicationAdministration -> data.groupindex = 0;
+                            medicationAdministration -> data.itemid = 'id_1356';
+                            code  -> data.values as values , values.value = 'Abbruch wegen Nebenwirkungen';
+                        };
+                    };
+                };
+                //status = on-hold
+                //code   = nebenwirkungen
+                //value  = Pause wegen Nebenwirkungen
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'on-hold'" then
+                    {
+                        medicationAdministration.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'nebenwirkungen'" then 
+                        {
+                            medicationAdministration -> data.blockindex = 6;
+                            medicationAdministration -> data.groupindex = 0;
+                            medicationAdministration -> data.itemid = 'id_1356';
+                            code  -> data.values as values , values.value = 'Pause wegen Nebenwirkungen';
+                        };
+                    };
+                };
+                //status = stopped
+                //code   = progress
+                //value  = Abbruch wegen Progress
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'stopped'" then
+                    {
+                        medicationAdministration.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'progress'" then 
+                        {
+                            medicationAdministration -> data.blockindex = 6;
+                            medicationAdministration -> data.groupindex = 0;
+                            medicationAdministration -> data.itemid = 'id_1356';
+                            code  -> data.values as values , values.value = 'Abbruch wegen Progres';
+                        };
+                    };
+                };
+                //status = on-hold
+                //code   = ablehnungPatient
+                //value  = Abbruch wegen Progress
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'on-hold'" then
+                    {
+                        medicationAdministration.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'ablehnungPatient'" then 
+                        {
+                            medicationAdministration -> data.blockindex = 6;
+                            medicationAdministration -> data.groupindex = 0;
+                            medicationAdministration -> data.itemid = 'id_1356';
+                            code  -> data.values as values , values.value = 'Abbruch wegen Progress';
+                        };
+                    };
+                };
+                //status = stopped
+                //code   = vielversprechendereTherapieoption
+                //value  = Vielversprechendere Therapieoption
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'stopped'" then
+                    {
+                        medicationAdministration.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'vielversprechendereTherapieoption'" then 
+                        {
+                            medicationAdministration -> data.blockindex = 6;
+                            medicationAdministration -> data.groupindex = 0;
+                            medicationAdministration -> data.itemid = 'id_1356';
+                            code  -> data.values as values, values.value = 'Vielversprechendere Therapieoption';
+                        };
+                    };
+                };
+                //status = stopped
+                //code   = verstorben
+                //value  = Patient verstorben
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'stopped'" then
+                    {
+                        medicationAdministration.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'verstorben'" then 
+                        {
+                            medicationAdministration -> data.blockindex = 6;
+                            medicationAdministration -> data.groupindex = 0;
+                            medicationAdministration -> data.itemid = 'id_1356';
+                            code  -> data.values as values , values.value = 'Patient verstorben';
+                        };
+                    };
+                };
+                //status = unknown
+                //code   = 
+                //value  = Sonstiges
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'unknown'" then
+                    {
+                        medicationAdministration -> data.blockindex = 6;
+                        medicationAdministration -> data.groupindex = 0;
+                        medicationAdministration -> data.itemid = 'id_1356';
+                        medicationAdministration  -> data.values as values, values.value = 'Sonstiges';
+                    };
+                };
+                //status = unknown
+                //code   = not-applicable
+                //value  = N/A
+                medicationAdministration-> operations.data as data then
+                {
+                    medicationAdministration.status as status where "status = 'unknown'" then
+                    {
+                        medicationAdministration.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'not-applicable'" then 
+                        {
+                            medicationAdministration -> data.blockindex = 6;
+                            medicationAdministration -> data.groupindex = 0;
+                            medicationAdministration -> data.itemid = 'id_1356';
+                            code  -> data.values as values , values.value = 'N/A';
                         };
                     };
                 };
             };
         };
-        //----------------------   EpisodeOfCare   --------------------
-        entry.resource as episodeOfCare where "resource is EpisodeOfCare" then
+
+        //Nebenwirkungen Grad III / Grad IV -> 6, 0, 2343
+        medicationAdministration -> tgt.operations as operations collate then
         {
-            //Referenzen
-            //Datum Progress
-            episodeOfCare -> tgt.operations as operations collate then
+            medicationAdministration-> operations.data as data then
             {
-                episodeOfCare -> operations.data as data then
+                
+                medicationAdministration.extension as nebenwirkungExtenion,
+                nebenwirkungExtenion.url as url where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung' and $this.valueBoolean = true " then 
                 {
-                    episodeOfCare.extension as datumProgress, 
-                        datumProgress.valueDate as valueDate then
-                    {
-                        episodeOfCare -> data.blockindex = 2;
-                        episodeOfCare -> data.groupindex = 0;
-                        episodeOfCare -> data.itemid = 'id_1543';
-                        valueDate -> data.values as values, values.value = valueDate;
-                    };
+                    medicationAdministration -> data.blockindex = 6;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2343';
+                    nebenwirkungExtenion -> data.values as values collate, values.value = 'Ja';
                 };
+
+                medicationAdministration.extension as nebenwirkungExtenion,
+                nebenwirkungExtenion.url as url where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung' and $this.valueBoolean = false " then 
+                {
+                    medicationAdministration -> data.blockindex = 6;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2343';
+                    nebenwirkungExtenion -> data.values as values collate, values.value = 'Nein';
+                };
+
+                medicationAdministration.extension as nebenwirkungExtenion,
+                nebenwirkungExtenion.url as url where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung' and $this.valueString = 'N/A' " then 
+                {
+                    medicationAdministration -> data.blockindex = 6;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_2343';
+                    nebenwirkungExtenion -> data.values as values collate, values.value = 'N/A';
+                };
+                
             };
         };
-        //----------------------   Patient   --------------------
-        entry.resource as patient where "resource is Patient" then
+        //Bemerkungen -> 7, 0, 1205
+        medicationAdministration -> tgt.operations as operations collate then
         {
-            //Referenzen
-            //Datum Progress
-            patient -> tgt.operations as operations collate then
+            medicationAdministration-> operations.data as data then
             {
-                patient -> operations.data as data then
+                
+                medicationAdministration.note as note,
+                note.text as text then 
                 {
-                    patient.deceasedDateTime as deceasedDateTime then
-                    {
-                        patient -> data.blockindex = 2;
-                        patient -> data.groupindex = 0;
-                        patient -> data.itemid = 'id_1544';
-                        deceasedDateTime -> data.values as values, values.value = deceasedDateTime;
-                    };
+                    medicationAdministration -> data.blockindex = 7;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1205';
+                    text -> data.values as values collate, values.value = text;
                 };
             };
         };
     };
+   
+    /* ------------------------------ MedicationAdministration ---------------------------- */
+    src.entry as entry, entry.resource as medicationAdministration where "resource is MedicationAdministration and resource.category.coding.code = 'C25446'" then
+    {
+        //Grund für die Änderung des Therapieschemas -> 3, 0, 1464
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.statusReason as statusReason,
+                statusReason.coding as coding,
+                coding.code as code where "code = 'nebenwirkungen'" then 
+                {
+                    medicationAdministration -> data.blockindex = 3;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1464';
+                    code  -> data.values as values collate, values.value = 'Nebenwirkungen/Unverträglichkeit';
+                };
+            };
+            
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.statusReason as statusReason,
+                statusReason.coding as coding,
+                coding.code as code where "code = 'ablehnungPatient'" then 
+                {
+                    medicationAdministration -> data.blockindex = 3;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1464';
+                    code  -> data.values as values collate, values.value = 'Ablehnung des Patienten';
+                };
+            };
+        };
+        //Neues Therapieschema -> 3, 0, 1359
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.medicationCodeableConcept as medicationCodeableConcept,
+                medicationCodeableConcept.coding as coding,
+                coding.system as system where "system = 'http://uk-koeln.de/fhir/ValueSet/SystemischeTherapieMedikation'" then 
+                {
+                    medicationAdministration -> data.blockindex = 3;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1359';
+                    coding.code as code  -> data.values as values collate, values.value = code;
+                };
+            };
+        };
+        //Datum der Änderung -> 3, 0, 1465
+        medicationAdministration -> tgt.operations as operations collate then
+        {
+            medicationAdministration-> operations.data as data then
+            {
+                medicationAdministration.effectivePeriod as effectivePeriod,
+                effectivePeriod.start as start then 
+                {
+                    medicationAdministration -> data.blockindex = 3;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1465';
+                    start  -> data.values as values collate, values.value = start;
+                };
+            };
+
+        };
+    };
+
+    
 }
