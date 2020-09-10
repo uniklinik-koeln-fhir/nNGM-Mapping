@@ -1,16 +1,20 @@
-///version =0.1
-///title = "Fusion NGS"
+///version = 0.1
+///title = "FusionNGSMAP"
 
-map "http://uk-koeln.de/fhir/StructureMap/FusionNGS" = FusionNGS
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR" = nNGM_Mapping_FusionNGSFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CST_Transport" as source
+
+
 uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
-uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
-uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target 
+uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceReqeust" as target
 
-group TrnsformBundle(source src: CST_Transport, target bunle: Bundle)
+/* ------------------------------ Bundle ---------------------------- */
+group TransformBundle(source src: CST_Transport, target bundle: Bundle)
 {
     src -> bundle.id = uuid();
     src -> bundle.type = 'colletion';
@@ -29,44 +33,38 @@ group TrnsformBundle(source src: CST_Transport, target bunle: Bundle)
     src -> bundle.entry as entry then CreatTranformObservationFGFR2(src, entry);
     src -> bundle.entry as entry then CreatTranformObservationFGFR3(src, entry);
     src -> bundle.entry as entry then CreatTranformObservationSonstigeFusionNgs(src, entry);
-    src -> bundle.entry as entry then CreatTranformObservationNTRK1(src, entry);
-    src -> bundle.entry as entry then CreatTranformObservationNTRK2(src, entry);
-    src -> bundle.entry as entry then CreatTranformObservationNTRK3(src, entry);
-    src -> bundle.entry as entry then CreatTranformObservationFGFR1(src, entry);
-    src -> bundle.entry as entry then CreatTranformObservationFGFR2(src, entry);
-    src -> bundle.entry as entry then CreatTranformObservationFGFR3(src, entry);
     src -> bundle.entry as entry then CreatTranformServiceReqeust(src, entry);
 }
 /* ------------------------------ Specimen ---------------------------- */
-group CreateSpecimen(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateTransformSpecimen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
         {
-            src -> tgt.resource = create('Specimen') as episodeofcare then TransformSpecimen(src, episodeofcare);
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
         };
     };
 }
+/* ------------------------------ Specimen ---------------------------- */
 group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
+    // Patient 
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    src -> tgt.type = cc('http://terminology.hl7.org/ValueSet/v2-0487', 'TISS');//?
-
     src.operations as operations, operations.data as data then
-    {
-        //Biopsy-ID
+    {           
+        //Biopsy-ID  
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
         {
-            values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
-                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
-                                      identifier.value = value;
+            values.value as value ->  tgt.identifier = create('Identifier') as biopsieId, 
+                                      biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'),
+                                      biopsieId.value = value;
         };
-    }
+    };
 }
 /* ------------------------------DiagnosticReport---------------------------- */
 group CreateTransformDiagnosticReport(source src: CTS_Transport, target tgt: BackboneElement)
@@ -82,9 +80,7 @@ group CreateTransformDiagnosticReport(source src: CTS_Transport, target tgt: Bac
 /* ------------------------------DiagnosticReport---------------------------- */
 group TransformDiagnosticReport(source src: CTS_Transport, target tgt: EpisodeOfCare)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
-    
+       
     src.operations as operations, operations.data as data then
     {
         src -> tgt.status = cast('active', 'FHIR.code');
@@ -94,8 +90,9 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: EpisodeOf
         // Untersuchungs-ID
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
         {
-            values.value as value ->    tgt.identifier as identifier,
-                                        identifier.value = value;
+            values.value as id ->    tgt.identifier = create('identifier') as befundNummer,
+                                                            befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                            befundNummer.value = id;
         };
     };
 }
@@ -126,7 +123,7 @@ group TransformOrganization(source src: CTS_Transport, target tgt: Organization)
         };      
     };
 }
-/* ------------------------------ Observation-Netzwerkzentrum---------------------------- */
+/* ------------------------------ ObservationNetzwerkzentrum---------------------------- */
 group CreateTransformObservationNetzwerkzentrum(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -148,33 +145,35 @@ group TransformObservationNetzwerkzentrum(source src: CTS_Transport, target tgt:
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //code
-        src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'Netzwerkzentrum');
-
-    
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'Netzwerkzentrum');
+        
     src.operations as operations, operations.data as data then
     {        
         // SOP-Versionsnummer des Standorts
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2612'" then
         {
-           sop -> componentSop.valueString= sop;
-           sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
+            values.value as Sop -> tgt.component = create('BackboneElement') as componentSop then
+            {
+             Sop -> componentSop.valueString= Sop;
+             Sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
+            };
         };       
         // Assay
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2538'" then
         {
-            values.value as assay -> tgt.component = create('BackboneElement') as componentAssay then
+            values.value as Assay -> tgt.component = create('BackboneElement') as componentAssay then
             {
-                assay -> componentAssay.valueCodeableConcept =  cc('http://uk-koeln.de/fhir/ValueSet/ngs-assays', assay);
-                assay -> componentAssay.code = cc('http://ncit.nci.nih.gov', 'C60819');
+                Assay -> componentAssay.valueCodeableConcept =  cc('http://uk-koeln.de/fhir/ValueSet/ngs-assays', assay);
+                Assay -> componentAssay.code = cc('http://ncit.nci.nih.gov', 'C60819');
             };
         };         
         // Hersteller
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2539'" then
         {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
+            values.value as Hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
             {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
+                Hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
+                Hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };        
         // Date of Assessment
@@ -189,10 +188,10 @@ group TransformObservationNetzwerkzentrum(source src: CTS_Transport, target tgt:
         // Phaenotyp
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2099'" then
         {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            values.value as Phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
             {
-                phaenotyp -> componentPhaenotyp.valueCodeableConcept= cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                Phaenotyp -> componentPhaenotyp.valueCodeableConcept= cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
+                Phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
             };
         };    
     };
@@ -202,15 +201,15 @@ group CreateTransformObservationALK(source src: CTS_Transport, target tgt: Backb
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2098'
-        or blockindex = 5 and groupindex = 0 and item = 'id_2099'
-        or blockindex = 5 and groupindex = 0 and item = 'id_2127'
-        or blockindex = 5 and groupindex = 0 and item = 'id_2128'
-        or blockindex = 5 and groupindex = 0 and item = 'id_2129'
-        or blockindex = 5 and groupindex = 0 and item = 'id_2130'
-        or blockindex = 5 and groupindex = 0 and item = 'id_2131'" then
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2098'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_2099'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_2127'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_2128'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_2129'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_2130'
+        or blockindex = 5 and groupindex = 0 and itemid = 'id_2131'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationALK(src, observation);
+        src -> tgt.resource = create('Observation') as observation then TransformObservationALK(src, observation);
         };
     };
 }
@@ -221,14 +220,14 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //ALK code
-        src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'ALK');
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'ALK');
 
   
     src.operations as operations, operations.data as data then
     {
 
         // Date of Assessment
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2098'" then
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid= 'id_2098'" then
         {
             values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
         };
@@ -238,57 +237,56 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
         };
 
         // Phaenotyp
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2099'" then
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2099'" then
         {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            values.value as Phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
             {
-                phaenotyp -> componentPhaenotyp.valueString = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                Phaenotyp -> componentPhaenotyp.valueString = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
+                Phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
             };
         };
-         // Ergebnis
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2127'" then
+        // Ergebnis
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2127'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+            
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            
         };
         // Fusionspartner
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2128'" then
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2128'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
+            values.value as Fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
                
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
-                fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
+                Fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
+                Fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
-         // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2129'" then
+        // Anzahl der Fusionsreads
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2129'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
+            values.value as anzahlderfusionsreads -> tgt.component = create('BackboneElement') as componenanzahlderfusionsreads then
             {
-                anzahlderfusionsreads-> componentAnzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
+                anzahlderfusionsreads-> componentanzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
         // 5' Fusionspartner exon
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2130'" then
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2130'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
+            values.value as fusionspartnerexon  -> tgt.component = create('BackboneElement') as componentfusionspartnerExon then
             {
                 fusionspartnerexon -> componentfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
                 fusionspartnerexon -> componentfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
-         //ALK Exon
-        data.values as values where "blockindex = 5 and groupindex = 0 and item = 'id_2131'" then
+        //ALK Exon
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2131'" then
         {
-            values.value as component-> tgt.component = create('BackboneElement') as componentExon then
+            values.value as Exon-> tgt.component = create('BackboneElement') as componentExon then
             {
-                exon -> componentexon.valueInteger= create('Integer') as integer then MapValue(exon, integer);
-                exon -> componentexon.code = cc('http://ncit.nci.nih.gov', 'C13231');
+                Exon -> componentExon.valueInteger= create('Integer') as integer then MapValue(exon, integer);
+                Exon -> componentExon.code = cc('http://ncit.nci.nih.gov', 'C13231');
             };
         };
     };
@@ -298,15 +296,15 @@ group CreateTransformObservationRET(source src: CTS_Transport, target tgt: Backb
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2183'
-        or blockindex = 6 and groupindex = 0 and item = 'id_2184'
-        or blockindex = 6 and groupindex = 0 and item = 'id_2206'
-        or blockindex = 6 and groupindex = 0 and item = 'id_2207'
-        or blockindex = 6 and groupindex = 0 and item = 'id_2208'
-        or blockindex = 6 and groupindex = 0 and item = 'id_2209'
-        or blockindex = 6 and groupindex = 0 and item = 'id_2210'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2183'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2184'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2206'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2207'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2208'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2209'
+        or blockindex = 6 and groupindex = 0 and itemid = 'id_2210'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationRET(src, observation);
+        src -> tgt.resource = create('Observation') as observation then TransformObservationRET(src, observation);
         };
     };
 }
@@ -317,14 +315,13 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //RET code
-        src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'RET');
-
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/obs-codes', 'RET');
     
     src.operations as operations, operations.data as data then
     {
 
         // Date of Assessment
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2183'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid= 'id_2183'" then
         {
             values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
         };
@@ -334,57 +331,55 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
         };
 
         // Phaenotyp
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2184'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2184'" then
         {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            values.value as Phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
             {
-                phaenotyp -> componentPhaenotyp.valueString = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                Phaenotyp -> componentPhaenotyp.valueString = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
+                Phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
             };
         };
          // Ergebnis
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2206'" then
-        {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2206'" then
+        {            
+            
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            
         };
         // Fusionspartner
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2207'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2207'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
-             {
-               
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
-                fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
+            values.value as Fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
+             {               
+                Fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
+                Fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
          // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2208'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2208'" then
         {
-            values.value as component  -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
+            values.value as anzahlderfusionsreads -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
             {
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
         // 5' Fusionspartner exon
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2209'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2209'" then
         {
-            values.value as component  -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
+            values.value as fusionspartnerexon  -> tgt.component = create('BackboneElement') as fusionspartnerexoncomponent then
             {
-                fusionspartnerexon -> componentfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
-                fusionspartnerexon -> componentfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
+                fusionspartnerexon -> fusionspartnerexoncomponent.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
+                fusionspartnerexon -> fusionspartnerexoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
          //RET Exon
-        data.values as values where "blockindex = 6 and groupindex = 0 and item = 'id_2210'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2210'" then
         {
-             values.value as component  -> tgt.component = create('BackboneElement') as componentExon then
+            values.value as exon  -> tgt.component = create('BackboneElement') as Exoncomponent then
             {
-                exon -> componentexon.valueInteger= create('Integer') as integer then MapValue(exon, integer);
-                exon -> componentexon.code = cc('http://ncit.nci.nih.gov', 'C13231');
+                Exon -> Exoncomponent.valueInteger= create('Integer') as integer then MapValue(exon, integer);
+                Exon -> Exoncomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'C13231');
             };
         };
     };
@@ -394,13 +389,13 @@ group CreateTransformObservationROS1(source src: CTS_Transport, target tgt: Back
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2211'
-        or blockindex = 7 and groupindex = 0 and item = 'id_2212'
-        or blockindex = 7 and groupindex = 0 and item = 'id_2241'
-        or blockindex = 7 and groupindex = 0 and item = 'id_2242'
-        or blockindex = 7 and groupindex = 0 and item = 'id_2243'
-        or blockindex = 7 and groupindex = 0 and item = 'id_2244'
-        or blockindex = 7 and groupindex = 0 and item = 'id_2245'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2211'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2212'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2241'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2242'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2243'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2244'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2245'" then
         {
             src -> tgt.resource = create('Observation') as observation then TransformObservationROS1(src, observation);
         };
@@ -418,7 +413,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
     src.operations as operations, operations.data as data then
     {
         // Date of Assessment
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2211'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2211'" then
         {
             values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
         };
@@ -428,53 +423,52 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
         };
 
         // Phaenotyp
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2212'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2212'" then
          {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            values.value as Phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
             {
-                phaenotyp -> componentPhaenotyp.valueString = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                Phaenotyp -> componentPhaenotyp.valueString = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes', phaenotyp);
+                Phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
             };
         };
         // Ergebnis
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2241'" then
-        {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2241'" then
+        {          
+            
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+     
         };
         // Fusionspartner
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2242'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2242'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
+            values.value as Fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {               
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
-                fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
+                Fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
+                Fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
         // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2243'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2243'" then
           {
-            values.value as component  -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
+            values.value as anzahlderfusionsreads  -> tgt.component = create('BackboneElement') as componentanzahlderfusionsreads then
             {
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
         // 5' Fusionspartner exon
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2244'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2244'" then
          {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
+            values.value as fusionspartnerexont -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
             {
                 fusionspartnerexon -> componentfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
                 fusionspartnerexon -> componentfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
         //ROS1 Exon
-        data.values as values where "blockindex = 7 and groupindex = 0 and item = 'id_2245'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2245'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentExon then
+            values.value as exon -> tgt.component = create('BackboneElement') as componentExon then
             {
                 exon -> componentexon.valueInteger= create('Integer') as integer then MapValue(exon, integer);
                 exon -> componentexon.code = cc('http://ncit.nci.nih.gov', 'C13231');
@@ -487,11 +481,11 @@ group CreateTransformObservationNTRK1(source src: CTS_Transport, target tgt: Bac
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 8 and groupindex = 0 and item = 'id_2540'
-        or blockindex = 8 and groupindex = 0 and item = 'id_2547'
-        or blockindex = 8 and groupindex = 0 and item = 'id_2548'
-        or blockindex = 8 and groupindex = 0 and item = 'id_2549'
-        or blockindex = 8 and groupindex = 0 and item = 'id_2550'" then
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2540'
+        or blockindex = 8 and groupindex = 0 and itemid = 'id_2547'
+        or blockindex = 8 and groupindex = 0 and itemid = 'id_2548'
+        or blockindex = 8 and groupindex = 0 and itemid = 'id_2549'
+        or blockindex = 8 and groupindex = 0 and itemid = 'id_2550'" then
         {
             src -> tgt.resource = create('Observation') as observation then TransformObservationNTRK1(src, observation);
         };
@@ -511,30 +505,30 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
     {
 
         // Date of Assessment valueDT
-        data.values as values where "blockindex = 8 and groupindex = 0 and item = 'id_2540'" then
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2540'" then
         {
             values.value as dateofassessment -> tgt.effectiveDateTime= dateOp(dateofassessment, 'datetime');
         };         
         // Ergebnis
-        data.values as values where "blockindex = 8 and groupindex = 0 and item = 'id_2547'" then
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2547'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+            
+           
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+           
         };
         // Fusionspartner
-        data.values as values where "blockindex = 8 and groupindex = 0 and item = 'id_2548'" then
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2548'" then
          {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentfusionspartner then
             {
                
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
-                fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
+                fusionspartner -> componentfusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
+                fusionspartner -> componentfusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
         // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 8 and groupindex = 0 and item = 'id_2549'" then
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2549'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
             {
@@ -543,28 +537,13 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
             };
         };
         // 5' Fusionspartner exon
-        data.values as values where "blockindex = 8 and groupindex = 0 and item = 'id_2550'" then
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2550'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
             {
                 fusionspartnerexon -> componentfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
                 fusionspartnerexon -> componentfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
-        };
-    };
-}
-/* ------------------------------ Observation NTRK2-------------------------- */
-group CreateTransformObservationNTRK2(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 9 and groupindex = 0 and item = 'id_2592'
-        or blockindex = 9 and groupindex = 0 and item = 'id_2596'
-        or blockindex = 9 and groupindex = 0 and item = 'id_2597'
-        or blockindex = 9 and groupindex = 0 and item = 'id_2598'
-        or blockindex = 9 and groupindex = 0 and item = 'id_2599'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationNTRK2(src, observation);
         };
     };
 }
@@ -580,30 +559,29 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
     src.operations as operations, operations.data as data then
     {
         // Date of Assessment ValueDT
-        data.values as values where "blockindex = 9 and groupindex = 0 and item = 'id_2592'" then
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2592'" then
         {
             values.value as dateofassessment -> tgt.effectiveDateTime= dateOp(dateofassessment, 'datetime');
         };  
         // Ergebnis
-        data.values as values where "blockindex = 9 and groupindex = 0 and item = 'id_2596'" then
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2596'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+            
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+        
         };
         // Fusionspartner
-        data.values as values where "blockindex = 9 and groupindex = 0 and item = 'id_2597'" then
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2597'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentfusionspartner then
             {
                
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
-                fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
+                fusionspartner -> componentfusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
+                fusionspartner -> componentfusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
          // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 9 and groupindex = 0 and item = 'id_2598'" then
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2598'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
             {
@@ -612,7 +590,7 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
             };
         };
         // 5' Fusionspartner exon
-        data.values as values where "blockindex = 9 and groupindex = 0 and item = 'id_2599'" then
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2599'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
             {
@@ -627,11 +605,11 @@ group CreateTransformObservationNTRK3(source src: CTS_Transport, target tgt: Bac
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2584'
-        or blockindex = 10 and groupindex = 0 and item = 'id_2588'
-        or blockindex = 10 and groupindex = 0 and item = 'id_2589'
-        or blockindex = 10 and groupindex = 0 and item = 'id_2590'
-        or blockindex = 10 and groupindex = 0 and item = 'id_2591'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2584'
+        or blockindex = 10 and groupindex = 0 and itemid = 'id_2588'
+        or blockindex = 10 and groupindex = 0 and itemid = 'id_2589'
+        or blockindex = 10 and groupindex = 0 and itemid = 'id_2590'
+        or blockindex = 10 and groupindex = 0 and itemid = 'id_2591'" then
         {
             src -> tgt.resource = create('Observation') as observation then TransformObservationNTRK2(src, observation);
         };
@@ -649,12 +627,12 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
     src.operations as operations, operations.data as data then
     {
         // Date of Assessment VALUEDT
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2584'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2584'" then
         {
             values.value as dateofassessment -> tgt.effectiveDateTime= dateOp(dateofassessment, 'datetime');
         };         
         // Ergebnis
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2588'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2588'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
             {
@@ -662,7 +640,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
             };
         };
         // Fusionspartner
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2589'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2589'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
@@ -672,7 +650,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
             };
         };
         // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2590'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2590'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
             {
@@ -681,7 +659,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
             };
         };
         // 5' Fusionspartner exon
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2591'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2591'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
             {
@@ -696,11 +674,11 @@ group CreateTransformObservationFGFR1(source src: CTS_Transport, target tgt: Bac
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2576'
-        or blockindex = 10 and groupindex = 0 and item = 'id_2580'
-        or blockindex = 11 and groupindex = 0 and item = 'id_2581'
-        or blockindex = 11 and groupindex = 0 and item = 'id_2582'
-        or blockindex = 11 and groupindex = 0 and item = 'id_2583'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2576'
+        or blockindex = 10 and groupindex = 0 and itemid = 'id_2580'
+        or blockindex = 11 and groupindex = 0 and itemid = 'id_2581'
+        or blockindex = 11 and groupindex = 0 and itemid = 'id_2582'
+        or blockindex = 11 and groupindex = 0 and itemid = 'id_2583'" then
         {
             src -> tgt.resource = create('Observation') as observation then TransformObservationFGFR1(src, observation);
         };
@@ -719,12 +697,12 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
     src.operations as operations, operations.data as data then
     {
         // Date of Assessment VALUEDT
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2576'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2576'" then
         {
             values.value as dateofassessment -> tgt.effectiveDateTime= dateOp(dateofassessment, 'datetime');
         };       
         // Ergebnis
-        data.values as values where "blockindex = 10 and groupindex = 0 and item = 'id_2580'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2580'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
             {
@@ -732,7 +710,7 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
             };
         };
         // Fusionspartner
-        data.values as values where "blockindex = 11 and groupindex = 0 and item = 'id_2581'" then
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2581'" then
         {
             values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {               
@@ -741,18 +719,18 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
             };
         };
          // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 11 and groupindex = 0 and item = 'id_2582'" then
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2582'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
+            values.value as anzahlderfusionsreads -> tgt.component = create('BackboneElement') as componentanzahlderfusionsreads then
             {
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
         // 5' Fusionspartner exon
-        data.values as values where "blockindex = 11 and groupindex = 0 and item = 'id_2583'" then
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2583'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as componentfusionspartnerexon then
             {
                 fusionspartnerexon -> componentfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
                 fusionspartnerexon -> componentfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
@@ -765,11 +743,11 @@ group CreateTransformObservationFGFR2(source src: CTS_Transport, target tgt: Bac
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 12 and groupindex = 0 and item = 'id_2568'
-        or blockindex = 12 and groupindex = 0 and item = 'id_2572'
-        or blockindex = 12 and groupindex = 0 and item = 'id_2573'
-        or blockindex = 12 and groupindex = 0 and item = 'id_2574'
-        or blockindex = 12 and groupindex = 0 and item = 'id_2575'" then
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2568'
+        or blockindex = 12 and groupindex = 0 and itemid = 'id_2572'
+        or blockindex = 12 and groupindex = 0 and itemid = 'id_2573'
+        or blockindex = 12 and groupindex = 0 and itemid = 'id_2574'
+        or blockindex = 12 and groupindex = 0 and itemid = 'id_2575'" then
         {
             src -> tgt.resource = create('Observation') as observation then TransformObservationFGFR2(src, observation);
         };
@@ -787,41 +765,40 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
     src.operations as operations, operations.data as data then
     {
         // Date of Assessment VALUEDT
-        data.values as values where "blockindex = 12 and groupindex = 0 and item = 'id_2568'" then
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2568'" then
         {
             values.value as dateofassessment -> tgt.effectiveDateTime= dateOp(dateofassessment, 'datetime');
         };
         // Ergebnis
-        data.values as values where "blockindex = 12 and groupindex = 0 and item = 'id_2572'" then
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2572'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+            
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            
         };
         // Fusionspartner
-        data.values as values where "blockindex = 12 and groupindex = 0 and item = 'id_2573'" then
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2573'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
+            values.value as fusionspartnert -> tgt.component = create('BackboneElement') as componentfusionspartner then
             {
                
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
-                fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
+                fusionspartner -> componentfusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
+                fusionspartner -> componentfusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
         // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 12 and groupindex = 0 and item = 'id_2574'" then
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2574'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
+            values.value as component -> tgt.component = create('BackboneElement') as componentanzahlderfusionsreads then
             {
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
         // 3' Fusionspartner Exon	
-        data.values as values where "blockindex = 12 and groupindex = 0 and item = 'id_2575'" then
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2575'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as componentfusionspartnerexon then
             {
                 fusionspartnerexon -> componentfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
                 fusionspartnerexon -> componentfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
@@ -834,11 +811,11 @@ group CreateTransformObservationFGFR3(source src: CTS_Transport, target tgt: Bac
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2560'
-        or blockindex = 13 and groupindex = 0 and item = 'id_2564'
-        or blockindex = 13 and groupindex = 0 and item = 'id_2565'
-        or blockindex = 13 and groupindex = 0 and item = 'id_2566'
-        or blockindex = 13 and groupindex = 0 and item = 'id_2567'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2560'
+        or blockindex = 13 and groupindex = 0 and itemid = 'id_2564'
+        or blockindex = 13 and groupindex = 0 and itemid = 'id_2565'
+        or blockindex = 13 and groupindex = 0 and itemid = 'id_2566'
+        or blockindex = 13 and groupindex = 0 and itemid = 'id_2567'" then
         {
             src -> tgt.resource = create('Observation') as observation then TransformObservationFGFR3(src, observation);
         };
@@ -856,41 +833,40 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
     src.operations as operations, operations.data as data then
     {
         // Date of Assessment VALUEDT
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2560'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2560'" then
         {
             values.value as dateofassessment -> tgt.effectiveDateTime= dateOp(dateofassessment, 'datetime');
         }; 
         // Ergebnis
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2564'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2564'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+            
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            
         };
         // Fusionspartner
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2565'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2565'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartner then
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentfusionspartner then
             {
                
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
-                fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
+                fusionspartner -> componentfusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes', fusionspartner);
+                fusionspartner -> componentfusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
         // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2566'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2566'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
+            values.value as anzahlderfusionsreads -> tgt.component = create('BackboneElement') as componentanzahlderfusionsreads then
             {
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
         // 3' Fusionspartner Exon	
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2567'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2567'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentFusionspartnerExon then
+            values.value as fusionspartnerexon -> tgt.component = create('BackboneElement') as componentfusionspartnerexon then
             {
                 fusionspartnerexon -> componentfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(fusionspartnerexon, integer);
                 fusionspartnerexon -> componentfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
@@ -903,13 +879,13 @@ group CreateTransformObservationSonstigeFusionNGS(source src: CTS_Transport, tar
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 14 and groupindex = 0 and item = 'id_2246'
-        or blockindex = 14 and groupindex = 0 and item = 'id_2254'
-        or blockindex = 14 and groupindex = 0 and item = 'id_2255'
-        or blockindex = 14 and groupindex = 0 and item = 'id_2256'
-        or blockindex = 14 and groupindex = 0 and item = 'id_2257'
-        or blockindex = 14 and groupindex = 0 and item = 'id_2258'
-        or blockindex = 14 and groupindex = 0 and item = 'id_2259'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2246'
+        or blockindex = 14 and groupindex = 0 and itemid = 'id_2254'
+        or blockindex = 14 and groupindex = 0 and itemid = 'id_2255'
+        or blockindex = 14 and groupindex = 0 and itemid = 'id_2256'
+        or blockindex = 14 and groupindex = 0 and itemid = 'id_2257'
+        or blockindex = 14 and groupindex = 0 and itemid = 'id_2258'
+        or blockindex = 14 and groupindex = 0 and itemid = 'id_2259'" then
         {
             src -> tgt.resource = create('Observation') as observation then TransformObservationSonstigeFusionNGS(src, observation);
         };
@@ -929,61 +905,60 @@ group TransformObservationSonstigeFusionNGS(source src: CTS_Transport, target tg
     {
 
         // Date of Assessment VALUEDT
-        data.values as values where "blockindex = 14 and groupindex = 0 and item = 'id_2246" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2246" then
         {
             values.value as dateofassessment -> tgt.effectiveDateTime= dateOp(dateofassessment, 'datetime');
         }; 
         // Ergebnis
-        data.values as values where "blockindex = 14 and groupindex = 0 and item = 'id_2254'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2254'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentErgebnis then
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
-            };
+            
+            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            
         };
         // erster Fusionspartner
-        data.values as values where "blockindex = 14 and groupindex = 0 and item = 'id_2255'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2255'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentersterfusionspartner then
+            values.value as ersterfusionspartner -> tgt.component = create('BackboneElement') as componentersterfusionspartner then
             {
-                esterfusionspartner -> componentersterfusionspartner.valueInteger = create('Integer') as integer then MapValue(esterfusionspartner, integer);
-                esterfusionspartner -> componentersterfusionspartner.code = cc('http://loinc.org', '48018-6');
+                ersterfusionspartner -> componentersterfusionspartner.valueInteger = create('Integer') as integer then MapValue(ersterfusionspartner, integer);
+                ersterfusionspartner -> componentersterfusionspartner.code = cc('http://loinc.org', '48018-6');
             };
         };
         // zweiter Fusionspartner
-        data.values as values where "blockindex = 14 and groupindex = 0 and item = 'id_2256'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2256'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as ersterfusionspartner then
+            values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentfusionspartner then
             {
-                esterfusionspartner -> componentersterfusionspartner.valueInteger = create('Integer') as integer then MapValue(esterfusionspartner, integer);
-                esterfusionspartner -> componentersterfusionspartner.code = cc('http://loinc.org', '48018-6');
+                fusionspartner -> componentfusionspartner.valueInteger = create('Integer') as integer then MapValue(fusionspartner, integer);
+                fusionspartner -> componentfusionspartner.code = cc('http://loinc.org', '48018-6');
             };
         };
         // Anzahl der Fusionsreads
-        data.values as values where "blockindex = 14 and groupindex = 0 and item = 'id_2257'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2257'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as componentAnzahlderFusionsreads then
+            values.value as anzahlderfusionsreads-> tgt.component = create('BackboneElement') as componentanzahlderfusionsreads then
             {
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.valueInteger = create('Integer') as integer then MapValue(anzahlderfusionsreads, integer);
                 anzahlderfusionsreads-> componentanzahlderfusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
         // Exon erster Fusionspartner
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2258'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2258'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as ersterfusionspartnerexon then
+            values.value as ersterfusionspartner -> tgt.component = create('BackboneElement') as componentersterfusionspartnerexon then
             {
-                esterfusionspartner -> componentersterfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(esterfusionspartner, integer);
-                esterfusionspartner -> componentersterfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
+                ersterfusionspartnerexon -> componentersterfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(ersterfusionspartner, integer);
+                ersterfusionspartnerexon -> componentersterfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
             };
         }; 
         // Exon zweiter Fusionspartner
-        data.values as values where "blockindex = 13 and groupindex = 0 and item = 'id_2259'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2259'" then
         {
-            values.value as component -> tgt.component = create('BackboneElement') as ersterfusionspartnerexon then
+            values.value as ersterfusionspartner -> tgt.component = create('BackboneElement') as componentersterfusionspartner then
             {
-                esterfusionspartner -> componentersterfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(esterfusionspartner, integer);
-                esterfusionspartner -> componentersterfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
+                ersterfusionspartner -> componentersterfusionspartnerexon.valueInteger = create('Integer') as integer then MapValue(ersterfusionspartner, integer);
+                ersterfusionspartner -> componentersterfusionspartnerexon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
             };
         };      
     };
@@ -1018,7 +993,7 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: EpisodeOfCa
         //Abschluss
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2462'" then
         {
-            values.value as value -> tgt.status as status, status.extension as extension, extension.url = 'http://uk-                                koeln.de/fhir/Extension/statusAbschluss',
+            values.value as value -> tgt.status as status, status.extension as extension, extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss',
                                      extension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/statusAbschluss', value, value);
         };
     };
