@@ -1,11 +1,6 @@
 /// version = 0.1
 /// title = "nNGM: Mapping Histologie FHIR"
 
-/*
-TODO
-- Double extension for element 'status' is not working
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR" = nNGM_Mapping_HistologieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
@@ -333,24 +328,39 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
         {
             values.value as value -> tgt.status = cast(value, 'FHIR.code');
         };
-        
-        // Extension statusabschluss
+    };
+
+    src then TransformHistologieStatusExtension(src, tgt);
+}
+
+/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
+group TransformHistologieStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Status des Abschlusses
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
         {
-            values.value as value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.extension as statusExtension then 
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
             {
-                value -> statusExtension.url = 'status';
-                value -> statusExtension.valueCodeableConcept as vcc, vcc.coding = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss', value);
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
             };
         };
 
-        // Extension datumAbschluss
+        //Datum des Abschlusses
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
         {
-            values.value as value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.extension as datumExtension then 
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
             {
-                value -> datumExtension.url = 'datum';
-                value -> datumExtension.valueDate = dateOp(value, 'dateTime');
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
             };
         };
     };
