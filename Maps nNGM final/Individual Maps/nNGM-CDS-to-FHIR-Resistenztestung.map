@@ -1,0 +1,361 @@
+/// version = 0.1
+/// title = "nNGM: Mapping Resistenztestung FHIR"
+/// CTS -> FHIR
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR" = nNGM_Mapping_ResistenztestungFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
+uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+
+group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+{
+    //metadata
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'collection';
+
+    src then CreateSpecimen(src, bundle);
+    src then CreateObservationKrebserkrankung(src, bundle);
+    src then CreateObservationsResistenztestung(src, bundle);
+}
+
+/* ------------------------------ Check whether specimen needs to be created ---------------------------- */ 
+group CreateSpecimen(source src: CTS_Transport, target bundle: Bundle) 
+{
+    // Check whether specimen needs to be created and create it if that is the case
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            src -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen); 
+        };
+    };
+}
+
+/* ------------------------------ Specimen ---------------------------- */ 
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+{ 
+    // Metadata
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Type
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
+ 
+    // Patient reference 
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    
+    src.operations as operations, operations.data as data then 
+    { 
+        // Biopsienummer -> tgt.identifier.value 
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601'" then 
+        { 
+            values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value); 
+        }; 
+    }; 
+} 
+
+/* ------------------------------ Check whether ObservationKrebserkrankung needs to be created ---------------------------- */ 
+group CreateObservationKrebserkrankung(source src: CTS_Transport, target bundle: Bundle) 
+{
+    // Check whether specimen needs to be created and create it if that is the case
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1573'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_2397'" then
+        {
+            src -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationKrebserkrankung(src, observation);
+        };
+    };
+}
+
+/* ------------------------------ Observation Progress/Rezidiv Krebserkrankung ---------------------------- */
+group TransformObservationKrebserkrankung(source src: CTS_Transport, target tgt: Observation)
+{
+    // Metadata
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/progress-relapse';
+
+    // Observation.status
+    src -> tgt.status = 'final';
+
+    // Observation.category
+    src -> tgt.category = cc('http://hl7.org/fhir/ValueSet/observation-category', 'survey');
+
+    // Observation.code
+    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C25630');
+
+    // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Progressdatum -> tgt.effectiveDateTime
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2397'" then
+        {
+             values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
+        };
+    };
+
+    // Rezidiv/Progress (Ja/Nein) -> valueBoolean 
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1573'" then
+        {
+            values.value as value where "value = 'yes'" then
+            {
+                value -> tgt.valueBoolean = cast(true, 'FHIR.boolean');
+            };
+
+            values.value as value where "value = 'no'" then
+            {
+                value -> tgt.valueBoolean = cast(false, 'FHIR.boolean');
+            };
+        };
+    };
+}
+
+/* ------------------------------ Check whether therapy was carried out and create an observation for it if that is the case ---------------------------- */
+group CreateObservationsResistenztestung(source src: CTS_Transport, target bundle: Bundle)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1434'" then
+        {
+            values.value as value where "value = 'EGFR'" then
+            {
+                src -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationEGFR(src, observation);
+            };
+
+            values.value as value where "value = 'ALK'" then
+            {
+                src -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationALK(src, observation);
+            };
+
+            values.value as value where "value = 'ROS1'" then
+            {
+                src -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationROS1(src, observation);
+            };
+        };
+    };
+}
+
+/* ------------------------------ Observation EGFR ---------------------------- */
+group TransformObservationEGFR(source src: CTS_Transport, target tgt: Observation)
+{
+    // Metadata
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tki-resistenz-egfr';
+
+    // Observation.status
+    src -> tgt.status = 'final';
+
+    // Observation.category
+    src -> tgt.category = cc('http://ncit.nci.nih.gov', 'C1967');
+
+    // Observation.code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/tki-resistenz', 'C134501');
+
+    // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Mutations
+    tgt then TransformMutationsResistenztestung(src, tgt);
+
+    // Access data
+    src.operations as operations, operations.data as data then
+    {
+        // Date Of Assessement -> tgt.effectiveDateTime
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2502'" then
+        {
+             values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
+        };
+
+        // Ros1-Fusion.FusionPartner
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2504'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as fusionPartner, fusionPartner.code = cc('http://ncit.nci.nih.gov', 'C28510'), fusionPartner.valueString = value;
+        };
+
+        // Therapies
+        // 1. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1441'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 1;
+        };
+    
+        // 2. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1442'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 2;
+        };
+    
+        // 3. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1443'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 3;
+        };
+    
+        // 4. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1444'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 4;
+        };
+    };
+}
+
+/* ------------------------------ Observation ALK ---------------------------- */
+group TransformObservationALK(source src: CTS_Transport, target tgt: Observation)
+{
+    // Metadata
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tki-resistenz-alk';
+
+    // Observation.status
+    src -> tgt.status = 'final';
+
+    // Observation.category
+    src -> tgt.category = cc('http://ncit.nci.nih.gov', 'C1967');
+
+    // Observation.code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/tki-resistenz', 'C142114');
+
+    // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Mutations
+    tgt then TransformMutationsResistenztestung(src, tgt);
+
+    // Access data
+    src.operations as operations, operations.data as data then
+    {
+        // Date Of Assessement -> tgt.effectiveDateTime
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2502'" then
+        {
+             values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
+        };
+
+        // Ros1-Fusion.FusionPartner
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2504'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as fusionPartner, fusionPartner.code = cc('http://ncit.nci.nih.gov', 'C28510'), fusionPartner.valueString = value;
+        };
+
+        // Therapies
+        // 1. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1447'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 1;
+        };
+    
+        // 2. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1448'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 2;
+        };
+    
+        // 3. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1449'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 3;
+        };
+    
+        // 4. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1450'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 4;
+        };
+    };
+}
+
+/* ------------------------------ Observation ROS1 ---------------------------- */
+group TransformObservationROS1(source src: CTS_Transport, target tgt: Observation)
+{
+    // Metadata
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tki-resistenz-ros1';
+
+    // Observation.status
+    src -> tgt.status = 'final';
+
+    // Observation.category
+    src -> tgt.category = cc('http://ncit.nci.nih.gov', 'C1967');
+
+    // Observation.code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/tki-resistenz', 'C131071');
+
+    // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Mutations
+    tgt then TransformMutationsResistenztestung(src, tgt);
+
+    // Access data
+    src.operations as operations, operations.data as data then
+    {
+        // Date Of Assessement -> tgt.effectiveDateTime
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2502'" then
+        {
+             values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
+        };
+
+        // Ros1-Fusion.FusionPartner
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2506'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as fusionPartner, fusionPartner.code = cc('http://ncit.nci.nih.gov', 'C28510'), fusionPartner.valueString = value;
+        };
+
+        // Therapies
+        // 1. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1453'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 1;
+        };
+    
+        // 2. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1454'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 2;
+        };
+    
+        // 3. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1455'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 3;
+        };
+    
+        // 4. Therapie
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1456'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 4;
+        };
+    };
+}
+
+/* ------------------------------ Add mutations to observation ---------------------------- */
+// The mutations are the same for each observation so we can separate them into groups and then simply call them for each observation
+group TransformMutationsResistenztestung(source src: CTS_Transport, target tgt: Observation)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Exon
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1436'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as exon, exon.valueString = value, exon.code = cc('http://ncit.nci.nih.gov', 'C13231');
+        };
+    
+        // HGVS c
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1437'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as hgvsc, hgvsc.valueString = value, hgvsc.code = cc('http://loinc.org', '48004-6');
+        };
+
+        // HGVS p
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1438'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as hgvsp, hgvsp.valueString = value, hgvsp.code = cc('http://loinc.org', '48005-3');
+        };
+    };
+}
