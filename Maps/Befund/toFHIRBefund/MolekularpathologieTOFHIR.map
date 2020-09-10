@@ -4,15 +4,29 @@
 /*
 TODO
 
-ORGANIZATION -> CDS FIELD: SOP-Versionsnummer des Standorts -> Mapping this to type.text is not correct. Its also a dropdown in the formular. Is there a Valueset out there
-                                                                to map this? 
-                                                                SOP version to extension
+separation of ish and fish 
+
 
 OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/ish -> The amplification-level component has a false binding and the values are not matching the formular.
 
-OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/fish -> hersteller componenet has the false valueset binding, should be "http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho"
-OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/fish -> valueCodeableConcept has the false valueset binding, should be "http://uk-koeln.de/fhir/ValueSet/ergebnis"
 OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/fish -> The amplification-level component has a false binding and the values are not matching the formular.
+
+Amplifikation high-level = LA9193-9
+amplification intermediate-level = LA8982-6
+Amplifikation moderate-level = LA9194-7
+negativ = LA32-8
+nicht auswertbar = LA11884-6
+
+OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/fish -> hersteller componenet has the false valueset binding, should be "http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho"
+
+
+OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/fish -> valueCodeableConcept has the false valueset binding, should be "http://uk-koeln.de/fhir/ValueSet/ergebnis"
+positiv = LA6576-8
+negativ = LA6577-6
+nicht auswertbar = 
+positiv (high-level amplification) = ?
+positiv (moderate-level amplification) = ?
+
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR" = nNGM_Mapping_MolekularphatologieFHIR
@@ -23,8 +37,10 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    src -> bundle.entry as entry then CreateEpisodeOfCare(src, entry);
-    src -> bundle.entry as entry then CreateOrganization(src, entry);
+    src -> bundle.entry as entry then CreateEpisodeOfCareMP(src, entry);
+    src -> bundle.entry as entry then CreateOrganizationMP(src, entry);
+    src -> bundle.entry as entry then CreateServiceRequestMP(src, entry);
+    
     src -> bundle.entry as entry then CreateALKCISHObservation(src, entry);
     src -> bundle.entry as entry then CreateALKFISHObservation(src, entry);
     src -> bundle.entry as entry then CreateMETCISHObservation(src, entry);
@@ -37,7 +53,7 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 
 
 /*-----------------EpisodeOfCare-----------------------*/
-group CreateEpisodeOfCare(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateEpisodeOfCareMP(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
@@ -54,24 +70,26 @@ group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCar
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
 
-    //fixed status
+    // fixed status
     src -> tgt.status = 'active';
 
     // Patient reference
     src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //Untersuchung-ID
+    // Untersuchung-ID -> identifier.value
     src.operations as operations, operations.data as data then 
     {
          data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'assessment_id'" then
         {
-            values.value as value -> tgt.identifier as identifier, identifier.value = value;
+            values.value as value -> tgt.identifier as identifier, 
+                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer', 
+                                     identifier.value = value;
         };
     };
 }
 
 /*-----------------Organization-----------------------*/
-group CreateOrganization(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateOrganizationMP(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
@@ -89,7 +107,7 @@ group TransformOrganization(source src: CTS_Transport, target tgt: Organization)
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site';
 
-    //Standort
+    //Standort --> name
     src.operations as operations, operations.data as data then 
     {
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
@@ -97,13 +115,78 @@ group TransformOrganization(source src: CTS_Transport, target tgt: Organization)
             values.value as value -> tgt.name = value;
         };
     };
+}
 
-    //SOP-Versionsnummer des Standorts
-    src.operations as operations, operations.data as data then 
+/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
+group CreateServiceRequestMP(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2462'
+        or blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
         {
-            values.value as value -> tgt.type as type, type.text = value;
+            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequest(src, serviceRequest);
+        };
+    };
+}
+
+/* -------------------------------------- Service Request -------------------------------------------- */
+group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    src.operations as operations, operations.data as data then
+    {
+       
+        //Durchfuehrung
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
+        {
+            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            {
+                value -> tgt.status = 'active' collate;
+            };
+            values.value as value where "$this.value = 'abgeschlossen'" then 
+            {
+                value -> tgt.status = 'completed' collate;
+            };
+        };
+    };
+
+    // Extensions
+    src then TransformMPStatusExtension(src, tgt);
+}
+
+/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
+group TransformMPStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Status des Abschlusses
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
+            };
+        };
+
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
+            };
         };
     };
 }
@@ -138,6 +221,18 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
     src then MapCISHCategory(src, tgt);
     src then MapALKCode(src, tgt);
 
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -158,7 +253,7 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
@@ -217,6 +312,18 @@ group TransformALKFISHObservation(source src: CTS_Transport, target tgt: Observa
     src then MapFISHCategory(src, tgt);
     src then MapALKCode(src, tgt);
 
+    //  SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -237,7 +344,7 @@ group TransformALKFISHObservation(source src: CTS_Transport, target tgt: Observa
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
@@ -308,6 +415,18 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
     src then MapCISHCategory(src, tgt);
     src then MapMETCode(src, tgt);
 
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -328,7 +447,7 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
@@ -350,7 +469,7 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
         {
             values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
             {
-                amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', amplifikation, amplifikation);
+                amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', amplifikation, amplifikation);
                 amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
             };
         };
@@ -395,6 +514,18 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
     src then MapFISHCategory(src, tgt);
     src then MapMETCode(src, tgt);
 
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -415,7 +546,7 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
@@ -481,6 +612,7 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
             };
         };
     };
+
     //gezaehlte Tumorzellen
     src.operations as operations, operations.data as data then
     {
@@ -589,6 +721,18 @@ group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observa
     src then MapCISHCategory(src, tgt);
     src then MapRETCode(src, tgt);
 
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -609,7 +753,7 @@ group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observa
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
@@ -668,6 +812,18 @@ group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observa
     src then MapFISHCategory(src, tgt);
     src then MapRETCode(src, tgt);
 
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -688,7 +844,7 @@ group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observa
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
@@ -760,6 +916,18 @@ group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observ
     src then MapCISHCategory(src, tgt);
     src then MapROS1Code(src, tgt);
 
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -780,7 +948,7 @@ group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observ
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
@@ -852,6 +1020,18 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
     src then MapFISHCategory(src, tgt);
     src then MapROS1Code(src, tgt);
 
+    //SOP-Versionsnummer des Standorts
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            {
+                sop -> sopcomponent.valueString = sop;
+            };
+        };
+    };
+
     //Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
@@ -872,7 +1052,7 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as herstellercomponent then
             {
-                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
+                hersteller -> herstellercomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho', hersteller);
                 hersteller -> herstellercomponent.code = cc('http://ncit.nci.nih.gov', 'C25392');
             };
         };
