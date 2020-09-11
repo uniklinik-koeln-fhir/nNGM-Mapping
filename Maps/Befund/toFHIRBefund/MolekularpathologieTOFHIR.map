@@ -4,21 +4,10 @@
 /*
 TODO
 
-OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/ish -> The amplification-level component has a false binding and the values are not matching the formular.
-OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/fish -> The amplification-level component has a false binding and the values are not matching the formular.
-
-Amplifikation high-level = LA9193-9
-amplification intermediate-level = LA8982-6
-Amplifikation moderate-level = LA9194-7
-negativ = LA32-8
-nicht auswertbar = LA11884-6
-
-OBSERVATION http://uk-koeln.de/fhir/StructureDefinition/Observation/fish -> valueCodeableConcept has the false valueset binding, should be "http://uk-koeln.de/fhir/ValueSet/ergebnis"
-positiv = LA6576-8
-negativ = LA6577-6
-nicht auswertbar = LA18198-4
-positiv (high-level amplification) = ?
-positiv (moderate-level amplification) = ?
+Remove Organization sections depending on feedback PW/AZ
+Modify MET CISH instance of ergebnis to facilitate difference between 
+ positiv (high-level amplification)
+ positiv (moderate-level amplification) 
 
 */
 
@@ -133,6 +122,31 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
+    // Intent
+    src -> tgt.intent = cast('proposal', 'FHIR.code');
+ 
+    // Code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-code', 'molekularpathologie');
+
+    // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // AuthoredOn
+    src -> tgt.authoredOn as ao, 
+            ao.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Category
+    src -> tgt.category as cat, 
+            cat.coding as coding, 
+            coding.code as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+
+
     src.operations as operations, operations.data as data then
     {
        
@@ -154,7 +168,7 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
     src then TransformMPStatusExtension(src, tgt);
 }
 
-/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
+/* -------------------------------------- Create double extensions for Fast Track --------------------------------------------*/
 group TransformMPStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
 {
     src.operations as operations, operations.data as data then
@@ -207,17 +221,34 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    //methode
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
+
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
     src then MapALKDateOfAssessment(src, tgt);
     src then MapALKPhaenotyp(src, tgt);
-    src then MapCISHCategory(src, tgt);
     src then MapALKCode(src, tgt);
 
-    //SOP-Versionsnummer des Standorts
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
+
+    // SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
     {
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
@@ -225,11 +256,13 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
+
             };
         };
     };
 
-    //Kit Bezeichnung
+    // Kit Bezeichnung
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2108'" then
@@ -242,7 +275,7 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
         };
     };
 
-    //Hersteller
+    // Hersteller
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2109'" then
@@ -255,16 +288,29 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
         };
     };
 
-    //Ergebnis
+    // Ergebnis
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2112'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
-    //Positive Tumorzellen
+    // Positive Tumorzellen
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2113'" then
@@ -299,14 +345,32 @@ group TransformALKFISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
+    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
+
     src then MapALKDateOfAssessment(src, tgt);
     src then MapALKPhaenotyp(src, tgt);
-    src then MapFISHCategory(src, tgt);
     src then MapALKCode(src, tgt);
+
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
 
     //  SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -316,6 +380,7 @@ group TransformALKFISHObservation(source src: CTS_Transport, target tgt: Observa
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
     };
@@ -351,7 +416,20 @@ group TransformALKFISHObservation(source src: CTS_Transport, target tgt: Observa
     {
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2119'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
@@ -402,14 +480,33 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
+
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
+
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
     src then MapMETDateOfAssessment(src, tgt);
     src then MapMETPhaenotyp(src, tgt);
-    src then MapCISHCategory(src, tgt);
     src then MapMETCode(src, tgt);
+
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -419,6 +516,7 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
     };
@@ -454,7 +552,21 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
     {
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2147'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv (high-level amplification)'
+                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
@@ -463,10 +575,34 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
     {
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2148'" then
         {
-            values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+            values.value where "$this.value = 'Amplifikation high-level'" then 
             {
-                amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', amplifikation, amplifikation);
-                amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA9193-9', 'High');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
+            };
+
+            values.value where "$this.value = 'Amplifikation moderate-level'" then 
+            {
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA8982-6', 'Medium');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
+            };
+
+            values.value where "$this.value = 'keine Amplifikation'" then 
+            {
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA32-8', 'no');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
             };
         };
     };
@@ -501,14 +637,32 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
+
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
     src then MapMETDateOfAssessment(src, tgt);
     src then MapMETPhaenotyp(src, tgt);
-    src then MapFISHCategory(src, tgt);
     src then MapMETCode(src, tgt);
+
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -518,6 +672,7 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
     };
@@ -553,7 +708,21 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
     {
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2154'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv (high-level amplification)'
+                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
@@ -562,10 +731,55 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
     {
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2155'" then
         {
-            values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+            
+        values.value where "$this.value = 'Amplifikation high-level'" then 
             {
-                amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', amplifikation, amplifikation);
-                amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA9193-9', 'High');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
+            };
+
+            values.value where "$this.value = 'Amplifikation intermediate-level'" then 
+            {
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA8982-6', 'Medium');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA32-8', 'no');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
+            };
+
+            values.value where "$this.value = 'Amplifikation low-level'" then 
+            {
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA9194-7', 'Low');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
+                {
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA11884-6', 'Indeterminate');
+
+                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
+                };
             };
         };
     };
@@ -708,14 +922,32 @@ group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
+
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
     src then MapRETDateOfAssessment(src, tgt);
     src then MapRETPhaenotyp(src, tgt);
-    src then MapCISHCategory(src, tgt);
     src then MapRETCode(src, tgt);
+
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -725,6 +957,7 @@ group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observa
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
     };
@@ -760,7 +993,21 @@ group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observa
     {
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2191'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv (high-level amplification)'
+                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
@@ -799,15 +1046,34 @@ group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
+    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
+
     src then MapRETDateOfAssessment(src, tgt);
     src then MapRETPhaenotyp(src, tgt);
-    src then MapFISHCategory(src, tgt);
     src then MapRETCode(src, tgt);
 
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
+
+    
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
     {
@@ -816,6 +1082,7 @@ group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observa
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
     };
@@ -851,7 +1118,21 @@ group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observa
     {
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2198'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv (high-level amplification)'
+                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
@@ -903,14 +1184,32 @@ group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observ
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
+
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
     src then MapROS1DateOfAssessment(src, tgt);
     src then MapROS1Phaenotyp(src, tgt);
-    src then MapCISHCategory(src, tgt);
     src then MapROS1Code(src, tgt);
+
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -920,6 +1219,7 @@ group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observ
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
     };
@@ -955,7 +1255,21 @@ group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observ
     {
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2225'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv (high-level amplification)'
+                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
@@ -1007,14 +1321,32 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
+    // Status 
+    src -> tgt.status = cast('final', 'FHIR.code');
 
-    src then MapObservationStatus(src, tgt);
-    src then MapObservationAbschluss(src, tgt);
+    // Category 
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+
+    // methode
+    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
+
     src then MapROS1DateOfAssessment(src, tgt);
     src then MapROS1Phaenotyp(src, tgt);
-    src then MapFISHCategory(src, tgt);
     src then MapROS1Code(src, tgt);
+
+    // Netzwerkzentrum
+    src.operations as operations, operations.data as data then 
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                nz -> nzcomponent.valueString = nz;
+                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+
+            };
+        };
+    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -1024,6 +1356,7 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
             values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
             {
                 sop -> sopcomponent.valueString = sop;
+                sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
     };
@@ -1059,7 +1392,21 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
     {
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2233'" then
         {
-            values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ergebnis', ergebnis, ergebnis);
+            values.value where "$this.value = 'positiv (high-level amplification)'
+                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
         };
     };
 
@@ -1100,23 +1447,10 @@ group MapObservationStatus(source src: CTS_Transport, target tgt: Observation)
     {
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
         {
-            values.value as value -> tgt.status;
+            values.value as value -> tgt.status = cast('final', 'FHIR.code');
         };
     };
 }
-
-group MapObservationAbschluss(source src: CTS_Transport, target tgt: Observation)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
-        {
-            values.value as value -> tgt.status as status, status.extension as extension, extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss',
-                                                                                            extension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/statusAbschluss', value, value);
-        };
-    };
-}
-
 
 group MapALKDateOfAssessment(source src: CTS_Transport, target tgt: Observation)
 {
@@ -1255,30 +1589,6 @@ group MapROS1Phaenotyp(source src: CTS_Transport, target tgt: Observation)
     };
 }
 
-//Categories
-group MapCISHCategory(source src: CTS_Transport, target tgt: Observation)
-{
-    //CISH category
-    src -> tgt.category as category then
-    {
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
-                                                                coding.code = 'laboratory';
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
-                                                                coding.code = 'CISH';                                                     
-    };
-}
-
-group MapFISHCategory(source src: CTS_Transport, target tgt: Observation)
-{
-    //FISH category
-    src -> tgt.category as category then
-    {
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
-                                                                coding.code = 'laboratory';
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/obs-methods',
-                                                                coding.code = 'FISH';                                                     
-    };
-}
 
 //Codes
 group MapALKCode(source src: CTS_Transport, target tgt: Observation)
