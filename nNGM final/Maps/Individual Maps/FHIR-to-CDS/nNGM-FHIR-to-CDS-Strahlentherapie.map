@@ -1,0 +1,436 @@
+/// version = 0.1
+/// title = "nNGM: Sonstige Therapie - FHIR to CTS"
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCTS" = nNGM_Mapping_StrahlentherapieCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group TransformStrahlentherapieCTS(source src: Bundle, target tgt: BackboneElement)
+{
+    // Metadata
+    src -> tgt.crfid = 'ST1';
+    src -> tgt.type = 'save';
+
+    // Transform Checkboxes
+    src then TransformStatusCheckboxes(src, tgt);
+
+    src.entry as entry then
+    {
+        //----------------------   EpisodeOfCare   --------------------
+        entry.resource as procedure where "resource is Procedure" then
+        {
+            //------------[DURCHFÜHRUNG]------------
+            //Therapiebeginn -> 0, 0, id_1185
+            procedure -> tgt.data as data then
+            {
+                procedure.performedPeriod as performedPeriod, 
+                    performedPeriod.start as start then
+                {
+                    procedure -> data.blockindex = 0;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1185';
+                    start -> data.values as values, values.value = start;
+                };
+            };
+
+            //Therapieende -> 0, 0, id_1186
+            procedure -> tgt.data as data then
+            {
+                procedure.performedPeriod as performedPeriod, 
+                    performedPeriod.end as end then
+                {
+                    procedure -> data.blockindex = 0;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1186';
+                    end -> data.values as values, values.value = end;
+                };
+            };
+
+            //Durchführende Einrichtung -> 0, 0, id_1182
+            procedure -> tgt.data as data then
+            {
+                procedure.performer as performer, 
+                    performer.actor as actor,
+                    actor.display as display then
+                {
+                    procedure -> data.blockindex = 0;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1182';
+                    display -> data.values as values, values.value = display;
+                };
+            };
+
+            //------------[THERAPIEMERKMALE]------------
+            //Bestrahlungsziel -> 1, 0, id_1181
+            procedure -> tgt.data as data then
+            {
+                procedure.bodySite as bodySite, 
+                    bodySite.coding as coding,
+                    coding.code as code where "code = 'not-applicable'" then
+                {
+                    procedure -> data.blockindex = 1;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1181';
+                    code -> data.values as values, values.value = 'N/A';
+                };
+                procedure.bodySite as bodySite, 
+                    bodySite.coding as coding,
+                    coding.code as code where "code != 'not-applicable'" then
+                {
+                    procedure -> data.blockindex = 1;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1181';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+
+            //Therapeutische Intention -> 1, 0, id_1183
+            procedure -> tgt.data as data then
+            {
+                procedure.reasonCode as reasonCode, 
+                    reasonCode.coding as coding,
+                    coding.code as code where "code = 'unknown'" then
+                {
+                    procedure -> data.blockindex = 1;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1183';
+                    code -> data.values as values, values.value = 'N/A';
+                };
+                procedure.reasonCode as reasonCode, 
+                    reasonCode.coding as coding,
+                    coding.code as code where "code != 'unknown'" then
+                {
+                    procedure -> data.blockindex = 1;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1183';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+
+            //Art der Bestrahlung -> 1, 0, id_1196
+            procedure -> tgt.data as data then
+            {
+                procedure.code as code, 
+                    code.extension as extension,
+                    extension.valueCodeableConcept as valueCodeableConcept, 
+                    valueCodeableConcept.coding as coding, 
+                    coding.code as code where "code = 'unknown'" then
+                {
+                    procedure -> data.blockindex = 1;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1196';
+                    code -> data.values as values, values.value = 'N/A';
+                };
+                procedure.code as code, 
+                    code.extension as extension,
+                    extension.valueCodeableConcept as valueCodeableConcept, 
+                    valueCodeableConcept.coding as coding, 
+                    coding.code as code where "code != 'unknown'" then
+                {
+                    procedure -> data.blockindex = 1;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1196';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+
+            //Dosis
+            //Einzeldosis (Gy) -> 1, 0, id_1198
+            procedure -> tgt.data as data then
+            {
+                procedure.extension as dosis, 
+                    dosis.extension as einzeldosis,
+                    einzeldosis.url as url where "url = 'einzeldosis'" then
+                {
+                    einzeldosis.valueQuantity as valueQuantity, 
+                    valueQuantity.value as value then
+                    {
+                        procedure -> data.blockindex = 1;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1198';
+                        value -> data.values as values, values.value = value;
+                    };
+                    einzeldosis.valueQuantity as valueQuantity, 
+                    valueQuantity.code as unit then
+                    {
+                        unit -> data.values as values collate, values.unit = unit;
+                    };
+                };
+            };
+
+            //Gesamtdosis (Gy) -> 1, 0, id_1199
+            procedure -> tgt.data as data then
+            {
+                procedure.extension as dosis, 
+                    dosis.extension as gesamtdosis,
+                    gesamtdosis.url as url where "url = 'gesamtdosis'" then
+                {
+                    gesamtdosis.valueQuantity as valueQuantity, 
+                    valueQuantity.value as value then
+                    {
+                        procedure -> data.blockindex = 1;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1199';
+                        value -> data.values as values, values.value = value;
+                    };
+                    gesamtdosis.valueQuantity as valueQuantity, 
+                    valueQuantity.code as unit then
+                    {
+                        unit -> data.values as values collate, values.unit = unit;
+                    };
+                };
+            };
+
+            //Boost
+            //Boost durchgeführt -> 1, 0, id_1363
+            procedure -> tgt.data as data then
+            {
+                procedure.extension as dosis, 
+                    dosis.extension as boost,
+                    boost.url as url where "url = 'boost'" then
+                {
+                    boost.valueBoolean as valueBoolean where "valueBoolean = true" then
+                    {
+                        procedure -> data.blockindex = 1;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1363';
+                        procedure -> data.values as values, values.value = 'ja';
+                    };
+                    boost.valueBoolean as valueBoolean where "valueBoolean = false" then
+                    {
+                        procedure -> data.blockindex = 1;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1363';
+                        procedure -> data.values as values, values.value = 'nein';
+                    };
+                };
+                    procedure.extension as dosis, 
+                    dosis.extension as boost,
+                    boost.url as url where "url = 'boostdosisInGesamtdosis'" then
+                {
+                    boost.valueBoolean as valueBoolean where "valueBoolean = true" then
+                    {
+                        procedure -> data.blockindex = 1;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1363';
+                        procedure -> data.values as values, values.value = 'ja, Boostdosis in Gesamtdosis enthalten';
+                    };
+                };
+            };
+
+            //Boostdosis (Gy) -> 1, 0, id_1364
+            procedure -> tgt.data as data then
+            {
+                procedure.extension as dosis, 
+                    dosis.extension as boostdosis,
+                    boostdosis.url as url where "url = 'gesamtdosis'" then
+                {
+                    boostdosis.valueQuantity as valueQuantity, 
+                    valueQuantity.value as value then
+                    {
+                        procedure -> data.blockindex = 1;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1364';
+                        value -> data.values as values, values.value = value;
+                    };
+                    boostdosis.valueQuantity as valueQuantity, 
+                    valueQuantity.code as unit then
+                    {
+                        unit -> data.values as values collate, values.unit = unit;
+                    };
+                };
+            };
+
+            //Bemerkungen-> 3, 0, id_1190
+
+            procedure -> tgt.data as data then
+            {
+                procedure.note as note, 
+                    note.text as text then
+                {
+                    procedure -> data.blockindex = 3;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1190';
+                    text -> data.values as values, values.value = text;
+                };
+            };
+        };
+        //----------------------   EpisodeOfCare   --------------------
+        entry.resource as episodeOfCare where "resource is EpisodeOfCare" then
+        {
+            //Referenzen
+            //Datum Progress -> 2, 0, id_1543
+            episodeOfCare -> tgt.data as data then
+            {
+                episodeOfCare.extension as datumProgress, 
+                    datumProgress.valueDate as valueDate then
+                {
+                    episodeOfCare -> data.blockindex = 2;
+                    episodeOfCare -> data.groupindex = 0;
+                    episodeOfCare -> data.itemid = 'id_1543';
+                    valueDate -> data.values as values, values.value = valueDate;
+                };
+            };
+        };
+        //----------------------   Patient   --------------------
+        entry.resource as patient where "resource is Patient" then
+        {
+            //Referenzen
+            //Datum Progress -> 2, 0, id_1544
+            patient -> tgt.data as data then
+            {
+                patient.deceasedDateTime as deceasedDateTime then
+                {
+                    patient -> data.blockindex = 2;
+                    patient -> data.groupindex = 0;
+                    patient -> data.itemid = 'id_1544';
+                    deceasedDateTime -> data.values as values, values.value = deceasedDateTime;
+                };
+            };
+        };
+    };
+}
+
+group TransformStatusCheckboxes(source src: Bundle, target tgt: BackboneElement){
+
+    src.entry as entry then
+    {
+        entry.resource as procedure where "resource is Procedure" then
+        {
+            //------------[Ende der Therapie]------------
+            //Status -> 2, 0, id_1211
+            procedure-> tgt.data as data collate then
+            {
+                //status = completed
+                //code   = 
+                //value  = Regul\u00e4res Ende
+                procedure.status as status where "status = 'completed'" then
+                {
+                    procedure -> data.blockindex = 2;
+                    procedure -> data.groupindex = 0;
+                    procedure -> data.itemid = 'id_1211';
+                    procedure  -> data.values as values , values.value = 'Regul\u00e4res Ende';
+                };
+                
+                //status = stopped
+                //code   = nebenwirkungen
+                //value  = Abbruch wegen Nebenwirkungen
+                procedure-> tgt.data as data collate then
+                {
+                    procedure.status as status where "status = 'stopped'" then
+                    {
+                        procedure.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'nebenwirkungen'" then 
+                        {
+                            procedure -> data.blockindex = 2;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1211';
+                            code  -> data.values as values , values.value = 'Abbruch wegen Nebenwirkungen';
+                        };
+                    };
+                };
+                //status = on-hold
+                //code   = nebenwirkungen
+                //value  = Pause wegen Nebenwirkungen
+                procedure-> tgt.data as data collate then
+                {
+                    procedure.status as status where "status = 'on-hold'" then
+                    {
+                        procedure.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'nebenwirkungen'" then 
+                        {
+                            procedure -> data.blockindex = 2;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1211';
+                            code  -> data.values as values , values.value = 'Pause wegen Nebenwirkungen';
+                        };
+                    };
+                };
+                //status = stopped
+                //code   = progress
+                //value  = Abbruch wegen Progress
+                procedure-> tgt.data as data  collate then
+                {
+                    procedure.status as status where "status = 'stopped'" then
+                    {
+                        procedure.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'progress'" then 
+                        {
+                            procedure -> data.blockindex = 2;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1211';
+                            code  -> data.values as values , values.value = 'Abbruch wegen Progres';
+                        };
+                    };
+                };
+                //status = not-done
+                //code   = ablehnungPatient
+                //value  = Ablehnung durch den Patienten
+                procedure-> tgt.data as data collate then
+                {
+                    procedure.status as status where "status = 'not-done'" then
+                    {
+                        procedure.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'ablehnungPatient'" then 
+                        {
+                            procedure -> data.blockindex = 2;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1211';
+                            code  -> data.values as values , values.value = 'Ablehnung durch den Patienten';
+                        };
+                    };
+                };
+                //status = stopped
+                //code   = verstorben
+                //value  = Patient verstorben
+                procedure-> tgt.data as data  collate then
+                {
+                    procedure.status as status where "status = 'stopped'" then
+                    {
+                        procedure.statusReason as statusReason,
+                        statusReason.coding as coding,
+                        coding.code as code where "code = 'verstorben'" then 
+                        {
+                            procedure -> data.blockindex = 2;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1211';
+                            code  -> data.values as values , values.value = 'Patient verstorben';
+                        };
+                    };
+                };
+                //status = unknown
+                //code   = 
+                //value  = Sonstiges
+                procedure-> tgt.data as data collate then
+                {
+                    procedure.status as status where "status = 'unknown'" then
+                    {
+                        procedure -> data.blockindex = 2;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1211';
+                        procedure  -> data.values as values, values.value = 'Sonstiges';
+                    };
+                };
+                //status = unknown
+                //code   = 
+                //value  = N/A
+                procedure-> tgt.data as data collate then
+                {
+                    procedure.status as status where "status = 'unknown'" then
+                    {
+
+                        procedure -> data.blockindex = 2;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1211';
+                        procedure  -> data.values as values , values.value = 'N/A';
+                    };
+                };
+            };
+        };
+    };
+}

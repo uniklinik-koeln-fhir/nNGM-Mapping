@@ -1,0 +1,310 @@
+/// version = 0.1
+/// title = "StrahlentherapieMap"
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR" = nNGM_Mapping_StrahlentherapieFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
+uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
+uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
+
+group TransformBundleStrahlentherapie(source src: CTS_Transport, target bundle: Bundle)
+{
+    //Check if any fields are filled in before creating the Procedure
+    src -> bundle.entry as entry then CreateProcedure(src, entry);
+    //Check if any fields are filled in before creating the EpisodeOfCare
+    src -> bundle.entry as entry then CreateEpisodeOfCare(src, entry);
+    //Check if any fields are filled in before creating the Patient
+    src -> bundle.entry as entry then CreatePatient(src, entry);
+}
+
+group CreateProcedure(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {   
+        data.values as values where "  blockindex = 0 and groupindex = 0 and itemid ='id_1185'
+                                    or blockindex = 0 and groupindex = 0 and itemid ='id_1186'
+                                    or blockindex = 0 and groupindex = 0 and itemid ='id_1182'
+                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1181'
+                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1183'
+                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1196'
+                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1198'
+                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1199'
+                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1363'
+                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1364'
+                                    or blockindex = 2 and groupindex = 0 and itemid ='id_1211'" then
+        {
+            src -> tgt.resource = create('Procedure') as procedure then TransformProcedure(src, procedure);
+        };
+    };
+}
+
+group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/Strahlentherapie';
+
+    src.operations as operations, operations.data as data then
+    {
+        //------------[DURCHFÜHRUNG]------------
+        //Therapiebeginn
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid ='id_1185'" then
+        {
+            values.value as start -> tgt.performed = create('Period') as period collate, period.start = dateOp(start, 'date');
+        };
+        //Therapieende
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid ='id_1186'" then
+        {
+            values.value as end -> tgt.performed = create('Period') as period collate, period.end = dateOp(end, 'date');
+        };
+        //Durchführende Einrichtung
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid ='id_1182'" then
+        {
+            values.value as value -> tgt.performer as performer, 
+                                    performer.actor = create('Reference') as actor,
+                                                        actor.display = value;
+        };
+        //------------[THERAPIEMERKMALE]------------
+        //Bestrahlungsziel
+        
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1181'" then
+        {
+            values.value as value where "value =  'N/A'" then 
+            {
+                value -> tgt.bodySite = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/Bestrahlungsziel','not-applicable','Not Applicable');
+            };
+            values.value as value where "value !=  'N/A'" then 
+            {
+                value -> tgt.bodySite = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/Bestrahlungsziel',value,value);
+            };
+            
+        };
+        //Therapeutische Intention
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1183'" then
+        {
+            values.value as value where "value =  'N/A'" then 
+            {
+               value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-strahlentherapie','unknown','Unknown');
+            };
+            values.value as value where "value !=  'N/A'" then 
+            {
+                value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-strahlentherapie',value,value);
+            };
+            
+        };
+        //Art der Bestrahlung
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1196'" then
+        {
+             values.value as value where "value =  'N/A'" then 
+            {
+                value -> tgt.code as code,
+                        code.extension as artDerBestrahlung,
+                        artDerBestrahlung.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/StrahlentherapieArtDerBestrahlung','unknown','Unknown');
+            };
+            values.value as value where "value !=  'N/A'" then 
+            {
+                 value -> tgt.code as code,
+                        code.extension as artDerBestrahlung,
+                        artDerBestrahlung.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/StrahlentherapieArtDerBestrahlung',value,value);
+            };           
+        };
+
+        //Dosis
+        //Einzeldosis (Gy)
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1198'" then
+        {
+            values -> tgt.extension as dosis, 
+                        dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
+                        dosis.extension as einzeldosis then
+                        {
+                            values -> einzeldosis.url = 'einzeldosis';
+                            values -> einzeldosis.valueQuantity = create('Quantity') as quantity then 
+                                {
+                                    values.value as value -> quantity.value = value;
+                                    values.value as value -> quantity.system = 'http://unitsofmeasure.org';
+                                    values.unit as unit   -> quantity.code = unit;
+                                };                                                  
+                        };
+        
+        };
+        //Gesamtdosis (Gy)
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1199'" then
+        {
+            values -> tgt.extension as dosis, 
+                        dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
+                        dosis.extension as gesamtdosis then
+                        {
+                            values -> gesamtdosis.url = 'gesamtdosis';
+                            values -> gesamtdosis.valueQuantity = create('Quantity') as quantity then 
+                                {
+                                    values.value as value -> quantity.value = value;
+                                    values.value as value -> quantity.system = 'http://unitsofmeasure.org';
+                                    values.unit as unit   -> quantity.code = unit;
+                                };                                                  
+                        };
+        };
+        //Boost
+        //Boost durchgeführt
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1363'" then
+        {
+            values.value as value where "value =  'ja'" then 
+            {
+                value -> tgt.extension as dosis,
+                        dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
+                        dosis.extension as boost then
+                        {
+                            value -> boost.url = 'boost';
+                            value -> boost.valueBoolean = true;
+                        };
+            };
+            values.value as value where "value =  'nein'" then 
+            {
+                value -> tgt.extension as dosis,
+                        dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
+                        dosis.extension as boost then
+                        {
+                            value -> boost.url = 'boost';
+                            value -> boost.valueBoolean = false;
+                        };
+            };
+            values.value as value where "value =  'ja, Boostdosis in Gesamtdosis enthalten'" then 
+            {
+                value -> tgt.extension as dosis,
+                        dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
+                        dosis.extension as boostdosis then
+                        {
+                            value -> boostdosis.url = 'boostdosisInGesamtdosis';
+                            value -> boostdosis.valueBoolean = true;
+                        };
+            };
+        };
+        //Boostdosis (Gy)
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1364'" then
+        {
+            values -> tgt.extension as dosis, 
+                    dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
+                    dosis.extension as boostdosis then
+                    {
+                        values -> boostdosis.url = 'boostdosis';
+                        values -> boostdosis.valueQuantity = create('Quantity') as quantity then 
+                            {
+                                values.value as value -> quantity.value = value;
+                                values.value as value -> quantity.system = 'http://unitsofmeasure.org';
+                                values.unit as unit   -> quantity.code = unit;
+                            };                                                  
+                    };
+        };
+        
+        //------------[Ende der Therapie]------------
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1211'" then
+        {
+            values.value as value where "value = 'Reguläres Ende'" then
+            {
+                src -> tgt.status = 'completed';
+            };
+            values.value as value where "value = 'Abbruch wegen Nebenwirkungen'" then
+            {
+                src -> tgt.status = 'stopped';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','nebenwirkungen','nebenwirkungen');
+            };
+            values.value as value where "value = 'Pause wegen Nebenwirkungen'" then
+            {
+                src -> tgt.status = 'on-hold';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','nebenwirkungen','nebenwirkungen');
+            };
+            values.value as value where "value = 'Abbruch wegen Progress'" then
+            {
+                src -> tgt.status = 'stopped';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','progress','Progress');
+            };
+            values.value as value where "value = 'Ablehnung durch den Patienten'" then
+            {
+                src -> tgt.status = 'not-done';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','ablehnungPatient','ablehnungPatient');
+            };
+            values.value as value where "value = 'Patient verstorben'" then
+            {
+                src -> tgt.status = 'stopped';
+                src -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason','verstorben','verstorben');
+            };
+            values.value as value where "value = 'Sonstiges'" then
+            {
+                src -> tgt.status = 'unknown';
+            };
+            values.value as value where "value = 'N/A'" then
+            {
+                src -> tgt.status = 'unknown';
+                src -> tgt.statusReason = cc('http://hl7.org/fhir/ValueSet/data-absent-reason','not-applicable','not-applicable');
+            };
+        };
+        //Bemerkungen
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid ='id_1190'" then
+        {
+            values -> tgt.note = create('Annotation') as annotation then 
+            {
+                values.value as value -> annotation.text = value;
+            };
+            
+        };
+    };
+
+}
+
+group CreateEpisodeOfCare(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {   
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1543'" then
+        {
+            src -> tgt.resource = create('EpisodeOfCare') as episodeOfCare then TransformEpisodeOfCare(src, episodeOfCare);
+        };
+    };
+}
+
+group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCare)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+    src -> tgt.status = 'active';
+
+    
+    //Works for patient because patient id is always present in cts data for every form
+    src.patid as patid -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    src.operations as operations, operations.data as data then
+    {
+        //Referenzen
+        //Datum Progress
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1543'" then
+        {
+            values.value as value -> tgt.extension as datumProgress, datumProgress.valueDate = dateOp(value, 'date');
+        };
+    };
+}
+
+group CreatePatient(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {   
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1544'" then
+        {
+            src -> tgt.resource = create('Patient') as patient then TransformPatient(src, patient);
+        };
+    };
+}
+
+group TransformPatient(source src: CTS_Transport, target tgt: Patient)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
+
+
+    src.operations as operations, operations.data as data then
+    {
+        //Todesdatum
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1544'" then
+        {
+            values.value as value -> tgt.deceasedDateTime = dateOp(value, 'date');
+        };
+    };
+}
