@@ -1,1050 +1,230 @@
 /// version = 0.1
-/// title = "nNGM: Mapping Molpathologie CTS"
+/// title = "nNGM: nNGM_Mapping_MolekularpathologieCTS - FHIR to CTS"
 
-/*
-TODO
-
-ORGANIZATION -> SOP-Versionsnummer des Standorts -> MAY CHANGE IN THE FUTURE BECAUSE WRONG PLACE TO MAP TO
-
-id_2510 missing checkboxes
-
-id_2132 date missing tgt.effectivePeriod.start
-id_2183 date missing tgt.effectivePeriod.end
-check if all tgt.effectivePeriod.start and .end are present
-
-*/
-
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolpathologieCTS" = nNGM_Mapping_MolpathologieCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCTS" = nNGM_Mapping_MolekularpathologieCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
-{
-    src -> tgt.version = '1.1';
-    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Molekularpathologie_checkboxesCTS"
 
-    src -> tgt.operations as operations collate, operations.crfid = '*-MP1';
-    src -> tgt.operations as operations collate, operations.type = 'save';
+group TransformMolekularpathologieOperation(source src: Bundle, target tgt: BackboneElement)
+{
+    src -> tgt.type = 'save';
+    src -> tgt.crfid = '1_MP1';
+
+    src then TransformMolekularpathologieCheckboxes(src, tgt);
 
     src.entry as entry then
     {
-        /*---------------EpisodeOfCare----------------*/
-        entry.resource as episodeofcare where "resource is EpisodeOfCare" then
+        /*---------------------EpisodeOfCare-----------------------*/
+        entry.resource as episodeofcare where "resource is EpisodeOfCare and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM'" then
         {
             //Untersuchung-ID
-            episodeofcare -> tgt.operations as operations collate then
+            episodeofcare -> tgt.data as data then
             {
-                episodeofcare -> operations.data as data then
-                {
-                    episodeofcare.identifier as identifier, identifier.value as value then
-                    {   
-                        episodeofcare -> data.blockindex = 8;
-                        episodeofcare -> data.groupindex = 0;
-                        episodeofcare -> data.itemid = 'assessment_id';
-                        value -> data.values as values, values.value = value;
-                    };
+                episodeofcare.identifier as identifier, identifier.value as value then
+                {   
+                    episodeofcare -> data.blockindex = 8;
+                    episodeofcare -> data.groupindex = 0;
+                    episodeofcare -> data.itemid = 'assessment_id';
+                    value -> data.values as values, values.value = value;
                 };
             };
         };
 
-        /*---------------Organization----------------*/
-         entry.resource as organization where "resource is Organization" then
+        /*---------------------ServiceRequest-----------------------*/
+        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
         {
-            //Standort
-            organization -> tgt.operations as operations collate then
+            // Durchfuehrung status.code
+            servicerequest -> tgt.data as data then
             {
-                organization -> operations.data as data then
-                {
-                    organization.name as name then
-                    {   
-                        organization -> data.blockindex = 0;
-                        organization -> data.groupindex = 0;
-                        organization -> data.itemid = 'id_2435';
-                        name -> data.values as values, values.value = name;
-                    };
+                servicerequest.status as value where "$this = 'completed'" then
+                {   
+                    servicerequest -> data.blockindex = 7;
+                    servicerequest -> data.groupindex = 0;
+                    servicerequest -> data.itemid = 'id_2520';
+                    value -> data.values as values, values.value = 'abgeschlossen';
+                };
+
+                servicerequest.status as value where "$this = 'active'" then
+                {   
+                    servicerequest -> data.blockindex = 7;
+                    servicerequest -> data.groupindex = 0;
+                    servicerequest -> data.itemid = 'id_2520';
+                    value -> data.values as values, values.value = 'in Bearbeitung';
                 };
             };
 
-            //SOP-Versionsnummer des Standorts
-            organization -> tgt.operations as operations collate then
+            // Abschluss status.extension:statusAbschluss.extension:status.valueCodeableConcept
+            servicerequest -> tgt.data as data then
             {
-                organization -> operations.data as data then
-                {
-                    organization.type as type then
-                    {   
-                        organization -> data.blockindex = 0;
-                        organization -> data.groupindex = 0;
-                        organization -> data.itemid = 'id_2617';
-                        type.text as text -> data.values as values, values.value = text;
-                    };
+                servicerequest.status as status, status.extension as statusabschluss, statusabschluss.extension as ext, ext.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as value then
+                {   
+                    servicerequest -> data.blockindex = 7;
+                    servicerequest -> data.groupindex = 0;
+                    servicerequest -> data.itemid = 'id_2462';
+                    value -> data.values as values, values.value = value;
+                };
+            };
+
+            // Datum des Abschlusses status.extension:statusAbschluss.extension:status.valueCodeableConcept
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.status as status, status.extension as statusabschluss, statusabschluss.extension as ext, ext.valueDate as value then
+                {   
+                    servicerequest -> data.blockindex = 7;
+                    servicerequest -> data.groupindex = 0;
+                    servicerequest -> data.itemid = 'id_2521';
+                    value -> data.values as values, values.value = value;
                 };
             };
         };
 
-        /*---------------ALK CISH OBSERVATION----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ALK' 
-                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
-        {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 3;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2108';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 3;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2109';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Ergebnis
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2112';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Positive Tumorzellen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 3;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2113';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------ALK FISH OBSERVATION----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ALK' 
-                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
-        {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 3;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2115';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 3;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2116';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Ergebnis
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2119';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Positive Tumorzellen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 3;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2120';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-
-            //Polysomie
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 3;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2121';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-        };
-         /*---------------MET CISH OBSERVATION----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'MET' 
-                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
-        {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2143';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2144';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Ergebnis
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2147';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Amplifikation
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'amplification-level' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2148';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-        };
-
-         /*---------------MET FISH OBSERVATION----------------*/
+        /*---------------MET FISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation 
                                             and resource.code.coding.code = 'MET' 
                                             and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
         {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
+            //Date Of Assesment
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2150';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2151';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
+                observation.effectivePeriod as period then
+                {   
+                    observation -> data.blockindex = 4;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2132';
+                    period.start as dateOfAssessment -> data.values as values, values.value = dateOfAssessment;
                 };
             };
 
             //Ergebnis
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
+                observation.valueCodeableConcept as cc, cc.coding as coding then
                 {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2154';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
+                    observation -> data.blockindex = 4;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2154';
+                    coding.code as code -> data.values as values, values.value = code;
                 };
             };
 
             //Amplifikation
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'amplification-level' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2155';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //15 MET Signal
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = '15-met-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2156';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-
-            //5 MET Signal
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = '5-met-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2157';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-
-            //4 MET Signal
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = '4-met-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2158';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
+                observation.component as component then
+                {   
+                    component.valueCodeableConcept as cc where "code.coding.code = 'amplification-level' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
+                    {
+                        observation -> data.blockindex = 4;
+                        observation -> data.groupindex = 0;
+                        observation -> data.itemid = 'id_2155';
+                        cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
                     };
                 };
             };
 
             //gezaehlte Tumorzellen
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueInteger as integer where "code.coding.code = 'C0007584' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2159';
-                            integer -> data.values as values, values.value = integer, values.unit = 'count';
-                        };
-                    };
-                };
-            };
-
-            //MET signale
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueInteger as integer where "code.coding.code = 'met-signal-count' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2160';
-                            integer -> data.values as values, values.value = integer;
-                        };
-                    };
-                };
-            };
-
-            //CEN signale
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueInteger as integer where "code.coding.code = 'cet-signal-count' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2161';
-                            integer -> data.values as values, values.value = integer;
-                        };
-                    };
-                };
-            };
-
-            //Quotient MET/CEN signale
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueInteger as integer where "code.coding.code = 'met-cen-signal-ratio' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2162';
-                            integer -> data.values as values, values.value = integer;
-                        };
-                    };
-                };
-            };
-
-            //Durchschnitt MET-Genkopiezahl/Zelle 
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueInteger as integer where "code.coding.code = 'met-copy-per-cell' and code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/tbd-codes'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2163';
-                            integer -> data.values as values, values.value = integer;
-                        };
-                    };
-                };
-            };
-
-            //Polysomie
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 4;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2164';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-        };
-          /*---------------RET CISH OBSERVATION----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'RET' 
-                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
-        {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 5;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2187';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 5;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2188';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Ergebnis
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                observation.component as component then
+                {   
+                    component.valueInteger as integer where "code.coding.code = 'C0007584' and code.coding.system = 'http://ncit.nci.nih.gov'" then
                     {
-                        observation -> data.blockindex = 5;
+                        observation -> data.blockindex = 4;
                         observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2191';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Positive Tumorzellen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 5;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2192';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
+                        observation -> data.itemid = 'id_2159';
+                        integer -> data.values as values, values.unit = 'count', values.value = integer;
                     };
                 };
             };
         };
-
         /*---------------RET FISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation 
                                             and resource.code.coding.code = 'RET' 
                                             and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
         {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
+            //Date Of Assesment
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 5;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2194';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 5;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2195';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
+                observation.effectivePeriod as period then
+                {   
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2183';
+                    period.start as dateOfAssessment -> data.values as values, values.value = dateOfAssessment;
                 };
             };
 
             //Ergebnis
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
+                observation.valueCodeableConcept as cc, cc.coding as coding then
                 {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2198';
+                    coding.code as code -> data.values as values, values.value = code;
+                };
+            };
+
+            //Positive Tumorzellen
+            observation -> tgt.data as data then
+            {
+                observation.component as component then
+                {   
+                    component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
                     {
                         observation -> data.blockindex = 5;
                         observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2198';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Positive Tumorzellen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 5;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2199';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-            //Polysomie
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 5;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2200';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
+                        observation -> data.itemid = 'id_2199';
+                        quantity.value as value -> data.values as values, values.unit = 'percent', values.value = value;
                     };
                 };
             };
         };
-
-         /*---------------ROS1 CISH OBSERVATION----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ROS1' 
-                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'CISH'" then
-        {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2221';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2222';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Ergebnis
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
-                    {
-                        observation -> data.blockindex = 6;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2225';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Positive Tumorzellen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2226';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-            //Polysomie
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2227';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-        };
-
-         /*---------------ROS1 FISH OBSERVATION----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ROS1' 
-                                            and resource.category.coding.where(system = \'http://uk-koeln.de/fhir/ValueSet/obs-methods\').code = 'FISH'" then
-        {
-            //Kit Bezeichnung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C42793' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2229';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Hersteller
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueCodeableConcept as cc where "code.coding.code = 'C25392' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2230';
-                            cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Ergebnis
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.valueCodeableConcept as cc, cc.coding as coding then
-                    {
-                        observation -> data.blockindex = 6;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2233';
-                        coding.code as code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Positive Tumorzellen
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C70460' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2234';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-            //Polysomie
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.component as component then
-                    {   
-                        component.valueQuantity as quantity where "code.coding.code = 'C36331' and code.coding.system = 'http://ncit.nci.nih.gov'" then
-                        {
-                            observation -> data.blockindex = 6;
-                            observation -> data.groupindex = 0;
-                            observation -> data.itemid = 'id_2235';
-                            quantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------STATUS DER UNTERSUCHUNGEN----------------*/
-
-        /*---------------ALK----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ALK'" then
-        {
-            //Durchführung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2520').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2520';
-                        status.value as value -> data.values as values, values.value = value;
-                    };
-                };
-            };
-
-            //Abschluss
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2462').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2462';
-                        status.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss'" then
-                        {
-                            extension.valueCodeableConcept as cc, cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            /*
-            //Datum des Anfang MET?
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2132').exists().not()" then
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2132';
-                        effectiveperiod.start as abschlussdatum -> data.values as values, values.value = abschlussdatum;
-                    };
-                };
-            };
-
-            //Datum des Anfang RET?
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2183').exists().not()" then
-                    {
-                        observation -> data.blockindex = 5;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2183';
-                        effectiveperiod.start as abschlussdatum -> data.values as values, values.value = abschlussdatum;
-                    };
-                };
-            };
-            */
-
-            //Datum des Abschlusses
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2521').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2521';
-                        effectiveperiod.end as abschlussdatum -> data.values as values, values.value = abschlussdatum;
-                    };
-                };
-            };
-        };
-
+        /*-------------Status der Untersuchungen------------------*/
         /*---------------MET----------------*/
         entry.resource as observation where "resource is Observation 
                                             and resource.code.coding.code = 'MET'" then
         {
             //Durchführung
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
+                observation.status as status where "%tgt.data.where(itemid = 'id_2520').exists().not()" then
                 {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2520').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2520';
-                        status.value as value -> data.values as values, values.value = value;
-                    };
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2520';
+                    observation -> data.values as values, values.value = 'abgeschlossen';
                 };
             };
 
             //Abschluss
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
+                observation.status as status where "%tgt.data.where(itemid = 'id_2462').exists().not()" then
                 {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2462').exists().not()" then
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2462';
+                    status.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss'" then
                     {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2462';
-                        status.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss'" then
-                        {
-                            extension.valueCodeableConcept as cc, cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
+                        extension.valueCodeableConcept as cc, cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
                     };
                 };
             };
 
             //Datum des Abschlusses
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
+                observation.effectivePeriod as effectiveperiod where "%tgt.data.where(itemid = 'id_2521').exists().not()" then
                 {
-                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2521').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2521';
-                        effectiveperiod.end as abschlussdatum -> data.values as values, values.value = abschlussdatum;
-                    };
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2521';
+                    effectiveperiod.end as abschlussdatum -> data.values as values, values.value = abschlussdatum;
                 };
             };
         };
@@ -1054,103 +234,35 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                                             and resource.code.coding.code = 'RET'" then
         {
             //Durchführung
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
-                {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2520').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2520';
-                        status.value as value -> data.values as values, values.value = value;
-                    };
-                };
+                observation -> data.blockindex = 7;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2520';
+                observation -> data.values as values, values.value = 'abgeschlossen';
             };
 
             //Abschluss
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
+                observation.status as status where "%tgt.data.where(itemid = 'id_2462').exists().not()" then
                 {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2462').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2462';
-                        status.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss'" then
-                        {
-                            extension.valueCodeableConcept as cc, cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2462';
+                    observation -> data.values as values, values.value = 'vollständig';
                 };
             };
 
             //Datum des Abschlusses
-            observation -> tgt.operations as operations collate then
+            observation -> tgt.data as data then
             {
-                observation -> operations.data as data then
+                observation.effectivePeriod as effectiveperiod where "%tgt.data.where(itemid = 'id_2521').exists().not()" then
                 {
-                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2521').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2521';
-                        effectiveperiod.end as abschlussdatum -> data.values as values, values.value = abschlussdatum;
-                    };
-                };
-            };
-        };
-
-        /*---------------ROS1----------------*/
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ROS1'" then
-        {
-            //Durchführung
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2520').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2520';
-                        status.value as value -> data.values as values, values.value = value;
-                    };
-                };
-            };
-
-            //Abschluss
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.status as status where "%tgt.operations.data.where(itemid = 'id_2462').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2462';
-                        status.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss'" then
-                        {
-                            extension.valueCodeableConcept as cc, cc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Datum des Abschlusses
-            observation -> tgt.operations as operations collate then
-            {
-                observation -> operations.data as data then
-                {
-                    observation.effectivePeriod as effectiveperiod where "%tgt.operations.data.where(itemid = 'id_2521').exists().not()" then
-                    {
-                        observation -> data.blockindex = 7;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2521';
-                        effectiveperiod.end as abschlussdatum -> data.values as values, values.value = abschlussdatum;
-                    };
+                    observation -> data.blockindex = 7;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2521';
+                    observation -> data.values as values, values.value = '2019-11-10';
                 };
             };
         };
