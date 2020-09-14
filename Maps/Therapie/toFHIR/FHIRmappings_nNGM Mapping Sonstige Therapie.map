@@ -1,13 +1,13 @@
 /// version = 0.1
-/// title = "SonstigeTherapieMapping"
+/// title = "nNGM_Mapping_SonstigeTherapie"
 
 /*
     TODO
-    - Methode (Freitext): missing valueSet
     - Maintenance: missing valueSet
+    - Grund für keine Therapie / BSC: missing system value 
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/SonstigeTherapieMapping" = SonstigeTherapieMapping
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapie" = nNGM_Mapping_SonstigeTherapie
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
@@ -15,40 +15,19 @@ uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {
+    // Mapped id with an universally unique identifier for Bundle
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    src -> bundle.entry as entry then CreateTransformProcedure(src, entry);
+    src -> bundle.entry as entry then CreateTransformProcedureLokalesVerfahren(src, entry);
+    src -> bundle.entry as entry then CreateTransformProcedureAnderesVerfahren(src, entry);
+    src -> bundle.entry as entry then CreateTransformProcedureKeineTherapie(src, entry);
     src -> bundle.entry as entry then CreateTransformPatient(src, entry);
 }
 
 /* ------------------------------ Procedure ---------------------------- */
-group CreateTransformProcedure(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1213'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1220'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_1221'
-        or blockindex = 1 and groupindex = 0 and itemid = 'id_2434'
-        or blockindex = 2 and groupindex = 0 and itemid = 'id_1215'
-        or blockindex = 2 and groupindex = 0 and itemid = 'id_1467'
-        or blockindex = 2 and groupindex = 0 and itemid = 'id_1218'
-        or blockindex = 2 and groupindex = 0 and itemid = 'id_1219'
-        or blockindex = 2 and groupindex = 0 and itemid = 'id_1547'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1360'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1472'" then
-        {
-            src -> tgt.resource = create('Procedure') as procedure then TransformProcedure(src, procedure);
-        };
-    };
-}
-
 group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/SonstigeTherapie';
-
     src.operations as operations, operations.data as data then
     {
         src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
@@ -77,68 +56,6 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
             values.value as value -> tgt.performer as performer, performer.actor as actor, actor.display = value;
         };
 
-        // Lokalisation (Auswahl)
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1215'" then
-        {
-            values.value as value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/ValueSet/cancer-base/icdo-o-3-t', value);
-        };
-
-        // Lokalisation (Freitext)
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1215'" then
-        {
-            values.value as value -> tgt.bodySite as bodySite, bodySite.text = value;
-        };
-
-        // Methode (Auswahl)
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1467'" then
-        {
-            values.value as value ->    tgt.code as code,
-                                        code.extension = create('BackboneElement') as methode,
-                                        methode.extension = create('BackboneElement') as extensionMethode,
-                                        extensionMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie',
-                                        extensionMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/sonstige-therapie-code', value);
-        };
-
-        // Methode (Freitext)
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1467'" then
-        {
-            values.value as value ->    tgt.code as code,
-                                        code.extension = create('BackboneElement') as methode,
-                                        methode.extension = create('BackboneElement') as sonstigeMethode,
-                                        sonstigeMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie',
-                                        sonstigeMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/dummy', value);
-        };
-
-        // Therapeutische Intention (Auswahl)
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1218'" then
-        {
-            values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-sonstige-therapieOther', value);
-        };
-
-        // Therapeutische Intention (Freitext)
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1218'" then
-        {
-            values.value as value -> tgt.reasonCode as reasonCode, reasonCode.text = value;
-        };
-
-        // Bezeichnung / Beschreibung der alternativen Methoden
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1219'" then
-        {
-            values.value as value ->    tgt.reasonCode as reasonCode,
-                                        reasonCode.extension = create('BackboneElement') as beschreibungAlternativeMethode,
-                                        beschreibungAlternativeMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/beschreiung-alternativer-methode',
-                                        beschreibungAlternativeMethode.valueString = value;
-        };
-
-        // Grund für keine Therapie / BSC
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1547'" then
-        {
-            values.value as value ->    tgt.reasonCode as reasonCode,
-                                        reasonCode.extension = create('BackboneElement') as grundKeineTherapie,
-                                        grundKeineTherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grund-keine-therapie',
-                                        grundKeineTherapie.valueCodeableConcept = cc('http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grund-keine-therapie', value);
-        };
-
         // Maintenance
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1360'" then
         {
@@ -155,7 +72,178 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
     };
 }
 
-/* ------------------------------ Patient ---------------------------- */
+/* ------------------------------ Checking if Art Der Therapie is 'Lokales Verfahren' ---------------------------- */
+group CreateTransformProcedureLokalesVerfahren(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1215'
+        or blockindex = 2 and groupindex = 0 and itemid = 'id_1467'" then
+        {
+            src -> tgt.resource = create('Procedure') as procedure then TransformProcedureLokalesVerfahren(src, procedure);
+        };
+    };
+}
+
+/* ------------------------------ Procedure - Lokales Verfahren ---------------------------- */
+group TransformProcedureLokalesVerfahren(source src: CTS_Transport, target tgt: Procedure)
+{
+    // Mapped id with an universally unique identifier for Procedure
+    src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/SonstigeTherapie';
+
+    // Called method to map general fields of Procedure profile
+    src then TransformProcedure(src, tgt);
+
+    src.operations as operations, operations.data as data then
+    {
+        // Lokalisation (Auswahl)
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1215'" then
+        {
+            values.value as value where "$this.value = 'Lunge' or $this.value = 'Leber'" then 
+            {
+                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/ValueSet/nNGM/SonstigeTherapieLokalisationUNK', value);
+            };
+
+            values.value as value where "$this.value = 'other'" then 
+            {
+                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/ValueSet/nNGM/SonstigeTherapieLokalisationUNK', 'C17649', value);
+            };
+        };
+
+        // Lokalisation (Freitext)
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1215'" then
+        {
+            values.value as value where "$this.isother = true" then
+            {
+                value -> tgt.bodySite as bodySite, bodySite.text = value;
+            };
+        };
+
+        // Methode (Auswahl)
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1467'" then
+        {
+            values.value as value where "$this.value = 'Transarterielle Chemoembolisation' or $this.value = 'Radiofrequenzablation' or $this.value = 'Selektive interne Radiotherapie'" then
+            {
+                values.value as value ->    tgt.code as code,
+                                            code.extension = create('BackboneElement') as methode,
+                                            methode.extension = create('BackboneElement') as extensionMethode,
+                                            extensionMethode.url = 'methode',
+                                            extensionMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/sonstige-therapie-code', value);
+            };
+        };
+
+        // Methode (Freitext)
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1467'" then
+        {
+            values.value as value where "$this.isother = true" then
+            {
+                values.value as value ->    tgt.code as code,
+                                            code.extension = create('BackboneElement') as methode,
+                                            methode.extension = create('BackboneElement') as sonstigeMethode,
+                                            sonstigeMethode.url = 'sonstigeMethode',
+                                            sonstigeMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/sonstige-therapie-code', value);
+            };
+        };
+    };
+}
+
+/* ------------------------------ Checking if Art Der Therapie is 'Anderes Verfahren' ---------------------------- */
+group CreateTransformProcedureAnderesVerfahren(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1218'
+        or blockindex = 2 and groupindex = 0 and itemid = 'id_1219'" then
+        {
+            src -> tgt.resource = create('Procedure') as procedure then TransformProcedureAnderesVerfahren(src, procedure);
+        };
+    };
+}
+
+/* ------------------------------ Procedure - Anderes Verfahren ---------------------------- */
+group TransformProcedureAnderesVerfahren(source src: CTS_Transport, target tgt: Procedure)
+{
+    // Mapped id with an universally unique identifier for Procedure
+    src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/SonstigeTherapie';
+
+    // Called method to map general fields of Procedure profile
+    src then TransformProcedure(src, tgt);
+
+    src.operations as operations, operations.data as data then
+    {
+        // Therapeutische Intention (Auswahl)
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1218'" then
+        {
+            values.value as value where "$this.value = 'Alternative Methoden' or $this.value = 'other'" then
+            {
+                value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-sonstige-therapieOther', value);
+            };
+        };
+
+        // Therapeutische Intention (Freitext)
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1218'" then
+        {
+            values.value as value where "$this.isother = true" then
+            {
+                values.value as value -> tgt.reasonCode as reasonCode, reasonCode.text = value;
+            };
+        };
+
+        // Bezeichnung / Beschreibung der alternativen Methoden
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1219'" then
+        {
+            values.value as value ->    tgt.reasonCode as reasonCode,
+                                        reasonCode.extension = create('BackboneElement') as beschreibungAlternativeMethode,
+                                        beschreibungAlternativeMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/beschreiung-alternativer-methode',
+                                        beschreibungAlternativeMethode.valueString = value;
+        };
+    };
+}
+
+/* ------------------------------ Checking if Art Der Therapie is 'keine Therapie' ---------------------------- */
+group CreateTransformProcedureKeineTherapie(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1547'" then
+        {
+            src -> tgt.resource = create('Procedure') as procedure then TransformProcedureKeineTherapie(src, procedure);
+        };
+    };
+}
+
+/* ------------------------------ Procedure - keine Therapie ---------------------------- */
+group TransformProcedureKeineTherapie(source src: CTS_Transport, target tgt: Procedure)
+{
+    // Mapped id with an universally unique identifier for Procedure
+    src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/SonstigeTherapie';
+
+    // Called method to map general fields of Procedure profile
+    src then TransformProcedure(src, tgt);
+
+    src.operations as operations, operations.data as data then
+    {
+        // Grund für keine Therapie / BSC
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1547'" then
+        {
+            values.value as value ->    tgt.reasonCode as reasonCode,
+                                        reasonCode.extension = create('BackboneElement') as grundKeineTherapie,
+                                        grundKeineTherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grund-keine-therapie',
+                                        grundKeineTherapie.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/SonstigeTherapieGrundKeineTherapieUNK', value);
+        };
+    };
+}
+
+/* ------------------------------ Check if Patient needs to be created ---------------------------- */
 group CreateTransformPatient(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -167,10 +255,32 @@ group CreateTransformPatient(source src: CTS_Transport, target tgt: BackboneElem
     };
 }
 
+/* ------------------------------ Patient ---------------------------- */
 group TransformPatient(source src: CTS_Transport, target tgt: Patient)
 {
+    // Mapped id with an universally unique identifier for Patient
     src -> tgt.id = uuid();
+
+    // Mapped profile with profile URL
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
+
+    // Mapped patient name with dataAbsent because it's not asked on the form, but it's obligatory field
+    src ->  tgt.name as name,
+            name.extension as dataAbsentReason,
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Mapped patient gender with dataAbsent because it's not asked on the form, but it's obligatory field
+    src ->  tgt.gender as gender,
+            gender.extension as dataAbsentReason,
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Mapped patient birthdate with dataAbsent because it's not asked on the form, but it's obligatory field
+    src ->  tgt.birthDate as birthDate,
+            birthDate.extension as dataAbsentReason,
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     src.operations as operations, operations.data as data then
     {

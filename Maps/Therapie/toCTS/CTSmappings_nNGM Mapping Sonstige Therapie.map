@@ -3,10 +3,10 @@
 
 /*
     TODO
-    - Methode (Freitext): missing valueSet
+    - Maintenance: missing valueSet
 */
 
-map "http://uk-koeln.de/fhir/StructureMap/SonstigeTherapieCTS" = SonstigeTherapieCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS" = nNGM_Mapping_SonstigeTherapieCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
@@ -21,20 +21,19 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
 
     src.entry as entry then
     {
-        /* ------------------------------ Procedure ---------------------------- */
         entry.resource as procedure where "resource is Procedure" then
         {
-            // Art der Therapie
+            // Art Der Therapie
             procedure -> tgt.operations as operations collate then
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.category as category, category.coding as coding, coding.code as code then
+                    procedure.category as category, category.coding as coding, coding.system as system where "system = 'https://www.uk-koeln.de/fhir/ValueSet/SonstigeTherapieCategory'" then
                     {
                         procedure -> data.blockindex = 0;
                         procedure -> data.groupindex = 0;
                         procedure -> data.itemid = 'id_1213';
-                        code -> data.values as values, values.value = code;
+                        coding.code as code -> data.values as values, values.value = code;
                     };
                 };
             };
@@ -44,12 +43,12 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.performedPeriod as performedPeriod, performedPeriod.start as start then
+                    procedure.performedPeriod as performedPeriod then
                     {
                         procedure -> data.blockindex = 1;
                         procedure -> data.groupindex = 0;
                         procedure -> data.itemid = 'id_1220';
-                        start -> data.values as values, values.value = start;
+                        performedPeriod.start as start -> data.values as values, values.value = start;
                     };
                 };
             };
@@ -59,12 +58,12 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.performedPeriod as performedPeriod, performedPeriod.end as end then
+                    procedure.performedPeriod as performedPeriod then
                     {
                         procedure -> data.blockindex = 1;
                         procedure -> data.groupindex = 0;
                         procedure -> data.itemid = 'id_1221';
-                        end -> data.values as values, values.value = end;
+                        performedPeriod.end as end -> data.values as values, values.value = end;
                     };
                 };
             };
@@ -74,12 +73,45 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.performer as performer, performer.actor as actor, actor.display as display then
+                    procedure.performer as performer, performer.actor as actor then
                     {
                         procedure -> data.blockindex = 1;
                         procedure -> data.groupindex = 0;
                         procedure -> data.itemid = 'id_2434';
-                        display -> data.values as values, values.value = display;
+                        actor.display as display -> data.values as values, values.value = display;
+                    };
+                };
+            };
+
+            // Maintenance
+            procedure -> tgt.operations as operations collate then
+            {
+                procedure -> operations.data as data then
+                {
+                    procedure.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/maintenance'" then
+                    {
+                        extension.valueCodeableConcept as vcc, vcc.coding as coding then
+                        {
+                            procedure -> data.blockindex = 4;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1360';
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Bemerkungen
+            procedure -> tgt.operations as operations collate then
+            {
+                procedure -> operations.data as data then
+                {
+                    procedure.note as note then
+                    {
+                        procedure -> data.blockindex = 4;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1472';
+                        note.text as text -> data.values as values, values.value = text;
                     };
                 };
             };
@@ -89,15 +121,12 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/cancer-base/icdo-o-3-t'" then
+                    procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/nNGM/SonstigeTherapieLokalisationUNK'" then
                     {
-                        coding.code as code where "code = 'other' or code = 'Leber' or code = 'Lunge'" then
-                        {
-                            procedure -> data.blockindex = 2;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1215';
-                            coding.code as code -> data.values as values, values.value = code;
-                        };
+                        procedure -> data.blockindex = 2;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1215';
+                        coding.code as code -> data.values as values, values.value = code;
                     };
                 };
             };
@@ -107,15 +136,12 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.bodySite as bodySite then
+                    procedure.bodySite as bodySite, bodySite.text as text where "text.exists()" then
                     {
-                        bodySite.text as text where "text != 'other' and text != 'Leber' and text != 'Lunge'" then
-                        {
-                            procedure -> data.blockindex = 2;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1215';
-                            text -> data.values as values, values.value = text;
-                        };
+                        procedure -> data.blockindex = 2;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1215';
+                        text -> data.values as values, values.value = text;
                     };
                 };
             };
@@ -125,14 +151,14 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.code as code, code.extension as methode, methode.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie'" then
+                    procedure.code as code, code.extension as methode, methode.extension as extensionMethode where "extension.url = 'methode'" then
                     {
-                        extension.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'Transarterielle Chemoembolisation' or code = 'Radiofrequenzablation' or code = 'Transarterielle Chemoembolisation'" then
+                        extensionMethode.valueCodeableConcept as vcc, vcc.coding as coding then
                         {
                             procedure -> data.blockindex = 2;
                             procedure -> data.groupindex = 0;
                             procedure -> data.itemid = 'id_1467';
-                            code -> data.values as values, values.value = code;
+                            coding.code as code -> data.values as values, values.value = code;
                         };
                     };
                 };
@@ -143,9 +169,9 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.code as code, code.extension as methode, methode.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie'" then
+                    procedure.code as code, code.extension as methode, methode.extension as extensionMethode where "extension.url = 'sonstigeMethode'" then
                     {
-                        extension.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code != 'Transarterielle Chemoembolisation' and code != 'Radiofrequenzablation' and code != 'Transarterielle Chemoembolisation' and code != 'other'" then
+                        extensionMethode.valueCodeableConcept as vcc, vcc.coding as coding then
                         {
                             procedure -> data.blockindex = 2;
                             procedure -> data.groupindex = 0;
@@ -163,28 +189,25 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 {
                     procedure.reasonCode as reasonCode, reasonCode.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/intention-sonstige-therapieOther'" then
                     {
-                        coding.code as code where "code = 'Alternative Methoden' or code = 'other'" then
-                        {
-                            procedure -> data.blockindex = 2;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1218';
-                            coding.code as code -> data.values as values, values.value = code;
-                        };
+                        procedure -> data.blockindex = 2;
+                        procedure -> data.groupindex = 0;
+                        procedure -> data.itemid = 'id_1218';
+                        coding.code as code -> data.values as values, values.value = code;
                     };
                 };
             };
 
-            // Therapeutische Intention (Freitext)
+            // Therapeutische Intention (Auswahl)
             procedure -> tgt.operations as operations collate then
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.reasonCode as reasonCode, reasonCode.text as text where "text != 'Alternative Methoden' and text != 'other'" then
+                    procedure.reasonCode as reasonCode, reasonCode.text as text where "text.exists()" then
                     {
                         procedure -> data.blockindex = 2;
                         procedure -> data.groupindex = 0;
                         procedure -> data.itemid = 'id_1218';
-                        text -> data.values as values, values.value = text;
+                        reasonCode.text as text -> data.values as values, values.value = text;
                     };
                 };
             };
@@ -196,10 +219,13 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 {
                     procedure.reasonCode as reasonCode, reasonCode.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/beschreiung-alternativer-methode'" then
                     {
-                        procedure -> data.blockindex = 2;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1219';
-                        extension.valueString as value -> data.values as values, values.value = value;  
+                        extension.valueString as valueString then
+                        {
+                            procedure -> data.blockindex = 2;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1219';
+                            valueString -> data.values as values, values.value = valueString;
+                        };
                     };
                 };
             };
@@ -209,54 +235,20 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.reasonCode as reasonCode, reasonCode.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grund-keine-therapie'" then
+                    procedure.reasonCode as reasonCode, reasonCode.extension as grundKeineTherapie where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grund-keine-therapie'" then
                     {
-                        extension.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
+                        grundKeineTherapie.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
                         {
                             procedure -> data.blockindex = 2;
                             procedure -> data.groupindex = 0;
                             procedure -> data.itemid = 'id_1547';
-                            coding.code as code -> data.values as values, values.value = code;
+                            code -> data.values as values, values.value = code;
                         };
-                    };
-                };
-            };
-
-            // Maintenance
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure -> operations.data as data then
-                {
-                    procedure.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/maintenance'" then
-                    {
-                        extension.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
-                        {
-                            procedure -> data.blockindex = 4;
-                            procedure -> data.groupindex = 0;
-                            procedure -> data.itemid = 'id_1360';
-                            coding.code as code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            // Bemerkungen
-            procedure -> tgt.operations as operations collate then
-            {
-                procedure -> operations.data as data then
-                {
-                    procedure.note as note, note.text as text then
-                    {
-                        procedure -> data.blockindex = 4;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1472';
-                        text -> data.values as values, values.value = text;
                     };
                 };
             };
         };
 
-        /* ------------------------------ Patient ---------------------------- */
         entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
         {
             // Todesdatum
