@@ -1,7 +1,7 @@
 /// version = 0.1
 /// title = "nNGM: Operation Therapie - FHIR to CTS"
 
-map "http://uk-koeln.de/fhir/StructureMap/OperationTherapieCTS" = OperationTherapieCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieCTS" = nNGM_Mapping_OperationTherapieCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
@@ -69,12 +69,15 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.code as code, code.extension as extension, extension.valueCodeableConcept as vcc, vcc.coding as coding where "coding.system = 'https://simplifier.net/nngm-therapy-form/vs-operationartdeseingriffsunk'" then
+                    procedure.code as code, code.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/art-des-eingriffs'" then
                     {
-                        procedure -> data.blockindex = 1;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1168';
-                        coding.code as code -> data.values as values, values.value = code;
+                        extension.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
+                        {
+                            procedure -> data.blockindex = 1;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1168';
+                            code -> data.values as values, values.value = code;
+                        };
                     };
                 };
             };
@@ -84,7 +87,7 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'https://simplifier.net/nngm-therapy-form/vs-operationlokalisationunk'" then
+                    procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/nNGM/OperationLokalisationUNK'" then
                     {
                         procedure -> data.blockindex = 1;
                         procedure -> data.groupindex = 0;
@@ -109,17 +112,34 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
 
+// "extension": [
+//     {
+//         "url": "http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/seitenlokalisation",
+//         "valueCodeableConcept": {
+//             "coding": [
+//                 {
+//                     "system": "http://uk-koeln.de/fhir/ValueSet/nngm/OperationSeitenlokalisation",
+//                     "code": "unknown"
+//                 }
+//             ]
+//         }
+//     }
+// ]
+
             // Seitenlokalisation
             procedure -> tgt.operations as operations collate then
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.extension as extension, extension.valueCodeableConcept as vcc, vcc.coding as coding where "coding.system = 'https://simplifier.net/nngm-therapy-form/vs-operationseitenlokalisation'" then
+                    procedure.bodySite as bodySite, bodySite.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/seitenlokalisation'" then
                     {
-                        procedure -> data.blockindex = 1;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_2400';
-                        coding.code as code -> data.values as values, values.value = code;
+                        extension.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
+                        {
+                            procedure -> data.blockindex = 1;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_2400';
+                            code -> data.values as values, values.value = code;
+                        };
                     };
                 };
             };
@@ -129,12 +149,59 @@ group TransformCTS(source src: Bundle, target tgt: CTS_Transport)
             {
                 procedure -> operations.data as data then
                 {
-                    procedure.code as code, code.extension as resektion, resektion.extension as resektionsart, resektionsart.valueCodeableConcept as vcc, vcc.coding as coding where "coding.system = 'https://simplifier.net/nngm-therapy-form/vs-operationartderresektion'" then
+                    procedure.code as code, code.extension as resektion, resektion.extension as resektionsart where "extension.url = 'resektionsart'" then
+                    {
+                        resektionsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
+                        {
+                            procedure -> data.blockindex = 1;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1176';
+                            code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Resektionsstatus
+            procedure -> tgt.operations as operations collate then
+            {
+                procedure -> operations.data as data then
+                {
+                    procedure.code as code, code.extension as resektion, resektion.extension as extension where "extension.url = 'resektionsstatus'" then
+                    {
+                        extension.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
+                        {
+                            procedure -> data.blockindex = 1;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1353';
+                            code -> data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Lymphadenektomie - extension:lymphadenektomie
+            procedure -> tgt.operations as operations collate then
+            {
+                procedure -> operations.data as data then
+                {
+                    procedure.extension as lymphadenektomie then
                     {
                         procedure -> data.blockindex = 1;
                         procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1176';
-                        coding.code as code -> data.values as values, values.value = code;
+                        procedure -> data.itemid = 'id_1362';
+                        lymphadenektomie.valueBoolean as value -> data.values as values, values.value = value;
+                    };
+
+                    procedure.extension as lymphadenektomie where "lymphadenektomie.valueBoolean.exists().not()" then
+                    {
+                        lymphadenektomie.extension as dataAbsent, dataAbsent.valueCode as valueCode then
+                        {
+                            procedure -> data.blockindex = 1;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1362';
+                            valueCode -> data.values as values, values.value = valueCode;
+                        };
                     };
                 };
             };
