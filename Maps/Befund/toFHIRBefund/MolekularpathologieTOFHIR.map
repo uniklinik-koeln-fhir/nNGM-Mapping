@@ -9,6 +9,9 @@ Modify MET CISH instance of ergebnis to facilitate difference between
  positiv (high-level amplification)
  positiv (moderate-level amplification) 
 
+
+In the seatable the episode of care section is replaced with the diagnosticreport?
+
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR" = nNGM_Mapping_MolekularphatologieFHIR
@@ -19,7 +22,7 @@ group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    src -> bundle.entry as entry then CreateEpisodeOfCareMP(src, entry);
+    src -> bundle.entry as entry then CreateDiagnosticReportMP(src, entry);
     src -> bundle.entry as entry then CreateOrganizationMP(src, entry);
     src -> bundle.entry as entry then CreateServiceRequestMP(src, entry);
     
@@ -50,8 +53,38 @@ group CreateSpecimenMP(source src: CTS_Transport, target tgt: BackboneElement)
     };
 }
 
-/*-----------------EpisodeOfCare-----------------------*/
-group CreateEpisodeOfCareMP(source src: CTS_Transport, target tgt: BackboneElement)
+group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // fixed status
+    src -> tgt.type = create('BackboneElement') as type,
+                      type.system = 'http://snomed.info/sct', 
+                      type.version = 'http://snomed.info/sct/900000000000207008',
+                      type.code as code, 
+                      code.extension as dataAbsentReason, 
+                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Patient reference
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Biopsy-ID -> identifier.value
+    src.operations as operations, operations.data as data then 
+    {
+         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            values.value as value -> tgt.identifier as identifier, 
+                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
+                                     identifier.value = value;
+        };
+    };
+}
+
+/*-----------------DiagnosticReport-----------------------*/
+group CreateDiagnosticReportMP(source src: CTS_Transport, target tgt: BackboneElement)
 {
     // Metadata
     src -> tgt.id = uuid();
@@ -111,7 +144,7 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
          data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'assessment_id'" then
         {
             values.value as value -> tgt.identifier as identifier, 
-                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer', 
+                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer', 
                                      identifier.value = value;
         };
     };
@@ -276,9 +309,12 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
 
     src then MapALKDateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapALKPhaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapALKCode(src, tgt);
 
     // Netzwerkzentrum
@@ -403,9 +439,12 @@ group TransformALKFISHObservation(source src: CTS_Transport, target tgt: Observa
 
     src then MapALKDateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapALKPhaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapALKCode(src, tgt);
 
     // Netzwerkzentrum
@@ -542,9 +581,12 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
 
     src then MapMETDateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapMETPhaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapMETCode(src, tgt);
 
     // Netzwerkzentrum
@@ -724,9 +766,12 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
 
     src then MapMETDateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapMETPhaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapMETCode(src, tgt);
 
     // Netzwerkzentrum
@@ -1012,9 +1057,12 @@ group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observa
 
     src then MapRETDateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapRETPhaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapRETCode(src, tgt);
 
     // Netzwerkzentrum
@@ -1139,9 +1187,12 @@ group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observa
 
     src then MapRETDateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapRETPhaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapRETCode(src, tgt);
 
     // Netzwerkzentrum
@@ -1280,9 +1331,12 @@ group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observ
 
     src then MapROS1DateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapROS1Phaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapROS1Code(src, tgt);
 
     // Netzwerkzentrum
@@ -1420,9 +1474,12 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
 
     src then MapROS1DateOfAssessment(src, tgt);
 <<<<<<< master
+<<<<<<< master
 =======
     src then MapROS1Phaenotyp(src, tgt);
 >>>>>>> completed to fhir map
+=======
+>>>>>>> to fhir fixes, finished to cds
     src then MapROS1Code(src, tgt);
 
     // Netzwerkzentrum
