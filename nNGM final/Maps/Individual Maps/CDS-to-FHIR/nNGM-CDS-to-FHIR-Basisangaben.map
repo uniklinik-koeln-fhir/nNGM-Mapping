@@ -24,7 +24,8 @@ group TransformBundleBasisangaben(source src: CTS_Transport, target bundle: Bund
     src -> bundle.entry as entry then CreatePatient(src, entry);
 
     // Tumorboard
-    src -> bundle.entry as entry then CreateServiceRequest(src, entry);
+    //src -> bundle.entry as entry then CreateServiceRequest(src, entry);
+    src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequest(src, servicerequest);
     
     // Coverage
     src -> bundle.entry as entry then CreateCoverage(src, entry);
@@ -176,7 +177,7 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
 {
     // Metadata
     src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorboard';
 
     // Status
     src -> tgt.status = cast('active', 'FHIR.code'); 
@@ -240,26 +241,26 @@ group TransformServiceRequestRequesterExtension(source src: CTS_Transport, targe
     src.operations as operations, operations.data as data then
     {
         // Vorstellung tumorboard -> requester.extension:vorstellungTmb
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296' and %tgt.requester.extension.where(url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme').exists().not()" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296'" then
         {
-            values -> tgt.requester as requester collate, requester.extension as persoenlicheTeilnahme, persoenlicheTeilnahme.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme' then
+            values -> tgt.requester as requester collate, requester.extension as vorstellung, vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb' then
             {
                 values.value as value where "$this.value = 'yes'" then
                 {
-                    value -> persoenlicheTeilnahme.valueBoolean = cast(true, 'FHIR.boolean');
+                    value -> vorstellung.valueBoolean = cast(true, 'FHIR.boolean');
                 };
 
                 values.value as value where "$this.value = 'no'" then
                 {
-                    value -> persoenlicheTeilnahme.valueBoolean = cast(false, 'FHIR.boolean');
+                    value -> vorstellung.valueBoolean = cast(false, 'FHIR.boolean');
                 };
             };
         };
 
         // Vorstellung tumorboard -> requester.extension:vorstellungTmb
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297' and %tgt.requester.extension.where(url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb').exists().not()" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297' and %tgt.requester.extension.where(url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme').exists().not()" then
         {
-            values -> tgt.requester as requester collate, requester.extension as persoenlicheTeilnahme, persoenlicheTeilnahme.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb' then
+            values -> tgt.requester as requester collate, requester.extension as persoenlicheTeilnahme, persoenlicheTeilnahme.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme' then
             {
                 values.value as value where "$this.value = 'yes'" then
                 {
