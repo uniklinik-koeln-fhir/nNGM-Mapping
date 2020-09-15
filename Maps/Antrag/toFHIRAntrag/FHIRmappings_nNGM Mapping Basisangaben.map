@@ -1,19 +1,11 @@
-/*
-TODO
- - Nichtraucher cut off day with split?
-- kooperationsvereinbarung cast string -> boolean
-- make 2 instances of organization.contact
-- replaces raucherstatus with loinc VS
-
-Check valuesets!
-*/
-
 /// version = 0.1
 /// title = "nNGM: Mapping Basisangaben FHIR"
+/// CTS -> FHIR
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR" = nNGM_Mapping_BasisangabenFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
@@ -25,113 +17,124 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {   
-    //metadata
+    // Metadata
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
-    //resources
-     src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
-     src -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestTumorboard(src, servicerequest);
-     src -> bundle.entry as entry, entry.resource = create('Patient') as patient then TransformPatient(src, patient);
-     src -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
-     
-     src -> bundle.entry as entry then CreateObservationHeight(src, entry);
-     src -> bundle.entry as entry then CreateObservationWeight(src, entry);
-     src -> bundle.entry as entry then CreateObservationECOG(src, entry);
-     src -> bundle.entry as entry then CreateObservationSmoking(src, entry);
+    // Organization
+    src -> bundle.entry as entry then CreateOrganizationReferenzen(src, entry);
 
-     src -> bundle.entry as entry then CreatePractitioner(src, entry);
-     
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
+    // Patient
+    src -> bundle.entry as entry then CreatePatient(src, entry);
 
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1a(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung1b(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentEinwilligung2(src, consent);
+    // Tumorboard
+    src -> bundle.entry as entry then CreateServiceRequest(src, entry);
+    
+    // Coverage
+    src -> bundle.entry as entry then CreateCoverage(src, entry);
+    
+    // Observations
+    src -> bundle.entry as entry then CreateObservationHeight(src, entry);
+    src -> bundle.entry as entry then CreateObservationWeight(src, entry);
+    src -> bundle.entry as entry then CreateObservationECOG(src, entry);
+    src -> bundle.entry as entry then CreateObservationSmoking(src, entry);
 
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung1(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentVersorgung2(src, consent);
-
-     
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung1(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung2(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung3(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung4(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung5(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung6(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung7(src, consent);
-     src -> bundle.entry as entry, entry.resource = create('Consent') as consent then TransformConsentForschung8(src, consent);
+    // Practitioner
+    src -> bundle.entry as entry then CreatePractitioner(src, entry);
+    
+    // Consent
+    src -> bundle.entry as entry then CreateConsentTeilnahme(src, entry);
+    src -> bundle.entry as entry then CreateConsentDatenschutz(src, entry);
+    src -> bundle.entry as entry then CreateConsentEinwilligung1a(src, entry);
+    src -> bundle.entry as entry then CreateConsentEinwilligung1b(src, entry);
+    src -> bundle.entry as entry then CreateConsentEinwilligung2(src, entry);
+    src -> bundle.entry as entry then CreateConsentVersorgung1(src, entry);
+    src -> bundle.entry as entry then CreateConsentVersorgung2(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung1(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung2(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung3(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung4(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung5(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung6(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung7(src, entry);
+    src -> bundle.entry as entry then CreateConsentForschung8(src, entry);
 }
 
-/* ------------------------------ Organization ---------------------------- */
-
-/*check if there is a OrganizationReferenzen required*/
+/* ------------------------------ Check if Organization needs to be created ---------------------------- */
 group CreateOrganizationReferenzen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_2326'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_2485'" then
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2435'
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
         {
             src -> tgt.resource = create('Organization') as organization then TransformOrganizationReferenzen(src, organization);
         };
     };
 }
 
+/* ------------------------------ Organization ---------------------------- */
 group TransformOrganizationReferenzen(source src: CTS_Transport, target tgt: Organization)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
     src.operations as operations, operations.data as data then
     {
-        //Netzwerkzentrum-id -> tgt.identifier
+        // Netzwerkzentrum-id -> tgt.identifier
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'" then
-        {
-            values.value as netzwerkzentrumid -> tgt.identifier = id('http://healex.systems/fhir/netzwerkzentrumid', netzwerkzentrumid);
-        };
-    
-        //Netzwerkpartnernummer -> tgt.identifier
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2326'" then
-        {
-            values.value as netzwerkpartnernr -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGM/netzwerkpartnerid', netzwerkpartnernr);
-        };
-        
-        //Kontakt -> tgt.address
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
-        {
-            values.value as kontakt -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = kontakt;
-        };
-       
-
-        //Netzwerkzentrum-id -> tgt.identifier
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
         {
             values.value as netzwerkzentrumid -> tgt.identifier = id('http://healex.systems/fhir/NamingSystem/nNGMnetzwerkzentrumid', netzwerkzentrumid);
         };
+       
+        // Standort -> tgt.name
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as value -> tgt.name = value;
+        };
     
-        //Kontakt -> tgt.address
+        // Kontakt -> tgt.contact.address.text
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
         {
-            values.value as kontakt -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = kontakt;
+            values.value as value -> tgt.contact = create('Contact') as contact, contact.address as address, address.text = value;
+        };
+    };
+}
+
+/* ------------------------------ Check if Patient needs to be created ---------------------------- */
+group CreatePatient(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1131'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1125'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1124'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1126'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1127'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1128'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1129'
+                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1280'" then
+        {
+            src -> tgt.resource = create('Patient') as patient then TransformPatient(src, patient);
         };
     };
 }
 
 /* ------------------------------ Patient ---------------------------- */
-
 group TransformPatient(source src: CTS_Transport, target tgt: Patient)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
 
     src.operations as operations, operations.data as data then
     {
-        //Geschlecht
+        // Geschlecht
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1131'" then
         {
-             values.value where "$this.value = 'männlich'" then 
+             values.value where "$this.value = 'männlich' or $this.value = 'm\u00e4nnlich'" then 
             {
                 values.value as za -> tgt.gender = cast('male', 'FHIR.code');
             };
@@ -143,13 +146,13 @@ group TransformPatient(source src: CTS_Transport, target tgt: Patient)
             
             values.value where "$this.value = 'divers'" then 
             {
-                values.value as za -> tgt.extension as aufenthaltsart, 
-                                    aufenthaltsart.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de', 
-                                    aufenthaltsart.valueCodeableConcept = cc('http://fhir.de/ValueSet/gender-amtlich-de', 'X', 'unbestimmt');
+                values.value as za -> tgt.extension as genderext, 
+                                    genderext.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de', 
+                                    genderext.valueCodeableConcept = cc('http://fhir.de/ValueSet/gender-amtlich-de', 'D', 'divers');
             };
         };
 
-        //Land
+        // Land
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1280'" then
         {
             values.value as country -> tgt.address as tgtAddress collate, tgtAddress.country = country;
@@ -157,133 +160,153 @@ group TransformPatient(source src: CTS_Transport, target tgt: Patient)
     };
 }
 
-/* ------------------------------ ServiceRequest ---------------------------- */
-group TransformServiceRequestTumorboard(source src: CTS_Transport, target tgt: ServiceRequest)
+/* ------------------------------ Check if ServiceRequest needs to be created ---------------------------- */
+group CreateServiceRequest(source src: CTS_Transport, target tgt: BackboneElement)
 {
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'
+                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1576'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2296'
+                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
+        {
+            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequest(src, servicerequest);
+        };
+    };
+}
+
+/* ------------------------------ ServiceRequest ---------------------------- */
+group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
-    //status
+    // Status
     src -> tgt.status = cast('active', 'FHIR.code'); 
     
-    //intent
+    // Intent
     src -> tgt.intent = 'proposal';
 
-    //code required, not in form
-    src -> tgt.code as code, 
-            code.coding as coding, 
-            coding.system as system, 
-            system.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // Code
+    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
     
-    src -> tgt.code as code1, 
-            code1.coding as coding, 
-            coding.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-    
-    //subject required
+    // Subject
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //requester not available
+    // Requester not available
     src -> tgt.requester as requester, 
            requester.reference as reference, 
            reference.extension as dataAbsentReason, 
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    
+    src then TransformServiceRequestRequesterExtension(src, tgt);
 
     src.operations as operations, operations.data as data then
     {
-        //anforderungsdatum -> authoredOn
+        // Anforderungsdatum -> authoredOn
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'" then
         {
             values.value as datum -> tgt.authoredOn = dateOp(datum, 'dateTime');
         };
     
-        //zeitpunkt anforderung -> aufenthaltsart extension
+        // Zeitpunkt anforderung -> aufenthaltsart extension
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1576'" then
         {
-             values.value where "$this.value = 'stationär'" then 
+            values.value where "$this.value = 'stationär' or $this.value = 'station\u00e4r'" then 
             {
-                values.value as za -> tgt.extension as aufenthaltsart, 
+                values.value as za -> tgt.encounter as encounter, encounter.extension as aufenthaltsart, 
                                     aufenthaltsart.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
                                     aufenthaltsart.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'IMP', 'inpatient encounter');
             };
 
             values.value where "$this.value = 'ambulant'" then 
             {
-                values.value as za -> tgt.extension as aufenthaltsart, 
+                values.value as za -> tgt.encounter as encounter, encounter.extension as aufenthaltsart, 
                                     aufenthaltsart.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
                                     aufenthaltsart.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/aufenthaltsart', 'AMB', 'ambulatory');
             };
             
             values.value where "$this.value = 'N/A'" then 
             {
-                values.value as za -> tgt.extension as aufenthaltsart, 
+                values.value as za -> tgt.encounter as encounter, encounter.extension as aufenthaltsart, 
                                     aufenthaltsart.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
                                     aufenthaltsart.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
             };
         };
+    };
+}
 
-        /*
-       
-        //vorstellung tumorboard
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296'" then
+/* -------------------------------------- Create double extension for ServiceRequest.Requester -------------------------------------------- */
+group TransformServiceRequestRequesterExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Vorstellung tumorboard -> requester.extension:vorstellungTmb
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296' and %tgt.requester.extension.where(url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme').exists().not()" then
         {
-            values.value as vorstellung where "$this.value = 'yes'" then
+            values -> tgt.requester as requester collate, requester.extension as persoenlicheTeilnahme, persoenlicheTeilnahme.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme' then
             {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               requester.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
-                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
-            };
+                values.value as value where "$this.value = 'yes'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(true, 'FHIR.boolean');
+                };
 
-            values.value as vorstellung where "$this.value = 'no'" then
-            {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               vorstellung.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb',
-                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
+                values.value as value where "$this.value = 'no'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(false, 'FHIR.boolean');
+                };
             };
         };
 
-        //vorstellung telefonkonferenz
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
+        // Vorstellung tumorboard -> requester.extension:vorstellungTmb
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2297' and %tgt.requester.extension.where(url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb').exists().not()" then
         {
-            values.value as vorstellung where "$this.value = 'yes'" then
+            values -> tgt.requester as requester collate, requester.extension as persoenlicheTeilnahme, persoenlicheTeilnahme.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb' then
             {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               requester.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
-                                               vorstellung.valueBoolean = vorstellung; //cast('permit', 'FHIR.Boolean');
-            };
+                values.value as value where "$this.value = 'yes'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(true, 'FHIR.boolean');
+                };
 
-            values.value as vorstellung where "$this.value = 'no'" then
-            {
-                values.value as vorstellung -> tgt.requester as requester,
-                                               requester.extension as vorstellung collate,
-                                               vorstellung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme',
-                                               vorstellung.valueBoolean = vorstellung; //cast('deny', 'FHIR.Boolean');
+                values.value as value where "$this.value = 'no'" then
+                {
+                    value -> persoenlicheTeilnahme.valueBoolean = cast(false, 'FHIR.boolean');
+                };
             };
         };
+    };
+}
 
-        */
+/* ------------------------------ Check if Coverage needs to be created ---------------------------- */
+group CreateCoverage(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'
+                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_1269'
+                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_1270'
+                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_2460'
+                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_1268'
+                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_1333'" then
+        {
+            src -> tgt.resource = create('Coverage') as coverage then TransformCoverage(src, coverage);
+        };
     };
 }
 
 /* ------------------------------ Coverage ---------------------------- */
 group TransformCoverage(source src: CTS_Transport, target tgt: Coverage)
 { 
-
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
 
-    //status = active
+    // status = active
     src -> tgt.status = cast('active', 'FHIR.code'); 
     
-    //beneficiary, beneficiary.reference
+    // beneficiary, beneficiary.reference
     src -> tgt.beneficiary as beneficiary,
            beneficiary.reference as reference, 
            reference.extension as dataAbsentReason,
@@ -292,78 +315,76 @@ group TransformCoverage(source src: CTS_Transport, target tgt: Coverage)
     
     src.operations as operations, operations.data as data then
     {
-        //Krankenkasse
+        // Krankenkasse
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'" then
         {
-            
             values.value as kkasse -> tgt.payor as payor, payor.display = kkasse;
         };
         
-        //Typ   
+        // Typ   
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1269'" then
         {
             
-            values.value as typ -> tgt.type = cc('http://fhir.de/ValueSet/versicherungsart-de-basis', typ);
+            values.value as typ -> tgt.type = cc('http://uk-koeln.de/fhir/ValueSet/nngm/krankenkassen-typ', typ);
         };
 
-        //PKVTyp
+        // PKV-tariff -> extension:pkvTarifform.valueCodeableConcept
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1270'" then
         {
             values.value as vorstellung where "$this.value = 'Basistarif'" then 
             {
-            values.value as value -> tgt.extension as pkv, 
-                                     pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
-                                     pkv.valueCodeableConcept as vcc, 
-                                     vcc.coding as coding, 
-                                     coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 
-                                     coding.code = cast('basis', 'FHIR.code');
+                values.value as value -> tgt.extension as pkv, 
+                                        pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                        pkv.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'basis');
             };
 
-            values.value as vorstellung where "$this.value = 'standard'" then 
+            values.value as vorstellung where "$this.value = 'Standardtarif'" then 
             {
             values.value as value -> tgt.extension as pkv, 
-                                     pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
-                                     pkv.valueCodeableConcept as vcc, 
-                                     vcc.coding as coding, 
-                                     coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 
-                                     coding.code = cast('Standardtarif', 'FHIR.code');
+                                        pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                        pkv.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'standard');
             };
 
             values.value as vorstellung where "$this.value = 'Vollversichert'" then 
             {
             values.value as value -> tgt.extension as pkv, 
-                                     pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
-                                     pkv.valueCodeableConcept as vcc, 
-                                     vcc.coding as coding, 
-                                     coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 
-                                     coding.code = cast('voll', 'FHIR.code');
+                                        pkv.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                        pkv.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'voll');
             };
         };
 
-        /*
-        //kooperationsvereinbarung
+        // Kooperationsvereinbarung -> Coverage.extension:kooperationsvereinbarung.valueBoolean
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2460'" then
         {
-            values.value as value -> tgt.extension as koop, 
-                                     koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
-                                     koop.valueBoolean = cast(value, 'FHIR.boolean');
-        };
-        */
+            values.value as value where "value = 'yes'" then
+            {
+                value -> tgt.extension as koop, 
+                            koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
+                            koop.valueBoolean = cast(true, 'FHIR.boolean');
+            };
 
+            values.value as value where "value = 'no'" then
+            {
+                value -> tgt.extension as koop, 
+                            koop.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung',
+                            koop.valueBoolean = cast(false, 'FHIR.boolean');
+            };
+        };
+
+        // Versichertennummer -> not mapped because this data is likely coming from the Brückenkopf
+
+        // Abrechnungsinformation -> payor.extension:abrechnungsinformation.valueCodeableConcept
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1333'" then
         {
-            //Abrechnungsinformationen -> payor.extension.valueCodeableConcept
-            values.value as Abrechnungsinformationen -> tgt.payor = create('Reference') as payor,
+            values.value as Abrechnungsinformation -> tgt.payor = create('Reference') as payor,
                                                         payor.extension as abrechnungsinformationen,
                                                         abrechnungsinformationen.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/abrechnungsinformation',
-                                                        abrechnungsinformationen.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/abrechnungsinformation', Abrechnungsinformationen);
+                                                        abrechnungsinformationen.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/abrechnungsinformation', Abrechnungsinformation);
         };    
     };
 }
 
-/* ------------------------------ Observation ---------------------------- */
-
-/*check if there is a ObservationHeight required*/
+/* ------------------------------ Check if Observation height is required ---------------------------- */
 group CreateObservationHeight(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -375,31 +396,32 @@ group CreateObservationHeight(source src: CTS_Transport, target tgt: BackboneEle
     };
 }
 
+/* ------------------------------ Observation height ---------------------------- */
 group TransformObservationHeight(source src: CTS_Transport, target tgt: Observation)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergroesse';
 
-    //status 
+    // Status 
     src -> tgt.status = cast('final', 'FHIR.code');
 
-    //category
-    src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'vital-signs');
+    // Category
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'vital-signs');
 
-    //code
+    // Code
     src -> tgt.code = cc('http://loinc.org', '8302-2');
 
-    //subject
+    // Subject
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //encounter
-    src -> tgt.encounter as encounter, 
-           encounter.reference as reference, 
-           reference.extension as dataAbsentReason, 
+    // Effective datetime
+    src -> tgt.effectiveDateTime as edt, 
+           edt.extension as dataAbsentReason, 
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    //Kopergroesse -> valueQuantity
+    // Kopergroesse -> valueQuantity
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1133'" then
@@ -413,7 +435,7 @@ group TransformObservationHeight(source src: CTS_Transport, target tgt: Observat
     };
 }
 
-/*check if there is a ObservationWeight required*/
+/* ------------------------------ Check if Observation weight is required ---------------------------- */
 group CreateObservationWeight(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -425,31 +447,32 @@ group CreateObservationWeight(source src: CTS_Transport, target tgt: BackboneEle
     };
 }
 
+/* ------------------------------ Observation weight ---------------------------- */
 group TransformObservationWeight(source src: CTS_Transport, target tgt: Observation)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergewicht';
 
-    //status 
+    // Status 
     src -> tgt.status = cast('final', 'FHIR.code');
 
-    //category
-    src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'vital-signs');
+    // Category
+    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'vital-signs');
 
-    //code
+    // Code
     src -> tgt.code = cc('http://loinc.org', '29463-7');
 
-    //subject
+    // Subject
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //encounter
-    src -> tgt.encounter as encounter, 
-           encounter.reference as reference, 
-           reference.extension as dataAbsentReason, 
+    // Effective datetime
+    src -> tgt.effectiveDateTime as edt, 
+           edt.extension as dataAbsentReason, 
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    //gewicht -> valueQuantity
+    // Gewicht -> valueQuantity
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1132'" then
@@ -463,7 +486,7 @@ group TransformObservationWeight(source src: CTS_Transport, target tgt: Observat
     };
 }
 
-/*check if there is a ObservationECOG required*/
+/* ------------------------------ Check if Observation ECOG is required ---------------------------- */
 group CreateObservationECOG(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -475,65 +498,59 @@ group CreateObservationECOG(source src: CTS_Transport, target tgt: BackboneEleme
     };
 }
 
+/* ------------------------------ Observation ECOG ---------------------------- */
 group TransformObservationECOG(source src: CTS_Transport, target tgt: Observation)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog';
 
-    //status 
+    // Status 
     src -> tgt.status = cast('final', 'FHIR.code');
 
-    //category
-    src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'survey');
+    // Category
+    src -> tgt.category = cc('http://hl7.org/fhir/ValueSet/observation-category', 'survey');
 
-    //code
+    // Code
     src -> tgt.code = cc('http://loinc.org', '89247-1');
 
-    //subject
+    // Subject
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //encounter
-    src -> tgt.encounter as encounter, 
-           encounter.reference as reference, 
-           reference.extension as dataAbsentReason, 
-           dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-           dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    //ecog -> valueQuantity
+    // Ecog -> valueQuantity
     src.operations as operations, operations.data as data then
     {
-        
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2290'" then
         {
-            values.value where "$this.value = '0 - normale, uneingeschränkte Aktivität, wie vor der Erkrankung'" then 
+            values.value where "$this.value = '0 - normale, uneingeschränkte Aktivität, wie vor der Erkrankung' or $this.value = '0 - normale, uneingeschr\u00e4nkte Aktivit\u00e4t, wie vor der Erkrankung'" then 
             {
-                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog', ecog); 
+                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog', '0', ecog); 
             };
 
-            values.value where "$this.value = '1 - Einschränkung bei körperlicher Anstrengung, gehfähig, leichte körperliche Arbeit möglich'" then 
+            values.value where "$this.value = '1 - Einschränkung bei körperlicher Anstrengung, gehfähig, leichte körperliche Arbeit möglich' or $this.value = '1 - Einschr\u00e4nkung bei k\u00f6rperlicher Anstrengung, gehf\u00e4hig, leichte k\u00f6rperliche Arbeit m\u00f6glich'" then 
             {
-                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog', ecog); 
+                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog','1', ecog); 
             };
 
-            values.value where "$this.value = '2 - gehfähig, Selbstversorgung möglich, aber nicht arbeitsfähig, kann mehr als 50% der Wachzeit aufstehen'" then 
+            values.value where "$this.value = '2 - gehfähig, Selbstversorgung möglich, aber nicht arbeitsfähig, kann mehr als 50% der Wachzeit aufstehen' or $this.value = '2 - gehf\u00e4hig, Selbstversorgung m\u00f6glich, aber nicht arbeitsf\u00e4hig, kann mehr als 50% der Wachzeit aufstehen'" then 
             {
-                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog', ecog); 
+                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog','2', ecog); 
             };
 
-            values.value where "$this.value = '3 - nur begrenzte Selbstversorgung möglich, 50% oder mehr der Wachzeit an Bett oder Stuhl gebunden'" then 
+            values.value where "$this.value = '3 - nur begrenzte Selbstversorgung möglich, 50% oder mehr der Wachzeit an Bett oder Stuhl gebunden' or $this.value = '3 - nur begrenzte Selbstversorgung m\u00f6glich, 50% oder mehr der Wachzeit an Bett oder Stuhl gebunden'" then 
             {
-                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog', ecog); 
+                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog','3', ecog); 
             };
-
-            values.value where "$this.value = '4 - völlig pflegebedürftig, keinerlei Selbstversorgung möglich, völlig an Bett oder Stuhl gebunden'" then 
+ 
+            values.value where "$this.value = '4 - völlig pflegebedürftig, keinerlei Selbstversorgung möglich, völlig an Bett oder Stuhl gebunden' or $this.value = '4 - v\u00f6llig pflegebed\u00FCrftig, keinerlei Selbstversorgung m\u00f6glich, v\u00f6llig an Bett oder Stuhl gebunden'" then 
             {
-                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog', ecog); 
+                values.value as ecog -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ecog','4', ecog); 
             };
         };
     };
 }
 
-/*check if there is a ObservationSmoking required*/
+/* ------------------------------ Check if Observation Smoking is required ---------------------------- */
 group CreateObservationSmoking(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
@@ -547,128 +564,119 @@ group CreateObservationSmoking(source src: CTS_Transport, target tgt: BackboneEl
     };
 }
 
+/* ------------------------------ Observation Smoking ---------------------------- */
 group TransformObservationSmoking(source src: CTS_Transport, target tgt: Observation)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/raucherstatus';
 
-    //status 
+    // Status 
     src -> tgt.status = cast('final', 'FHIR.code');
 
-    //category
+    // Category
     src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'social-history');
 
-    //code
+    // Code
     src -> tgt.code = cc('http://loinc.org', '72166-2');
 
-    //subject
+    // Subject
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //encounter
-    src -> tgt.encounter as encounter, 
-           encounter.reference as reference, 
-           reference.extension as dataAbsentReason, 
-           dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-           dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    //smoking -> valueQuantity
     src.operations as operations, operations.data as data then
     {
-        //typ -> valueCodeableConcept
+        // Typ -> valueCodeableConcept
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2292'" then
         {
              values.value where "$this.value = 'Raucher'" then 
             {
-                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'r', 'Raucher'); 
+                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'LA18976-3', 'Current every day smoker'); 
             };
 
              values.value where "$this.value = 'Ex-Raucher'" then 
             {
-                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'er', 'Ex-Raucher'); 
+                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'LA15920-4', 'Former smoker'); 
             };
 
              values.value where "$this.value = 'Nieraucher'" then 
             {
-                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'nr', 'Nieraucher'); 
+                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'LA18978-9', 'Never smoker'); 
             };
 
              values.value where "$this.value = 'N/A'" then 
             {
-                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'UNK', 'Unknown'); 
+                values.value as raucherstatus -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/raucherstatus', 'LA18980-5', 'Unknown if ever smoked'); 
             };
         };
 
-        //Pack years -> component.packungenProJahr
+        // Pack years -> component:packYears.valueQuantity
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2294'" then
         {
             values.value as packyears -> tgt.component = create('BackboneElement') as packung, 
                                                             packung.code as code, 
                                                             code.text = 'Packungen Pro Jahr',
-                                                            code.coding = c('http://loinc.org', '8664-5'),
+                                                            code.coding = c('http://ncit.nci.nih.gov', 'C127065'),
                                                             packung.valueQuantity = create('Quantity') as qty, 
-                                                            qty.unit = 'PackYears',
+                                                            qty.unit = 'pack years',
                                                             qty.system = 'http://unitsofmeasure.org',
                                                             qty.code = cast('{PackYears}','FHIR.code'),
                                                             qty.value = packyears;
         };                                  
 
-        //nichtraucher seit -> component.nichtraucher
+        // Nichtraucher seit -> component.nichtraucher
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2293'" then
         {
             values.value as nichtraucher -> tgt.component = create('BackboneElement') as nr,
                                                             nr.code as code,
                                                             code.text = 'Nichtraucher Seit',
-                                                            code.coding = c('http://loinc.org', '63630-8'), 
-                                                            nr.valueDateTime = dateOp(nichtraucher, 'date');
+                                                            code.coding = c('http://ncit.nci.nih.gov', 'C127065'), 
+                                                            nr.valueDateTime = dateOp(nichtraucher, 'dateTime');
         };
-
     };
 }
 
-/* ------------------------------ Practitioner ---------------------------- */
-
-/*check if there is a Practitioner required*/
+/* ------------------------------ Check if Practitioner is required ---------------------------- */
 group CreatePractitioner(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2326'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
         {
-            src -> tgt.resource = create('Practitioner') as pracitioner then TransformPractitioner(src, pracitioner);
+            src -> tgt.resource = create('Practitioner') as practitioner then TransformPractitioner(src, practitioner);
         };
     };
 }
 
+/* ------------------------------ Practitioner ---------------------------- */
 group TransformPractitioner(source src: CTS_Transport, target tgt: Practitioner)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Practitioner/nNGM';
 
-    //identifier
-    src -> tgt.identifier as identifier, 
-            identifier.system as system, 
-            system.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-    
-    src -> tgt.identifier as identifier1, 
-            identifier1.value as value, 
-            value.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-
-    //name
+    // Name
     src -> tgt.name as name, 
             name.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-
-
     src.operations as operations, operations.data as data then
     {
-        //Anforderer email address -> telecom:email.system, telecom:email.value
+        // Netzwerkpartnernummer -> tgt.identifier:nngmPractitionerId
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2326'" then
+        {
+            values.value as netzwerkpartnernr -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/practitionerId', netzwerkpartnernr);
+        };
+        
+        // Kontakt -> tgt.address.text
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
+        {
+            values.value as kontakt -> tgt.address as address, address.text = kontakt;
+        };
+
+        // E-Mail Adresse des Anforderes (Behandler) für die Einladung -> telecom:email.value
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'" then
         {
             values.value as mail -> tgt.telecom = create('ContactPoint') as cp, cp.system = 'email', cp.value = mail;
@@ -676,25 +684,41 @@ group TransformPractitioner(source src: CTS_Transport, target tgt: Practitioner)
     };
 }
 
-/* ------------------------------ Consent ---------------------------- */
+/* ------------------------------ Check if Consent Teilnahme is required ---------------------------- */
+group CreateConsentTeilnahme(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2392'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2393'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentTeilnahme(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Teilnahme ---------------------------- */
 group TransformConsentTeilnahme(source src: CTS_Transport, target tgt: Consent)
 {
-
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
 
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-teilnahme');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
+    // Status
     src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
     src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
     src.operations as operations, operations.data as data then
     {
-        //teilnahme unterschrieben -> provision.type
+        // Teilnahme unterschrieben -> provision.type
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2392'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -714,33 +738,50 @@ group TransformConsentTeilnahme(source src: CTS_Transport, target tgt: Consent)
             };
         };
 
-        //teilnahme datum -> provision.type.period.standort
-         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2393'" then
-         {
+        // Teilnahme datum -> provision.type.period.standort
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2393'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     }; 
 }
 
+/* ------------------------------ Check if Consent Datenschutz is required ---------------------------- */
+group CreateConsentDatenschutz(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2389'
+                                        or blockindex = 9 and groupindex = 0 and itemid = 'id_2390'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentDatenschutz(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Datenschutz ---------------------------- */
 group TransformConsentDatenschutz(source src: CTS_Transport, target tgt: Consent)
 {
-
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
     
-     src -> tgt.status = cast('active', 'FHIR.code');
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
     src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
 
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-datenschutz');
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
 
-    //patient
+    // Patient
     src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //policy
+    // Policy
     src.operations as operations, operations.data as data then
     {
-        //datenschutz unterschrieben -> provision.type
+        // Datenschutz unterschrieben -> provision.type
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2389'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -760,33 +801,50 @@ group TransformConsentDatenschutz(source src: CTS_Transport, target tgt: Consent
             };
         };
 
-        //datenschutz datum -> provision.type.period.standort
-         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2390'" then
-         {
+        // Datenschutz datum -> provision.type.period.standort
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2390'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     }; 
 }
 
-
-group TransformConsentEinwilligung1a(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Einwilligung 1a is required ---------------------------- */
+group CreateConsentEinwilligung1a(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-        //1a unterschrieben -> provision.type
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2440'
+                                        or blockindex = 8 and groupindex = 0 and itemid = 'id_2441'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentEinwilligung1a(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Einwilligung 1a ---------------------------- */
+group TransformConsentEinwilligung1a(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // 1a unterschrieben -> provision.type
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2440'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -806,31 +864,50 @@ group TransformConsentEinwilligung1a(source src: CTS_Transport, target tgt: Cons
             };
         };
 
-        //1a datum -> provision.type.period.standort
-         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2441'" then
-         {
+        // 1a datum -> provision.type.period.standort
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2441'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentEinwilligung1b(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Einwilligung 1b is required ---------------------------- */
+group CreateConsentEinwilligung1b(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-        //1b unterschrieben -> provision.type
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2446'
+                                        or blockindex = 8 and groupindex = 0 and itemid = 'id_2447'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentEinwilligung1b(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Einwilligung 1b ---------------------------- */
+group TransformConsentEinwilligung1b(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // 1b unterschrieben -> provision.type
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2446'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -851,27 +928,46 @@ group TransformConsentEinwilligung1b(source src: CTS_Transport, target tgt: Cons
         };
 
         //1b datum -> provision.type.period.standort
-         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2447'" then
-         {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2447'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
+/* ------------------------------ Check if Consent Einwilligung 2 is required ---------------------------- */
+group CreateConsentEinwilligung2(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2449'
+                                        or blockindex = 8 and groupindex = 0 and itemid = 'id_2450'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentEinwilligung2(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Einwilligung 2 ---------------------------- */
 group TransformConsentEinwilligung2(source src: CTS_Transport, target tgt: Consent)
 {
-
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
-    //patient
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
     src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //policy
+    // Policy
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2449'" then
@@ -893,28 +989,47 @@ group TransformConsentEinwilligung2(source src: CTS_Transport, target tgt: Conse
             };
         };
 
-        //2 datum -> provision.type.period.standort
-         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2450'" then
-         {
+        // 2 datum -> provision.type.period.standort
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2450'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
         };
     };
 }
 
+/* ------------------------------ Check if Consent Versorgung 1 is required ---------------------------- */
+group CreateConsentVersorgung1(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2351'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2352'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentVersorgung1(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Versorgung 1 ---------------------------- */
 group TransformConsentVersorgung1(source src: CTS_Transport, target tgt: Consent)
 {
-
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
-    //patient
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+    
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
     src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //policy
+    // Policy
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2351'" then
@@ -943,20 +1058,39 @@ group TransformConsentVersorgung1(source src: CTS_Transport, target tgt: Consent
     };
 }
 
+/* ------------------------------ Check if Consent Versorgung 2 is required ---------------------------- */
+group CreateConsentVersorgung2(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2357'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2358'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentVersorgung2(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Versorgung 2 ---------------------------- */
 group TransformConsentVersorgung2(source src: CTS_Transport, target tgt: Consent)
 {
-
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
 
-    //patient
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
     src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    //policy
+    // Policy
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2357'" then
@@ -978,30 +1112,49 @@ group TransformConsentVersorgung2(source src: CTS_Transport, target tgt: Consent
             };
         };
 
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2358'" then
-         {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2358'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung1(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 1 is required ---------------------------- */
+group CreateConsentForschung1(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-         //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2361'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2362'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung1(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 1 ---------------------------- */
+group TransformConsentForschung1(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner unterschrieben -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2361'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1021,31 +1174,50 @@ group TransformConsentForschung1(source src: CTS_Transport, target tgt: Consent)
             };
         };
 
-        //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner datum -> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2362'" then
-         {
+        // Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) innerhalb des nNGM und an kooperierende Partner datum -> provision.type.period.standort
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2362'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung2(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 2 is required ---------------------------- */
+group CreateConsentForschung2(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-         //Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2364'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2365'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung2(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 2 ---------------------------- */
+group TransformConsentForschung2(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner unterschrieben -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2364'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1065,31 +1237,50 @@ group TransformConsentForschung2(source src: CTS_Transport, target tgt: Consent)
             };
         };
 
-        //Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner datum -> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2365'" then
-         {
+        // Weitergabe von MDAT und Resttumorproben innerhalb des nNGM und an kooperierende Partner datum -> provision.type.period.standort
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2365'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung3(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 3 is required ---------------------------- */
+group CreateConsentForschung3(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-         //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2367'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2368'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung3(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 3 ---------------------------- */
+group TransformConsentForschung3(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland unterschrieben -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2367'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1110,31 +1301,50 @@ group TransformConsentForschung3(source src: CTS_Transport, target tgt: Consent)
             };
         };
 
-        //Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland datum -> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2368'" then
-         {
+        // Weitergabe pseudonymisierter krankheitsbezogener Daten (MDAT) in ein Drittland datum -> provision.type.period.standort
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2368'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung4(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 4 is required ---------------------------- */
+group CreateConsentForschung4(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-         //Weitergabe von MDAT und Resttumorproben in ein Drittland unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2370'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2371'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung4(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 4 ---------------------------- */
+group TransformConsentForschung4(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Weitergabe von MDAT und Resttumorproben in ein Drittland unterschrieben -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2370'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1155,31 +1365,50 @@ group TransformConsentForschung4(source src: CTS_Transport, target tgt: Consent)
             };
         };
 
-        //Weitergabe von MDAT und Resttumorproben in ein Drittland datum -> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2371'" then
-         {
+        // Weitergabe von MDAT und Resttumorproben in ein Drittland datum -> provision.type.period.standort
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2371'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung5(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 5 is required ---------------------------- */
+group CreateConsentForschung5(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-        //Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2373'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2374'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung5(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 5 ---------------------------- */
+group TransformConsentForschung5(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung unterschrieben -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2373'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1200,31 +1429,48 @@ group TransformConsentForschung5(source src: CTS_Transport, target tgt: Consent)
             };
         };
 
-        //Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung datum-> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2374'" then
-         {
+        // Weitergabe pseudonnymisierter krankheitsbezogener Daten (MDAT) zur kommerziellen Nutzung datum-> provision.type.period.standort
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2374'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung6(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 6 is required ---------------------------- */
+group CreateConsentForschung6(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-        //Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2376'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2377'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung6(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 6 ---------------------------- */
+group TransformConsentForschung6(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung unterschrieben -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2376'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1244,31 +1490,50 @@ group TransformConsentForschung6(source src: CTS_Transport, target tgt: Consent)
             };
         };
 
-        //Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung datum -> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2377'" then
-         {
+        // Weitergabe von MDAT und Resttumorproben zur kommerziellen Nutzung datum -> provision.type.period.standort
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2377'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung7(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 7 is required ---------------------------- */
+group CreateConsentForschung7(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-        //Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeiptunkt zur Gewinnung weiterer informationen uber den Behandlungsverlauf unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2382'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2383'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung7(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 7 ---------------------------- */
+group TransformConsentForschung7(source src: CTS_Transport, target tgt: Consent)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeiptunkt zur Gewinnung weiterer informationen uber den Behandlungsverlauf unterschrieben -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2382'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1289,30 +1554,49 @@ group TransformConsentForschung7(source src: CTS_Transport, target tgt: Consent)
         };
 
         //Kontaktaufnahme des nNGM-Zentrums zu einem spateren Zeiptunkt zur Gewinnung weiterer informationen uber den Behandlungsverlauf unterschrieben Datum -> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2383'" then
-         {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2383'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
 
-group TransformConsentForschung8(source src: CTS_Transport, target tgt: Consent)
+/* ------------------------------ Check if Consent Forschung 8 is required ---------------------------- */
+group CreateConsentForschung8(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
-     src -> tgt.status = cast('active', 'FHIR.code');
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
-    //category
-    src -> tgt.category = cc('http://uk-koeln.de/fhir/ValueSet/nngm/einwilligungserklaerung', 'nngm-einwilligung');
-
-    //patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //policy
     src.operations as operations, operations.data as data then
     {
-        //kontaktaufnahme neue studie unterschrieben -> provision.type
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2379'
+                                        or blockindex = 11 and groupindex = 0 and itemid = 'id_2380'" then
+        {
+            src -> tgt.resource = create('Consent') as consent then TransformConsentForschung8(src, consent);
+        };
+    };
+}
+
+/* ------------------------------ Consent Forschung 8 ---------------------------- */
+group TransformConsentForschung8(source src: CTS_Transport, target tgt: Consent) 
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+
+    // Status
+    src -> tgt.status = cast('active', 'FHIR.code');
+
+    // Scope
+    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+    
+    // Category
+    src -> tgt.category = cc('http://loinc.org', '59284-0');
+
+    // Patient
+    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Policy
+    src.operations as operations, operations.data as data then
+    {
+        // Kontaktaufnahme des nNGM-Zentrums zum zweck des einschlusses in eine mogliche infrage kommende neue Studie -> provision.type
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2379'" then
         {
             values.value as signature where "$this.value = 'yes'" then
@@ -1320,7 +1604,7 @@ group TransformConsentForschung8(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
 
-                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WK');                 
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'KE');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -1328,14 +1612,14 @@ group TransformConsentForschung8(source src: CTS_Transport, target tgt: Consent)
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
                 
-                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'WK');                 
+                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', 'KE');                 
             };
         };
 
         //Kontaktaufnahme des nNGM-Zentrums zum Zweck des Einschlusses in eine mogliche infrage kommende neue Studie datum -> provision.type.period.standort
-         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2380'" then
-         {
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2380'" then
+        {
             values.value as datum -> tgt.dateTime = dateOp(datum, 'dateTime');
-         };
+        };
     };
 }
