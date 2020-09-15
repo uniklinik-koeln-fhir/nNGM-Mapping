@@ -4,12 +4,7 @@
 
 /*
 Check identifiers by system
-2296
-2297
-id_2293 cut of day 
-
-Coverage triggers SD map too 
-
+id_2293 cut of day
 */
 
 
@@ -100,19 +95,7 @@ group TransformBasisangabenCTS(source src: Bundle, target tgt: BackboneElement)
         /* ------------------------------ ServiceRequest ---------------------------- */
         entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorboard'" then
         {   
-            //Patient ID -> cts.patid
-            servicerequest -> tgt.data as data then
-            {
-                servicerequest.subject as subject then
-                {   
-                    subject.reference as patient then
-                    {
-                        patient -> tgt.patid = evaluate(patient, '$this.split(\'\/\').last()');
-                    };
-                };
-            };
-
-            //Anforderungsdatum
+            // Anforderungsdatum
             servicerequest -> tgt.data as data then 
             {
                 servicerequest.authoredOn as authoredon where "%tgt.data.where(itemid = 'id_1571').exists().not()" then
@@ -124,26 +107,26 @@ group TransformBasisangabenCTS(source src: Bundle, target tgt: BackboneElement)
                 };
             };
 
-            //Patient ist zum zeitpunkt der Anforderung 
+            // Patient ist zum zeitpunkt der Anforderung 
             servicerequest -> tgt.data as data then
             {
-                servicerequest.extension as aufenthaltsart, aufenthaltsart.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart'" then
+                servicerequest.encounter as encounter, encounter.extension as extension then
                 {
-                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
+                    extension.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'IMP'", vcc.coding as coding, coding.code as code then
                     {
                         servicerequest -> data.blockindex = 3;
                         servicerequest -> data.groupindex = 0;
                         servicerequest -> data.itemid  = 'id_1576';
                         code -> data.values as values, values.value = 'station\u00e4r';
                     };
-                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'AMB'" then
+                    extension.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'AMB'", vcc.coding as coding, coding.code as code then
                     {
                         servicerequest -> data.blockindex = 3;
                         servicerequest -> data.groupindex = 0;
                         servicerequest -> data.itemid  = 'id_1576';
                         code -> data.values as values, values.value = 'ambulant';
                     };
-                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'UNK'" then
+                    extension.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'UNK'", vcc.coding as coding, coding.code as code then
                     {
                         servicerequest -> data.blockindex = 3;
                         servicerequest -> data.groupindex = 0;
@@ -154,11 +137,11 @@ group TransformBasisangabenCTS(source src: Bundle, target tgt: BackboneElement)
             };
 
             //Ich wünsche eine Vorstellung des Falls im Tumorboard des nNGM (Zentrum der Anforderung)
-            servicerequest -> tgt.data as data then
+            servicerequest.requester as requester, requester.extension as extension -> tgt.data as data then
             {
-                servicerequest.requester as requester, requester.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb'" then
+                extension where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/vorstellung-tmb'" then
                 {
-                    extension.valueBoolean as valueBoolean where "valueBoolean = true" then
+                    extension.valueBoolean as valueBoolean where "$this.valueBoolean = true" then
                     {
                         servicerequest -> data.blockindex = 10;
                         servicerequest -> data.groupindex = 0;
@@ -166,7 +149,7 @@ group TransformBasisangabenCTS(source src: Bundle, target tgt: BackboneElement)
                         valueBoolean -> data.values as values, values.value = 'yes';
                     };
 
-                    extension.valueBoolean as valueBoolean where "valueBoolean = false" then
+                    extension.valueBoolean as valueBoolean where "$this.valueBoolean = false" then
                     {
                         servicerequest -> data.blockindex = 10;
                         servicerequest -> data.groupindex = 0;
@@ -177,24 +160,24 @@ group TransformBasisangabenCTS(source src: Bundle, target tgt: BackboneElement)
             };
             
             //Ich möchte am Tumorboard persönlich oder per Telefonkonferenz teilnehmen
-            servicerequest -> tgt.data as data then
+            servicerequest.requester as requester, requester.extension as extension -> tgt.data as data then
             {
-                servicerequest.requester as requester, requester.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme'" then
+                extension where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/persoenlicheTeilnahme'" then
                 {
-                    extension.valueBoolean where "$this.valueBoolean = true" then
+                    extension.valueBoolean as valueBoolean where "$this.valueBoolean = true" then
                     {
                         servicerequest -> data.blockindex = 10;
                         servicerequest -> data.groupindex = 0;
                         servicerequest -> data.itemid  = 'id_2297';
-                        extension.valueBoolean -> data.values as values, values.value = 'yes';
+                        valueBoolean -> data.values as values, values.value = 'yes';
                     };
 
-                    extension.valueBoolean where "$this.valueBoolean = false" then
+                    extension.valueBoolean as valueBoolean where "$this.valueBoolean = false" then
                     {
                         servicerequest -> data.blockindex = 10;
                         servicerequest -> data.groupindex = 0;
                         servicerequest -> data.itemid  = 'id_2297';
-                        extension.valueBoolean -> data.values as values, values.value = 'no';
+                        valueBoolean -> data.values as values, values.value = 'no';
                     };
                 };
             };
@@ -301,12 +284,25 @@ group TransformBasisangabenCTS(source src: Bundle, target tgt: BackboneElement)
             // Extension.valueBoolean -> 5, 0, 2460
             coverage -> tgt.data as data then 
             {
-                coverage.extension as ext, ext.valueBoolean as bool where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung'" then
+                coverage.extension as extension where "$this.extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/kooperationsvereinbarung'" then
                 {
-                    coverage -> data.blockindex = 5;
-                    coverage -> data.groupindex = 0;
-                    coverage -> data.itemid = 'id_2460';
-                    bool -> data.values as values, values.value = bool;
+                    // Rezidiv = True
+                    extension.valueBoolean as kooperationsvereinbarung where "$this.valueBoolean = true" then
+                    {
+                        kooperationsvereinbarung -> data.blockindex = 5;
+                        kooperationsvereinbarung -> data.groupindex = 0;
+                        kooperationsvereinbarung -> data.itemid = 'id_2460';
+                        kooperationsvereinbarung -> data.values as values, values.value = 'yes';
+                    };
+                    
+                    // Rezidiv = False
+                    extension.valueBoolean as kooperationsvereinbarung where "$this.valueBoolean = false" then
+                    {
+                        kooperationsvereinbarung -> data.blockindex = 5;
+                        kooperationsvereinbarung -> data.groupindex = 0;
+                        kooperationsvereinbarung -> data.itemid = 'id_2460';
+                        kooperationsvereinbarung -> data.values as values, values.value = 'no';
+                    };
                 };
             };
 
@@ -374,12 +370,44 @@ group TransformBasisangabenCTS(source src: Bundle, target tgt: BackboneElement)
             //Ecog
             observation -> tgt.data as data then 
             {
-                observation.valueCodeableConcept as vcc, vcc.coding as coding then
+                observation.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = '0'", vcc.coding as coding then
                 {
                     observation -> data.blockindex = 6;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2290';
-                    coding.code as ecog -> data.values as values, values.value = ecog; 
+                    coding.code as ecog -> data.values as values, values.value = '0 - normale, uneingeschr\u00e4nkte Aktivit\u00e4t, wie vor der Erkrankung'; 
+                };
+
+                observation.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = '1'", vcc.coding as coding then
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2290';
+                    coding.code as ecog -> data.values as values, values.value = '1 - Einschr\u00e4nkung bei k\u00f6rperlicher Anstrengung, gehf\u00e4hig, leichte k\u00f6rperliche Arbeit m\u00f6glich'; 
+                };
+
+                observation.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = '2'", vcc.coding as coding then
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2290';
+                    coding.code as ecog -> data.values as values, values.value = '2 - gehf\u00e4hig, Selbstversorgung m\u00f6glich, aber nicht arbeitsf\u00e4hig, kann mehr als 50 % der Wachzeit aufstehen'; 
+                };
+
+                observation.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = '3'", vcc.coding as coding then
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2290';
+                    coding.code as ecog -> data.values as values, values.value = '3 - nur begrenzte Selbstversorgung m\u00f6glich, 50 % oder mehr der Wachzeit an Bett oder Stuhl gebunden'; 
+                };
+
+                observation.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = '4'", vcc.coding as coding then
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2290';
+                    coding.code as ecog -> data.values as values, values.value = '4 - v\u00f6llig pflegebed\u00FCrftig, keinerlei Selbstversorgung m\u00f6glich, v\u00f6llig an Bett oder Stuhl gebunden'; 
                 };
             };
         };
