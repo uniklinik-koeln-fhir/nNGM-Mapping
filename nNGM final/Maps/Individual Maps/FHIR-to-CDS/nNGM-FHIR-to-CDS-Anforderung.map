@@ -54,39 +54,35 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
     src -> tgt.type = 'save';
     src -> tgt.crfid = '*-AF1';
 
+    src then TransformCheckboxes2474Checkboxes(src, tgt);
+
     src.entry as entry then
     {
-        entry.resource as specimen where "resource is Specimen" then 
+        entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then 
         {
-            //BiopsieID
+            //Biopsy-ID -> 5, 0, id_1601
             specimen -> tgt.data as data then
             {
-                specimen.identifier as biopsieID then
+                specimen.identifier as identifier then
                 {   
-                    biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
-                    {
-                        specimen -> data.blockindex = 5;
-                        specimen -> data.groupindex = 0;
-                        specimen -> data.itemid = 'id_1601';
-                        biopsieID -> data.values as values, values.value = bid;
-                    };
+                    specimen -> data.blockindex = 5;
+                    specimen -> data.groupindex = 0;
+                    specimen -> data.itemid = 'id_1601';
+                    identifier.value as value-> data.values as values, values.value = value, values.unit = 'count';
                 };
-            };
+            };     
 
             //Zu untersuchendes Material
             specimen -> tgt.data as data then
             {
-                specimen.identifier as biopsieID then
+                specimen.identifier as identifier then
                 {   
-                    biopsieID.value as bid where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/zuuntersuchendesmaterial'" then
-                    {
-                        specimen -> data.blockindex = 0;
-                        specimen -> data.groupindex = 0;
-                        specimen -> data.itemid = 'id_2457';
-                        biopsieID -> data.values as values, values.value = bid;
-                    };
+                    specimen -> data.blockindex = 0;
+                    specimen -> data.groupindex = 0;
+                    specimen -> data.itemid = 'id_2457';
+                    identifier.value as value-> data.values as values, values.value = value;
                 };
-            };
+            };     
 
             // Entnahmedatum
             specimen -> tgt.data as data then
@@ -161,7 +157,7 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                     observation -> data.blockindex = 1;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_836';
-                    coding -> data.values as values, values.value = evaluate(coding, '$this.code');
+                    coding -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');
                 };
             };
 
@@ -235,7 +231,7 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                     servicerequest -> data.blockindex = 0;
                     servicerequest -> data.groupindex = 0;
                     servicerequest -> data.itemid = 'id_1368';
-                    coding.code as code -> data.values as values, values.value = code;
+                    coding.display as display -> data.values as values, values.value = display;
                 };
             };
         };
@@ -243,7 +239,7 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
         // Tumorblockanforderung
         servicerequest -> tgt.data as data then
         {
-            servicerequest.doNotPerform as dnp where "doNotPerform = true" then
+            servicerequest.doNotPerform as dnp where "doNotPerform = false" then
             {
                 servicerequest -> data.blockindex = 4;
                 servicerequest -> data.groupindex = 0;
@@ -255,7 +251,7 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
 
         servicerequest -> tgt.data as data then
         {
-            servicerequest.doNotPerform as dnp where "doNotPerform = false" then
+            servicerequest.doNotPerform as dnp where "doNotPerform = true" then
             {
                 servicerequest -> data.blockindex = 4;
                 servicerequest -> data.groupindex = 0;
@@ -268,14 +264,22 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
         //Grund zum entfallen der Tumorblockanforderung
         servicerequest -> tgt.data as data then
         {
-            servicerequest.extension as entfallen, entfallen.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundentfallen'" then 
+            servicerequest.extension as entfallen, entfallen.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung'" then 
             {
-                entfallen.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then 
+                entfallen.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'bereitsUnterwegs'", vcc.coding as coding, coding.code as code then 
                 {
-                    servicerequest -> data.blockindex = 4;
-                    servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2490';
-                    code -> data.values as values, values.value = code;
+                    code -> data.blockindex = 4;
+                    code -> data.groupindex = 0;
+                    code -> data.itemid = 'id_2490';
+                    code -> data.values as values, values.value = 'Tumormaterial bereits unterwegs';
+                };
+
+                entfallen.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'innerePathologie'", vcc.coding as coding, coding.code as code then 
+                {
+                    code -> data.blockindex = 4;
+                    code -> data.groupindex = 0;
+                    code -> data.itemid = 'id_2490';
+                    code -> data.values as values, values.value = 'Antrag interne Pathologie';
                 };
             };
         };
@@ -321,7 +325,6 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                     coding.code as code -> data.values as values, values.value = code;
                 };
         }; 
-
 
         // Tumorblock anforderung
         servicerequest -> tgt.data as data then
@@ -380,6 +383,38 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                 };
             };
         };
+        };
+    };
+}
+
+group TransformCheckboxes2474Checkboxes(source src: Bundle, target tgt: BackboneElement) 
+{
+    src.entry as entry then
+    {
+        // OrderDetail -> 3, 0, 2474
+        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then
+        {
+            servicerequest.orderDetail as orderDetail where "$this.orderdetail.coding.code = 'C128554'" -> tgt.data as data collate then
+            {
+                orderDetail where "%tgt.data.where(itemid = 'id_2474').exists().not()" then
+                {
+                    servicerequest -> data.blockindex = 3;
+                    servicerequest -> data.groupindex = 0;
+                    servicerequest -> data.itemid = 'id_2474';
+                };
+                servicerequest -> data.values as values, values.value = 'PD-L1';
+            };
+
+            servicerequest.orderDetail as orderDetail where "$this.orderdetail.coding.code = 'C38184'" -> tgt.data as data collate then
+            {
+                orderDetail where "%tgt.data.where(itemid = 'id_2474').exists().not()" then
+                {
+                    servicerequest -> data.blockindex = 3;
+                    servicerequest -> data.groupindex = 0;
+                    servicerequest -> data.itemid = 'id_2474';
+                };
+                servicerequest -> data.values as values, values.value = 'ALK';
+            };
         };
     };
 }
