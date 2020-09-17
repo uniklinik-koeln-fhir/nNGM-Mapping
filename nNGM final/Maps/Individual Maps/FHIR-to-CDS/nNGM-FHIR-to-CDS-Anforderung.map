@@ -54,8 +54,6 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
     src -> tgt.type = 'save';
     src -> tgt.crfid = '*-AF1';
 
-    src then TransformCheckboxes2474Checkboxes(src, tgt);
-
     src.entry as entry then
     {
         entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then 
@@ -166,7 +164,8 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
             {
                 observation.valueCodeableConcept as vcc, vcc.coding as coding where "$this.valueCodeableConcept.coding.code = 'CUP'" then
                 {
-                    vcc.text as text then {
+                    vcc.text as text then 
+                    {
                         observation -> data.blockindex = 2;
                         observation -> data.groupindex = 0;
                         observation -> data.itemid = 'id_2319';
@@ -205,215 +204,225 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
             };
         };
 
-
         /* ------------------------------ ServiceRequest ---------------------------- */
-        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then 
+        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock' or resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then 
         {
-        //pathologe
-        servicerequest -> tgt.data as data then
-        {
-        servicerequest.performer as performer ,performer.display as pathologe then 
+            //pathologe
+            servicerequest -> tgt.data as data then
             {
-                servicerequest -> data.blockindex = 4;
-                servicerequest -> data.groupindex = 0;
-                servicerequest -> data.itemid = 'id_1560';
-                pathologe -> data.values as values, values.value = pathologe;
-            };
-        };
-
-        // Diagnostik Typ
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.category as category then
-            {
-                category.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-kategorie'" then
+                servicerequest.performer as performer, performer.display as pathologe then 
                 {
-                    servicerequest -> data.blockindex = 0;
+                    servicerequest -> data.blockindex = 4;
                     servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_1368';
-                    coding.display as display -> data.values as values, values.value = display;
+                    servicerequest -> data.itemid = 'id_1560';
+                    pathologe -> data.values as values, values.value = pathologe;
                 };
             };
-        };
-            
-        // Tumorblockanforderung
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.doNotPerform as dnp where "doNotPerform = false" then
-            {
-                servicerequest -> data.blockindex = 4;
-                servicerequest -> data.groupindex = 0;
-                servicerequest -> data.itemid  = 'id_2476';
-                dnp -> data.values as values, values.value = 'no';
-            };
-        };
-        
 
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.doNotPerform as dnp where "doNotPerform = true" then
+            // Diagnostik Typ
+            servicerequest -> tgt.data as data then
             {
-                servicerequest -> data.blockindex = 4;
-                servicerequest -> data.groupindex = 0;
-                servicerequest -> data.itemid  = 'id_2476';
-                dnp -> data.values as values, values.value = 'yes';
-            };
-        };
-        
-
-        //Grund zum entfallen der Tumorblockanforderung
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.extension as entfallen, entfallen.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung'" then 
-            {
-                entfallen.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'bereitsUnterwegs'", vcc.coding as coding, coding.code as code then 
+                servicerequest.category as category then
                 {
-                    code -> data.blockindex = 4;
-                    code -> data.groupindex = 0;
-                    code -> data.itemid = 'id_2490';
-                    code -> data.values as values, values.value = 'Tumormaterial bereits unterwegs';
-                };
-
-                entfallen.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'innerePathologie'", vcc.coding as coding, coding.code as code then 
-                {
-                    code -> data.blockindex = 4;
-                    code -> data.groupindex = 0;
-                    code -> data.itemid = 'id_2490';
-                    code -> data.values as values, values.value = 'Antrag interne Pathologie';
+                    category.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-kategorie'" then
+                    {
+                        servicerequest -> data.blockindex = 0;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_1368';
+                        coding.display as display -> data.values as values, values.value = display;
+                    };
                 };
             };
-        };
-
-        //Liquid Biopsy
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.extension as liquidbiopsy then 
+                
+            // Tumorblockanforderung
+            servicerequest -> tgt.data as data then
             {
-                liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/LiquidBiopsy'" then 
+                servicerequest.doNotPerform as dnp where "doNotPerform = false" then
                 {
-                    servicerequest -> data.blockindex = 3;
+                    servicerequest -> data.blockindex = 4;
                     servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2313';
-                    liquidbiopsy -> data.values as values, values.value = value;
+                    servicerequest -> data.itemid  = 'id_2476';
+                    dnp -> data.values as values, values.value = 'no';
                 };
             };
-        };
 
-        //GrundFehlendeBiopsie
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.extension as liquidbiopsy then 
+            servicerequest -> tgt.data as data then
             {
-                liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/GrundFehlendeBiopsieAnforderung'" then 
+                servicerequest.doNotPerform as dnp where "doNotPerform = true" then
                 {
-                    servicerequest -> data.blockindex = 3;
+                    servicerequest -> data.blockindex = 4;
                     servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2314';
-                    liquidbiopsy -> data.values as values, values.value = value;
+                    servicerequest -> data.itemid  = 'id_2476';
+                    dnp -> data.values as values, values.value = 'yes';
                 };
             };
-        };
 
-        // Gewünschte diagnostik
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.code as code, code.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-code'" then                        
+            //Grund zum entfallen der Tumorblockanforderung
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.extension as entfallen, entfallen.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundEntfallBlockAnforderung'" then 
+                {
+                    entfallen.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'bereitsUnterwegs'", vcc.coding as coding, coding.code as code then 
+                    {
+                        code -> data.blockindex = 4;
+                        code -> data.groupindex = 0;
+                        code -> data.itemid = 'id_2490';
+                        code -> data.values as values, values.value = 'Tumormaterial bereits unterwegs';
+                    };
+
+                    entfallen.valueCodeableConcept as vcc where "$this.valueCodeableConcept.coding.code = 'innerePathologie'", vcc.coding as coding, coding.code as code then 
+                    {
+                        code -> data.blockindex = 4;
+                        code -> data.groupindex = 0;
+                        code -> data.itemid = 'id_2490';
+                        code -> data.values as values, values.value = 'Antrag interne Pathologie';
+                    };
+                };
+            };
+
+            //Liquid Biopsy
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.extension as liquidbiopsy then 
+                {
+                    liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/LiquidBiopsy'" then 
+                    {
+                        servicerequest -> data.blockindex = 3;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2313';
+                        liquidbiopsy -> data.values as values, values.value = value;
+                    };
+                };
+            };
+
+            //GrundFehlendeBiopsie
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.extension as liquidbiopsy then 
+                {
+                    liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/GrundFehlendeBiopsieAnforderung'" then 
+                    {
+                        servicerequest -> data.blockindex = 3;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2314';
+                        liquidbiopsy -> data.values as values, values.value = value;
+                    };
+                };
+            };
+
+            // Gewünschte diagnostik
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.code as code, code.coding as coding where "$this.coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-code'" then                        
                 {
                     servicerequest -> data.blockindex = 3;
                     servicerequest -> data.groupindex = 0;
                     servicerequest -> data.itemid = 'id_2473';
                     coding.code as code -> data.values as values, values.value = code;
                 };
-        }; 
-
-        // Tumorblock anforderung
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.occurrenceDateTime as dt then 
-            {
-                    servicerequest -> data.blockindex = 4;
-                    servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2477';
-                    dt -> data.values as values, values.value = dt;
             };
-        };
 
-        // Wiederholungen
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.extension as wiederholung where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/wiederholung'" then  
+            // orderDetail -> 3, 0, 2474
+            servicerequest -> tgt.data as data then
             {
-                wiederholung.valueInteger as repeat then 
-                {
-                    servicerequest -> data.blockindex = 4;
-                    servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2478';
-                    repeat -> data.values as values, values.value = repeat;
-                };
-            };
-        };
-
-        //storno
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.extension as storno then 
-            {
-                storno.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/storno'" then 
-                {
-                    servicerequest -> data.blockindex = 4;
-                    servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2479';
-                    storno.valueDateTime as dt -> data.values as values, values.value = dt;
-                };
-            };
-        };
-
-
-        //versandmaterial
-        servicerequest -> tgt.data as data then
-        {
-            servicerequest.extension as versandmaterial then 
-            {
-                versandmaterial.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/versandmaterial'" then 
-                {
-                    servicerequest -> data.blockindex = 4;
-                    servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2480';
-                    versandmaterial.valueDateTime as dt -> data.values as values, values.value = dt;
-                };
-            };
-        };
-        };
-    };
-}
-
-group TransformCheckboxes2474Checkboxes(source src: Bundle, target tgt: BackboneElement) 
-{
-    src.entry as entry then
-    {
-        // OrderDetail -> 3, 0, 2474
-        entry.resource as servicerequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then
-        {
-            servicerequest.orderDetail as orderDetail where "$this.orderdetail.coding.code = 'C128554'" -> tgt.data as data collate then
-            {
-                orderDetail where "%tgt.data.where(itemid = 'id_2474').exists().not()" then
+                servicerequest.orderDetail as orderDetail where "%tgt.data.where(itemid = 'id_2474').exists().not()" then
                 {
                     servicerequest -> data.blockindex = 3;
                     servicerequest -> data.groupindex = 0;
                     servicerequest -> data.itemid = 'id_2474';
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C128554'" then
+                    {
+                        coding -> data.values as values, values.value = 'PD-L1';
+                    };
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C38184'" then
+                    {
+                        coding -> data.values as values, values.value = 'ALK';
+                    };
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C148329'" then
+                    {
+                        coding -> data.values as values, values.value = 'MET1';
+                    };
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C18399'" then
+                    {
+                        coding -> data.values as values, values.value = 'ROS1';
+                    };
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C18363'" then
+                    {
+                        coding -> data.values as values, values.value = 'BRAF';
+                    };
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C17757'" then
+                    {
+                        coding -> data.values as values, values.value = 'EGFR';
+                    };
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C25785'" then
+                    {
+                        coding -> data.values as values, values.value = 'KRAS';
+                    };
                 };
-                servicerequest -> data.values as values, values.value = 'PD-L1';
             };
 
-            servicerequest.orderDetail as orderDetail where "$this.orderdetail.coding.code = 'C38184'" -> tgt.data as data collate then
+            // Tumorblock anforderung
+            servicerequest -> tgt.data as data then
             {
-                orderDetail where "%tgt.data.where(itemid = 'id_2474').exists().not()" then
+                servicerequest.occurrenceDateTime as dt then 
                 {
-                    servicerequest -> data.blockindex = 3;
-                    servicerequest -> data.groupindex = 0;
-                    servicerequest -> data.itemid = 'id_2474';
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2477';
+                        dt -> data.values as values, values.value = dt;
                 };
-                servicerequest -> data.values as values, values.value = 'ALK';
+            };
+
+            // Wiederholungen
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.extension as extension then  
+                {
+                    extension.valueInteger as repeat where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/wiederholung'" then 
+                    {
+                        servicerequest -> data.blockindex = 4;
+                        servicerequest -> data.groupindex = 0;
+                        servicerequest -> data.itemid = 'id_2478';
+                        repeat -> data.values as values, values.value = repeat, values.unit = 'count';
+                    };
+                };
+            };
+
+            // Storno
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.extension as extension then 
+                {
+                    extension.valueDateTime as valueDateTime where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/stornierungBlockAnforderung'" then
+                    {
+                        valueDateTime -> data.blockindex = 4;
+                        valueDateTime -> data.groupindex = 0;
+                        valueDateTime -> data.itemid = 'id_2479';
+                        valueDateTime -> data.values as values, values.value = valueDateTime;
+                    };
+                };
+            };
+
+            // Versandmaterial
+            servicerequest -> tgt.data as data then
+            {
+                servicerequest.extension as extension then 
+                {
+                    extension.valueDateTime as valueDateTime where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/versandDatumBlockAnforderung'" then
+                    {
+                        valueDateTime -> data.blockindex = 4;
+                        valueDateTime -> data.groupindex = 0;
+                        valueDateTime -> data.itemid = 'id_2480';
+                        valueDateTime -> data.values as values, values.value = valueDateTime;
+                    };
+                };
             };
         };
     };
