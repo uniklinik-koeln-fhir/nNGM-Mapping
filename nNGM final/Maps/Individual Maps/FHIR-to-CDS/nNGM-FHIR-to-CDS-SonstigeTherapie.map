@@ -1,0 +1,220 @@
+/// version = 0.1
+/// title = "nNGM: Sonstige Therapie - FHIR to CTS"
+
+/*
+TODO: 
+
+CDS doesn't parse patient decesed date
+
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS" = nNGM_Mapping_SonstigeTherapieCTS
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group TransformSonstigeTherapieCTS(source src: Bundle, target tgt: BackboneElement)
+{
+    src-> tgt.crfid = 'SO1';
+    src-> tgt.type = 'save';
+
+    src.entry as entry then
+    {
+        entry.resource as procedure where "resource is Procedure and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/SonstigeTherapie'" then
+        {
+            // Art der Therapie
+            procedure-> tgt.data as data then
+            {
+                procedure.category as category, category.coding as coding, coding.system as system then
+                {
+                    procedure->data.blockindex = 0;
+                    procedure->data.groupindex = 0;
+                    procedure->data.itemid = 'id_1213';
+                    coding.code as code ->data.values as values, values.value = code;
+                };
+            };
+
+            // Therapiebeginn
+            procedure->tgt.data as data then
+            {
+                procedure.performedPeriod as performedPeriod then
+                {
+                    procedure->data.blockindex = 1;
+                    procedure->data.groupindex = 0;
+                    procedure->data.itemid = 'id_1220';
+                    performedPeriod.start as start->data.values as values, values.value = start;
+                };
+            };
+
+            // Therapieende
+            procedure->tgt.data as data then
+            {
+                procedure.performedPeriod as performedPeriod then
+                {
+                    procedure->data.blockindex = 1;
+                    procedure->data.groupindex = 0;
+                    procedure->data.itemid = 'id_1221';
+                    performedPeriod.end as end->data.values as values, values.value = end;
+                };
+            };
+
+            // Durchführende Einrichtung
+
+            procedure->tgt.data as data then
+            {
+                procedure.performer as performer, performer.actor as actor then
+                {
+                    procedure->data.blockindex = 1;
+                    procedure->data.groupindex = 0;
+                    procedure->data.itemid = 'id_2434';
+                    actor.display as display->data.values as values, values.value = display;
+                };
+            };
+
+            // Maintenance
+
+            procedure->tgt.data as data then
+            {
+                procedure.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/maintenance'" then
+                {
+                    extension.valueCodeableConcept as vcc, vcc.coding as coding then
+                    {
+                        procedure->data.blockindex = 4;
+                        procedure->data.groupindex = 0;
+                        procedure->data.itemid = 'id_1360';
+                        coding.code as code->data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            // Bemerkungen
+
+            procedure->tgt.data as data then
+            {
+                procedure.note as note then
+                {
+                    procedure->data.blockindex = 4;
+                    procedure->data.groupindex = 0;
+                    procedure->data.itemid = 'id_1472';
+                    note.text as text->data.values as values, values.value = text;
+                };
+            };
+
+            // Lokalisation (Auswahl)
+
+            procedure->tgt.data as data then
+            {
+                procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/nNGM/SonstigeTherapieLokalisationUNK'" then
+                {
+                    procedure->data.blockindex = 2;
+                    procedure->data.groupindex = 0;
+                    procedure->data.itemid = 'id_1215';
+                    coding.code as code->data.values as values, values.value = code;
+
+                    // Lokalisation (Freitext)
+                    procedure.bodySite as bodySite, bodySite.text as text where "text.exists()" then
+                    {
+                        procedure->data.blockindex = 2;
+                        procedure->data.groupindex = 0;
+                        procedure->data.itemid = 'id_1215';
+                        text->data.values as values, values.isother = true, values.value = text;
+                    };
+                };
+            };
+
+            // Methode (Auswahl)
+            procedure->tgt.data as data then
+            {
+                procedure.code as code, code.extension as methode, methode.extension as extensionMethode where "extension.url = 'methode'" then
+                {
+                    extensionMethode.valueCodeableConcept as vcc, vcc.coding as coding then
+                    {
+                        procedure->data.blockindex = 2;
+                        procedure->data.groupindex = 0;
+                        procedure->data.itemid = 'id_1467';
+                        coding.code as code->data.values as values, values.value = code;
+
+                        // Methode (Freitext)
+                        procedure.code as code, code.extension as methode, methode.extension as extensionMethode where "extension.url = 'sonstigeMethode'" then
+                        {
+                            extensionMethode.valueCodeableConcept as vcc, vcc.coding as coding then
+                            {
+                                procedure->data.blockindex = 2;
+                                procedure->data.groupindex = 0;
+                                procedure->data.itemid = 'id_1467';
+                                coding.code as code->data.values as values, values.isother = true, values.value = code;
+                            };
+                        };
+                    };
+                };
+            };
+
+            // Therapeutische Intention (Auswahl)
+            procedure->tgt.data as data then
+            {
+                procedure.reasonCode as reasonCode, reasonCode.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/intention-sonstige-therapieOther'" then
+                {
+                    procedure->data.blockindex = 2;
+                    procedure->data.groupindex = 0;
+                    procedure->data.itemid = 'id_1218';
+                    coding.code as code->data.values as values, values.value = code;
+
+                    // Therapeutische Intention (Auswahl)
+                    procedure.reasonCode as reasonCode, reasonCode.text as text where "text.exists()" then
+                    {
+                        procedure->data.blockindex = 2;
+                        procedure->data.groupindex = 0;
+                        procedure->data.itemid = 'id_1218';
+                        reasonCode.text as text->data.values as values, values.isother = true, values.value = text;
+                    };
+                };
+            };
+
+            // Bezeichnung / Beschreibung der alternativen Methoden
+            procedure->tgt.data as data then
+            {
+                procedure.reasonCode as reasonCode, reasonCode.extension as extension where "extension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/beschreiung-alternativer-methode'" then
+                {
+                    extension.valueString as valueString then
+                    {
+                        procedure->data.blockindex = 2;
+                        procedure->data.groupindex = 0;
+                        procedure->data.itemid = 'id_1219';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+
+            // Grund für keine Therapie / BSC
+
+            procedure->tgt.data as data then
+            {
+                procedure.reasonCode as reasonCode, reasonCode.extension as grundKeineTherapie where "extension.url = 'http://uk-koeln.de/fhir/ValueSet/nngm/SonstigeTherapieGrundKeineTherapieUNK'" then
+                {
+                    grundKeineTherapie.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code then
+                    {
+                        procedure->data.blockindex = 2;
+                        procedure->data.groupindex = 0;
+                        procedure->data.itemid = 'id_1547';
+                        code->data.values as values, values.value = code;
+                    };
+                };
+            };
+        };
+
+        entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
+        {
+            // Todesdatum
+            patient->tgt.data as data then
+            {
+                patient.deceasedDateTime as deceasedDateTime then
+                {
+                    patient->data.blockindex = 3;
+                    patient->data.groupindex = 0;
+                    patient->data.itemid = 'id_2401';
+                    deceasedDateTime->data.values as values, values.value = deceasedDateTime;
+                };
+            };
+        };
+    };
+}
