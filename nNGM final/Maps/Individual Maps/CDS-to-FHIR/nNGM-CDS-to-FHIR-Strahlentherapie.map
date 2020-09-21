@@ -1,28 +1,26 @@
 /// version = 0.1
 /// title = "StrahlentherapieMap"
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieMap" = nNGM_Mapping_StrahlentherapieMap
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR" = nNGM_Mapping_StrahlentherapieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 
-group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+
+group TransformBundleStrahlentherapie(source src: CTS_Transport, target bundle: Bundle)
 {
-    src -> bundle.id = uuid();
-    src -> bundle.type = 'collection';
-
     //Check if any fields are filled in before creating the Procedure
-    src -> bundle.entry as entry then CreateTransformProcedure(src, entry);
+    src -> bundle.entry as entry then CreateProcedure(src, entry);
     //Check if any fields are filled in before creating the EpisodeOfCare
-    src -> bundle.entry as entry then CreateTransformEpisodeOfCare(src, entry);
+    src -> bundle.entry as entry then CreateEpisodeOfCare(src, entry);
     //Check if any fields are filled in before creating the Patient
-    src -> bundle.entry as entry then CreateTransformPatient(src, entry);
-
+    src -> bundle.entry as entry then CreatePatient(src, entry);
 }
 
-group CreateTransformProcedure(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Check whether Procedure needs to be created ---------------------------- */
+group CreateProcedure(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {   
@@ -43,6 +41,7 @@ group CreateTransformProcedure(source src: CTS_Transport, target tgt: BackboneEl
     };
 }
 
+/* ------------------------------ Procedure ---------------------------- */
 group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
 {
     src -> tgt.id = uuid();
@@ -83,6 +82,7 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
             };
             
         };
+
         //Therapeutische Intention
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1183'" then
         {
@@ -94,8 +94,8 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
             {
                 value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/ValueSet/nngm/intention-strahlentherapie',value,value);
             };
-            
         };
+
         //Art der Bestrahlung
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1196'" then
         {
@@ -248,13 +248,13 @@ group TransformProcedure(source src: CTS_Transport, target tgt: Procedure)
             {
                 values.value as value -> annotation.text = value;
             };
-            
         };
     };
 
 }
 
-group CreateTransformEpisodeOfCare(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Check whether EpisodeOfCare needs to be created ---------------------------- */
+group CreateEpisodeOfCare(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {   
@@ -265,13 +265,13 @@ group CreateTransformEpisodeOfCare(source src: CTS_Transport, target tgt: Backbo
     };
 }
 
+/* ------------------------------ EpisodeOfCare ---------------------------- */
 group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCare)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
     src -> tgt.status = 'active';
 
-    
     //Works for patient because patient id is always present in cts data for every form
     src.patid as patid -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(patid, '\'Patient/\' + $this');
 
@@ -286,7 +286,8 @@ group TransformEpisodeOfCare(source src: CTS_Transport, target tgt: EpisodeOfCar
     };
 }
 
-group CreateTransformPatient(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Check whether Patient needs to be created ---------------------------- */
+group CreatePatient(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {   
@@ -297,11 +298,11 @@ group CreateTransformPatient(source src: CTS_Transport, target tgt: BackboneElem
     };
 }
 
+/* ------------------------------ Patient ---------------------------- */
 group TransformPatient(source src: CTS_Transport, target tgt: Patient)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
-
 
     src.operations as operations, operations.data as data then
     {
