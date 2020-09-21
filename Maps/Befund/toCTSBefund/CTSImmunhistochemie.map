@@ -6,11 +6,13 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCTS" = nN
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
+
 /*
 TO DO 
 
-* Checkboxes
-* Observations
+* Netzwerkcentrum, SOP version not working -> move to functions 
+* 2141 not working, checkbox yes  -> needs debugging
+
 
 */
 
@@ -19,6 +21,8 @@ group TransformImmunohistochemieCTS(source src: Bundle, target tgt: BackboneElem
 
     src->tgt.crfid = 'IHC1';
     src->tgt.type = 'save';
+
+    src then TransformImmunohistochemieCheckboxes(src, tgt);
 
     src.entry as entry then
     {
@@ -738,7 +742,7 @@ group TransformImmunohistochemieCTS(source src: Bundle, target tgt: BackboneElem
             {
                 observation.component as component then
                 {
-                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2068').exists().not()" then
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2077').exists().not()" then
                     {
                         component.valueCodeableConcept as valueCodeableConcept,
                             valueCodeableConcept.coding as coding,
@@ -1058,7 +1062,7 @@ group TransformImmunohistochemieCTS(source src: Bundle, target tgt: BackboneElem
                             valueCodeableConcept.coding as coding,
                             coding.code as code then
                         {
-                            observation->data.blockindex = 9;
+                            observation->data.blockindex = 10;
                             observation->data.groupindex = 0;
                             observation->data.itemid = 'id_2094';
                             code->data.values as values, values.value = code;
@@ -1307,7 +1311,7 @@ group TransformImmunohistochemieCTS(source src: Bundle, target tgt: BackboneElem
                 {
                     observation->data.blockindex = 12;
                     observation->data.groupindex = 0;
-                    observation->data.itemid = '';
+                    observation->data.itemid = 'id_2132';
                     period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
                 };
             };
@@ -1417,9 +1421,47 @@ group TransformImmunohistochemieCTS(source src: Bundle, target tgt: BackboneElem
             };
 
             // Klassifikation
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25161' and %tgt.data.where(itemid = 'id_2140').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 12;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2140';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
 
+            // Expression high level
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueBoolean as value where "$this.value = 'true'" then  
+                    {
+                        observation->data.blockindex = 12;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2141';
+                        observation ->data.values as values, values.value = 'yes';
+                    };
 
-            // Expression high-level
+                    component.valueBoolean as value where "$this.value = 'false'" then
+                    {
+                        observation->data.blockindex = 12;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2141';
+                        observation ->data.values as values, values.value = 'no';
+                    };
+                };
+            };
 
             // SOP number
             observation->tgt.data as data then
@@ -1459,12 +1501,514 @@ group TransformImmunohistochemieCTS(source src: Bundle, target tgt: BackboneElem
         };
 
 
+        //  PDL1 menge tumorcellen, flaeche pos cellen 
+        /*---------------PD-L1 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'PD-L1'" then
+        {
+
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 13;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2172';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2173').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 13;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2173';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2176').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 13;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2176';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2177').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 13;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2177';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2180';
+                    code->data.values as values, values.value = 'auswertbar';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 13;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2180';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+
+            };
+
+            // Menge der tumorzellen 
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueQuantity as quantity where "code.coding.code = 'C127771' and %tgt.data.where(itemid = 'id_2181').exists().not()" then
+                    {
+                        observation->data.blockindex = 13;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2181';
+                        quantity.value as value ->data.values as values, values.unit = 'percent', values.value = value;
+                    };
+                };
+            };
+
+            // Flaeche positiver Immunzellen
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueQuantity as quantity where "code.coding.code = 'tcell-surface-ratio' and %tgt.data.where(itemid = 'id_2182').exists().not()" then
+                    {
+                        observation->data.blockindex = 13;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2182';
+                        quantity.value as value ->data.values as values, values.unit = 'percent', values.value = value;
+                        };
+                    };
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443'" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341'" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
 
 
+        /*---------------ROS1 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'ROS1'" then
+        {
 
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2211';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
 
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2536').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2536';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
 
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2214').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2214';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
 
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2216').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2216';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
 
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA11884-6'" then
+                {
+                    observation->data.blockindex = 11;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'fraglich';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443'" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341'" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
     }; //src entry
 } //group
+
+group TransformImmunohistochemieCheckboxes(source src: Bundle, target tgt: BackboneElement)
+{
+    src.entry as entry then
+    {
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'BRAF'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'BRAF';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'CK7'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'CK7';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MIB1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'MIB1';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'Napsin A'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'Napsin A';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'P40'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'P40';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'SYNAPTOPHYSIN'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'SYNAPTOPHYSIN';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'TTF1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'TTF1';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ALK'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'ALK';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MET'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'MET';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'PD-L1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'PD-L1';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ROS1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'ROS1';
+            };
+        };
+    };
+}
