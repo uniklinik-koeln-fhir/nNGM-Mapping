@@ -82,12 +82,12 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                 };
             };     
 
-            // Entnahmedatum
+            // Entnahmedatum 
             specimen -> tgt.data as data then
             {
                 specimen.collection as collection then
                 {
-                    collection.collectedDateTime as collectedDateTime where "%tgt.data.where(itemid = 'id_2316').exists().not()" then
+                    collection.collectedDateTime as collectedDateTime then
                     {
                         specimen -> data.blockindex = 1;
                         specimen -> data.groupindex = 0;
@@ -97,12 +97,12 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                 };
             };
 
-            // Entnahmedatum
+            // Entnahmedatum 
             specimen -> tgt.data as data then
             {
                 specimen.collection as collection then
                 {
-                    collection.collectedDateTime as collectedDateTime where "%tgt.data.where(itemid = 'id_1551').exists().not()" then
+                    collection.collectedDateTime as collectedDateTime then
                     {
                         specimen -> data.blockindex = 2;
                         specimen -> data.groupindex = 0;
@@ -122,7 +122,7 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                         specimen -> data.blockindex = 1;
                         specimen -> data.groupindex = 0;
                         specimen -> data.itemid  = 'id_1589';
-                        code -> data.values as values, values.value = 'stationär';
+                        code -> data.values as values, values.value = 'station\u00e4r';
                     };
 
                     aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'AMB'" then
@@ -138,6 +138,37 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                         specimen -> data.blockindex = 1;
                         specimen -> data.groupindex = 0;
                         specimen -> data.itemid  = 'id_1589';
+                        code -> data.values as values, values.value = 'N/A';
+                    };
+                };
+            };
+
+            // Blutentnahme erfolgte
+            specimen -> tgt.data as data then
+            {
+                specimen.extension as aufenthaltsart, aufenthaltsart.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart'" then
+                {
+                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'IMP'" then
+                    {
+                        specimen -> data.blockindex = 2;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid  = 'id_2320';
+                        code -> data.values as values, values.value = 'station\u00e4r';
+                    };
+
+                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'AMB'" then
+                    {
+                        specimen -> data.blockindex = 2;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid  = 'id_2320';
+                        code -> data.values as values, values.value = 'ambulant';
+                    };
+
+                    aufenthaltsart.valueCodeableConcept as vcc, vcc.coding as coding, coding.code as code where "code = 'NA'" then
+                    {
+                        specimen -> data.blockindex = 2;
+                        specimen -> data.groupindex = 0;
+                        specimen -> data.itemid  = 'id_2320';
                         code -> data.values as values, values.value = 'N/A';
                     };
                 };
@@ -159,17 +190,23 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
                 };
             };
 
-            // Histologie des vorbefunds (freitext?)
+            // Histologie des vorbefunds (Blutdiagnostik)
             observation -> tgt.data as data then
             {
-                observation.valueCodeableConcept as vcc, vcc.coding as coding where "$this.valueCodeableConcept.coding.code = 'CUP'" then
+                observation.valueCodeableConcept as vcc then
                 {
-                    vcc.text as text then 
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2319';
+
+                    vcc.coding as coding where "coding.code = 'CUP'" then 
                     {
-                        observation -> data.blockindex = 2;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2319';
-                        coding.code -> data.values as values, values.value = evaluate(coding, '$this.code');
+                        coding.code as code -> data.values as values, values.value = code;
+                    };
+
+                    vcc.coding as coding where "coding.code != 'CUP'" then 
+                    {
+                        coding -> data.values as values, values.value = evaluate(coding, '$this.code + \'\\t\' + $this.display');
                     };
                 };
             };
@@ -283,29 +320,54 @@ group TransformAnforderungCTS(source src: Bundle, target tgt: BackboneElement)
             //Liquid Biopsy
             servicerequest -> tgt.data as data then
             {
-                servicerequest.extension as liquidbiopsy then 
+                servicerequest.orderDetail as orderDetail then 
                 {
-                    liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/LiquidBiopsy'" then 
+                    servicerequest -> data.blockindex = 3;
+                    servicerequest -> data.groupindex = 0;
+                    servicerequest -> data.itemid = 'id_2313';
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C16885'", coding.code as code then 
                     {
-                        servicerequest -> data.blockindex = 3;
-                        servicerequest -> data.groupindex = 0;
-                        servicerequest -> data.itemid = 'id_2313';
-                        liquidbiopsy -> data.values as values, values.value = value;
+                        code -> data.values as values, values.value = 'Prim\u00e4rmutation';
+                    };
+
+                    orderDetail.coding as coding where "$this.coding.code = 'C19391'", coding.code as code then 
+                    {
+                        code -> data.values as values, values.value = 'Resistenztestung';
                     };
                 };
             };
 
-            //GrundFehlendeBiopsie
+            // GrundFehlendeBiopsie 
             servicerequest -> tgt.data as data then
             {
-                servicerequest.extension as liquidbiopsy then 
+                servicerequest.extension as extension then 
                 {
-                    liquidbiopsy.value as value where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/GrundFehlendeBiopsieAnforderung'" then 
+                    extension.url as url where "%tgt.data.where(itemid = 'id_2314').exists().not()" then
                     {
                         servicerequest -> data.blockindex = 3;
                         servicerequest -> data.groupindex = 0;
                         servicerequest -> data.itemid = 'id_2314';
-                        liquidbiopsy -> data.values as values, values.value = value;
+                    };
+
+                    extension.valueCodeableConcept as valueCodeableConcept where "$this.valueCodeableConcept.coding.code = 'FT'" then 
+                    {
+                        valueCodeableConcept -> data.values as values, values.value = 'Fehlende Tumormanifestation, die einer Biopsie zug\u00e4nglich w\u00e4re';
+                    };
+
+                    extension.valueCodeableConcept as valueCodeableConcept where "$this.valueCodeableConcept.coding.code = 'RA'" then 
+                    {
+                        valueCodeableConcept -> data.values as values, values.value = 'Reduzierter Allgemeinzustand';
+                    };
+
+                    extension.valueCodeableConcept as valueCodeableConcept where "$this.valueCodeableConcept.coding.code = 'UR'" then 
+                    {
+                        valueCodeableConcept -> data.values as values, values.value = 'Unzumutbares Risikos einer Biopsie bzw. zu erwartende Komplikationen';
+                    };
+
+                    extension.valueCodeableConcept as valueCodeableConcept where "$this.valueCodeableConcept.coding.code = 'AP'" then 
+                    {
+                        valueCodeableConcept -> data.values as values, values.value = 'Ablehnung seitens Patient(in)';
                     };
                 };
             };
