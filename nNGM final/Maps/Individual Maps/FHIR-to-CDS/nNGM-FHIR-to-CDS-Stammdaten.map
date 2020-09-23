@@ -7,7 +7,7 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCTS" = nNGM_Map
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneElement)
+group TransformStammdatenCTS(source src: Bundle, target tgt: BackboneElement)
 {
     src -> tgt.crfid = 'SD';
     src -> tgt.type = 'save';
@@ -303,5 +303,86 @@ group TransformStammdatenOperation(source src: Bundle, target tgt: BackboneEleme
                 };
             };
         };
+
+        /* ------------------------------ Consent ---------------------------- */
+        entry.resource as consent where "resource is Consent and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM'" then 
+        {   
+            //1a Signed
+            consent -> tgt.data as data then 
+            {
+                consent.policyRule as policyRule where "policyRule.coding.code = '1a'" then
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 3;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2440';
+                        consent -> data.values as values, values.value = 'yes';
+                    };
+
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 3;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2440';
+                        consent -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            // Datetime
+            consent -> tgt.data as data then
+            {
+                consent.policyRule as policyRule where "policyRule.coding.code = '1a' and provision.type = 'permit'" then
+                {
+                    consent.dateTime as dt then 
+                    {
+                        consent -> data.blockindex = 3;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2441';
+                        dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };         
+
+            //1b Signed
+            consent -> tgt.data as data then 
+            {
+                consent.policyRule as policyRule where "policyRule.coding.code = '1b'" then
+                {
+                    consent.provision as provision where "provision.type = 'permit'" then
+                    {
+                        consent -> data.blockindex = 3;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2446';
+                        provision.type -> data.values as values, values.value = 'yes';
+                    };
+                };
+
+                consent.policyRule as policyRule where "policyRule.coding.code = '1b'" then
+                {
+                    consent.provision as provision where "provision.type = 'deny'" then
+                    {
+                        consent -> data.blockindex = 3;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2446';
+                        provision.type -> data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            consent -> tgt.data as data then
+            {
+                consent.policyRule as policyRule where "policyRule.coding.code = '1b' and provision.type = 'permit'" then
+                {
+                    consent.dateTime as dt then 
+                    {
+                        consent -> data.blockindex = 3;
+                        consent -> data.groupindex = 0;
+                        consent -> data.itemid = 'id_2447';
+                        dt -> data.values as values, values.value = dt;
+                    };
+                };
+            };  
     };
 }
