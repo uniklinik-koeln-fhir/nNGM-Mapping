@@ -1,1792 +1,1992 @@
 /// version = 0.1
-/// title = "ImmunohistochemieFHIR"
+/// title = "nNGM: Mapping Immunhistochemie CTS"
 
-/*
-TODO
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCTS" = nNGM_Mapping_ImmunhistochemieCTS
 
-id_2180 PD-L1 missing post/neg -> auswertbar cc not working
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-*/
-
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunohistochemieFHIR" = ImmunohistochemieFHIR
-
-uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
-uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
-uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
-
-group TransformBundleImmunohistochemie(source src: CTS_Transport, target bundle: Bundle)
+group TransformImmunohistochemieCTS(source src: Bundle, target tgt: BackboneElement)
 {
-    src -> bundle.id = uuid();
-    src -> bundle.type = 'collection';
+    src -> tgt.crfid = '*-IHC1';
+    src -> tgt.type = 'save';
 
-    // ServiceRequest
-    src -> bundle.entry as entry then CreateTransformServiceRequestIHC(src, entry);
+    src then TransformImmunohistochemieCheckboxes(src, tgt);
 
-    // Specimen
-    src -> bundle.entry as entry then CreateSpecimenIHC(src, entry);
-
-    // DiagnosticReport
-    src -> bundle.entry as entry then CreateDiagnosticReportIHC(src, entry);
-
-    // Observation
-    src -> bundle.entry as entry then CreateTransformObservationBRAF(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationCK7(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationMIB1(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationNapsinA(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationP40(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationSynaptophysin(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationTTF1(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationALK(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationMET(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationPDL1(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationROS1(src, entry);
-}
-/*-----------------Specimen-----------------------*/
-group CreateSpecimenIHC(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
+    src.entry as entry then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        /* --------------- ServiceRequest ---------------------- */
+        entry.resource as serviceRequest where "resource is ServiceRequest" then
         {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+            // Durchfuehrung
+            serviceRequest->tgt.data as data then
+            {
+                serviceRequest.status as status where "$this.status = 'active'" then
+                {
+                    serviceRequest->data.blockindex = 15;
+                    serviceRequest->data.groupindex = 0;
+                    serviceRequest->data.itemid = 'id_2520';
+                    status->data.values as values, values.value = 'in Bearbeitung';
+                };
+                serviceRequest.status as status where "$this.status = 'completed'" then
+                {
+                    serviceRequest->data.blockindex = 15;
+                    serviceRequest->data.groupindex = 0;
+                    serviceRequest->data.itemid = 'id_2520';
+                    status->data.values as values, values.value = 'abgeschlossen';
+                };
+            };
+
+            // Abschluss
+            serviceRequest->tgt.data as data then
+            {
+                serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
+                {
+                    statusextension where "$this.url ='status'" then
+                    {
+                        serviceRequest->data.blockindex = 15;
+                        serviceRequest->data.groupindex = 0;
+                        serviceRequest->data.itemid = 'id_2462';
+                        statusextension.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code->data.values as values, values.value = code;
+                    };
+                };
+            };
+
+            // Datum des Abschlusses
+            serviceRequest->tgt.data as data then
+            {
+                serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+                {
+                    datumextension where "$this.url ='datum'" then
+                    {
+                        serviceRequest->data.blockindex = 15;
+                        serviceRequest->data.groupindex = 0;
+                        serviceRequest->data.itemid = 'id_2521';
+                        datumextension.valueDate as valueDate->data.values as values, values.value = valueDate;
+                    };
+                };
+            };
+        };
+
+        //------------------------ Specimen ------------------------
+        entry.resource as specimen where "resource is Specimen" then
+        {
+            // Biopsy-ID
+            specimen->tgt.data as data then
+            {
+                specimen.identifier as identifier then
+                {
+                    specimen->data.blockindex = 0;
+                    specimen->data.groupindex = 0;
+                    specimen->data.itemid = 'id_1601';
+                    identifier.value as value->data.values as values, values.value = value, values.unit = 'count';
+                };
+            };
+        };
+
+        //------------------------ DiagnosticReport ------------------------
+        entry.resource as diagnosticReport where "resource is DiagnosticReport" then
+        {
+            // Untersuchungs-ID
+            diagnosticReport->tgt.data as data then
+            {
+                diagnosticReport.identifier as identifier,
+                    identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
+                {
+                    diagnosticReport->data.blockindex = 1;
+                    diagnosticReport->data.groupindex = 0;
+                    diagnosticReport->data.itemid = 'assessment_id';
+                    identifier.value as value->data.values as values, values.value = value;
+                };
+            };
+        };
+
+        /*---------------BRAF IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'BRAF'" then
+        {
+
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 4;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'braf_ihc_group';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'braf_ihc_phaenotype').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 4;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'braf_ihc_phaenotype';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'braf_ihc_ab').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 4;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'braf_ihc_ab';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'braf_ihc_kit_ab_producer').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 4;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'braf_ihc_kit_ab_producer';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 4;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'braf_ihc_result';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 4;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'braf_ihc_result';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 4;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'braf_ihc_result';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        }; 
+
+        /*---------------CK7 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'CK7'" then
+        {
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 5;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2037';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2038').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 5;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2038';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2041').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 5;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2041';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2042').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 5;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2042';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 5;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2045';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 5;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2045';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 5;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2045';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------MIB1 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'MIB1'" then
+        {
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 6;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2055';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2056').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 6;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2056';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2059').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 6;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2059';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2060').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 6;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2060';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 6;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2063';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 6;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2063';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 6;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2063';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------NAPSIN A IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'Napsin A'" then
+        {
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 7;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2064';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2065').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 7;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2065';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2068').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 7;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2068';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2069').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 7;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2069';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 7;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2072';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 7;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2072';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 7;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2072';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.code where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.code where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------P40 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'P40'" then
+        {
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 8;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2073';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2074').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 8;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2074';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2077').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 8;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2077';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2078').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 8;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2078';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 8;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2079';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 8;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2079';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 8;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2079';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------Synaptophysin IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'SYNAPTOPHYSIN'" then
+        {
+
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 9;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2080';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2081').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 9;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2081';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2084').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 9;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2084';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2085').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 9;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2085';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 9;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2088';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 9;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2088';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 9;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2088';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------TTF1 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'TTF1'" then
+        {
+
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 10;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2089';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2090').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 10;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2090';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2093').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 10;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2093';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2094').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 10;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2094';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 10;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2097';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 10;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2097';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 10;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2097';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------ALK IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'ALK'" then
+        {
+
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 11;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2098';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2534').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 11;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2534';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2102').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 11;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2102';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2103').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 11;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2103';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 11;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2106';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 11;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2106';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 11;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2106';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA11884-6'" then
+                {
+                    observation->data.blockindex = 11;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2106';
+                    code->data.values as values, values.value = 'fraglich';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+        /*---------------MET IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'MET'" then
+        {
+
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 12;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2132';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2535').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 12;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2535';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2136').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 12;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2136';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2451').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 12;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2451';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 12;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2139';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 12;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2139';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 12;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2139';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA11884-6'" then
+                {
+                    observation->data.blockindex = 12;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2139';
+                    code->data.values as values, values.value = 'fraglich';
+                };
+            };
+
+            // Klassifikation
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25161' and %tgt.data.where(itemid = 'id_2140').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 12;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2140';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Expression high level
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueBoolean as value where "$this.valueBoolean = true" then  
+                    {
+                        observation->data.blockindex = 12;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2141';
+                        value -> data.values as values, values.value = 'yes';
+                    };
+
+                    component.valueBoolean as value where "$this.valueBoolean = false" then
+                    {
+                        observation->data.blockindex = 12;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2141';
+                        value ->data.values as values, values.value = 'no';
+                    };
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+
+        //  PDL1 menge tumorcellen, flaeche pos cellen 
+        /*---------------PD-L1 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'PD-L1'" then
+        {
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 13;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2172';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2173').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 13;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2173';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2176').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 13;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2176';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2177').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 13;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2177';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 13;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2180';
+                    code->data.values as values, values.value = 'auswertbar';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 13;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2180';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+
+            };
+
+            // Menge der tumorzellen 
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueQuantity as quantity where "code.coding.code = 'C127771' and %tgt.data.where(itemid = 'id_2181').exists().not()" then
+                    {
+                        observation->data.blockindex = 13;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2181';
+                        quantity.value as value ->data.values as values, values.unit = 'percent', values.value = value;
+                    };
+                };
+            };
+
+            // Flaeche positiver Immunzellen
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueQuantity as quantity where "code.coding.code = 'tcell-surface-ratio' and %tgt.data.where(itemid = 'id_2182').exists().not()" then
+                    {
+                        observation->data.blockindex = 13;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2182';
+                        quantity.value as value ->data.values as values, values.unit = 'percent', values.value = value;
+                    };
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+        };
+
+
+        /*---------------ROS1 IHC OBSERVATION----------------*/
+        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc' and resource.code.coding.code = 'ROS1'" then
+        {
+
+            // Date Of Assesment
+            observation->tgt.data as data then
+            {
+                observation.effectivePeriod as period then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2211';
+                    period.start as dateOfAssessment->data.values as values, values.value = dateOfAssessment;
+                };
+            };
+
+            
+            // Phaenotyp
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueString where "%tgt.data.where(itemid = 'id_2536').exists().not()" then
+                    {
+                        component.valueString as value  then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2536';
+                            value->data.values as values, values.unit = 'predef', values.value = 'Expresssion';
+                        };
+                    };
+                };
+            };
+
+            // Antikoerper  C16295 http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C16295' and %tgt.data.where(itemid = 'id_2215').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2215';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Hersteller
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2216').exists().not()" then
+                    {
+                        component.valueCodeableConcept as valueCodeableConcept,
+                            valueCodeableConcept.coding as coding,
+                            coding.code as code then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2216';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Ergebnis
+            observation->tgt.data as data then
+            {
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'positiv';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6577-6'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'negativ';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA18198-4'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'nicht auswertbar';
+                };
+
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA11884-6'" then
+                {
+                    observation->data.blockindex = 14;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2219';
+                    code->data.values as values, values.value = 'fraglich';
+                };
+            };
+
+            // SOP number
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2613').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2613';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
+
+            // Standort
+            observation->tgt.data as data then
+            {
+                observation.component as component then
+                {
+                    component.valueCodeableConcept where "code.coding.code = 'C25341' and %tgt.data.where(itemid = 'id_2435').exists().not()" then
+                    {
+                        component.valueString as code then
+                        {
+                            observation->data.blockindex = 2;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2435';
+                            code->data.values as values, values.value = code;
+                        };
+                    };
+                };
+            };
         };
     };
 }
 
-group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+group TransformImmunohistochemieCheckboxes(source src: Bundle, target tgt: BackboneElement)
 {
-    // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // fixed status
-    src -> tgt.type = create('BackboneElement') as cc, cc.coding as type,
-                      type.system = 'http://snomed.info/sct', 
-                      type.version = 'http://snomed.info/sct/900000000000207008',
-                      type.code as code, 
-                      code.extension as dataAbsentReason, 
-                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // Biopsy-ID -> identifier.value
-    src.operations as operations, operations.data as data then 
+    src.entry as entry then
     {
-         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'BRAF'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
         {
-            values.value as value -> tgt.identifier as identifier, 
-                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
-                                     identifier.value = value;
-        };
-    };
-}
-
-/*-----------------DiagnosticReport-----------------------*/
-group CreateDiagnosticReportIHC(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReport(src, diagnosticreport);
-        };
-    };
-}
-
-group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport) 
-{
-    // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
-
-    // fixed status
-    src -> tgt.status = 'active';
-
-    // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // Untersuchung-ID -> identifier.value
-    src.operations as operations, operations.data as data then 
-    {
-         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            values.value as value -> tgt.identifier as identifier, 
-                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer', 
-                                     identifier.value = value;
-        };
-    };
-}
-
-/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
-group CreateTransformServiceRequestIHC(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'
-        or blockindex = 15 and groupindex = 0 and itemid = 'id_2462'
-        or blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequest(src, serviceRequest);
-        };
-    };
-}
-
-/* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-     // Intent
-    src -> tgt.intent = cast('proposal', 'FHIR.code');
- 
-    // Code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'immunohistochemie');
-
-    // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // AuthoredOn
-    src -> tgt.authoredOn as ao, 
-            ao.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Category
-    src -> tgt.category as cat, 
-            cat.coding as coding, 
-            coding.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    src.operations as operations, operations.data as data then
-    {
-        //Status der Untersuchungen
-        //Durchfuehrung
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            observation -> tgt.data as data collate then
             {
-                value -> tgt.status = 'active' collate;
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = 'completed' collate;
-            };
-        };
-    };
-
-    // Extensions
-    src then TransformIHCStatusExtension(src, tgt);
-}
-
-/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
-group TransformIHCStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
-{
-    src.operations as operations, operations.data as data then
-    {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2462'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value);
-                    value -> statusExtension.url = 'status';
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
+                observation -> data.values as values, values.value = 'BRAF';
             };
         };
 
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'CK7'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
+            observation -> tgt.data as data collate then
             {
-                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
-            };
-        };
-    };
-}
-
-
-
-/* ------------------------------ Observation BRAF---------------------------- */
-group CreateTransformObservationBRAF(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_group'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_phaenotype'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_ab'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_kit_ab_producer'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAF(src, observation);
-        };
-    };
-}
-/* ------------------------------ Observation BRAF ---------------------------- */
-group TransformObservationBRAF(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //BRAF code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'BRAF');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
+                observation -> data.values as values, values.value = 'CK7';
             };
         };
 
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MIB1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
         {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
+            observation -> tgt.data as data collate then
             {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
+                observation -> data.values as values, values.value = 'MIB1';
             };
         };
 
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'Napsin A'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_phaenotype'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
+            observation -> tgt.data as data collate then
             {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
+                observation -> data.values as values, values.value = 'Napsin A';
             };
         };
 
-        // Date of Assessment 
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_group'" then
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'P40'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_ab'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
+            observation -> tgt.data as data collate then
             {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'P40';
             };
         };
 
-        // Hersteller
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_kit_ab_producer'" then
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'Synaptophysin'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
         {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
+            observation -> tgt.data as data collate then
             {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'Synaptophysin';
             };
         };
 
-        // Ergebnis
-        src.operations as operations, operations.data as data then
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'TTF1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
         {
-            data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
+            observation -> tgt.data as data collate then
             {
-                values.value where "$this.value = 'positiv'" then 
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
+                observation -> data.values as values, values.value = 'TTF1';
+            };
+        };
 
-                values.value where "$this.value = 'negativ'" then 
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ALK'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
+                observation -> data.values as values, values.value = 'ALK';
+            };
+        };
 
-                values.value where "$this.value = 'nicht auswertbar'" then 
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MET'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
+                observation -> data.values as values, values.value = 'MET';
+            };
+        };
 
-                values.value where "$this.value = 'fraglich'" then 
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'PD-L1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
                 {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
                 };
+                observation -> data.values as values, values.value = 'PD-L1';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ROS1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2508';
+                };
+                observation -> data.values as values, values.value = 'ROS1';
             };
         };
     };
-}
-
-
-/* ------------------------------ Observation CK7---------------------------- */
-group CreateTransformObservationCK7(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2037'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2038'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2041'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2042'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationCK7(src, observation);
-        };
-    };
-}
-
-group TransformObservationCK7(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //CK7 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'CK7');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2037'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2038'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2041'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2042'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2405'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation MIB1---------------------------- */
-group CreateTransformObservationMIB1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2055'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2056'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2059'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2060'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2063'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationMIB1(src, observation);
-        };
-    };
-}
-
-group TransformObservationMIB1(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //MIB1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'MIB1');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2056'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2055'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-
-        // Antikörper
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2059'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2060'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2063'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation Napsin A---------------------------- */
-group CreateTransformObservationNapsinA(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2064'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2065'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2068'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2069'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2072'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationNAPSINA(src, observation);
-        };
-    };
-}
-
-group TransformObservationNAPSINA(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //MIB1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Napsin A');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2065'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2064'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2068'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2069'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2072'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation P40---------------------------- */
-group CreateTransformObservationP40(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2073'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2074'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2077'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2078'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2079'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationP40(src, observation);
-        };
-    };
-}
-
-group TransformObservationP40(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //P40 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'P40');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2074'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2073'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2077'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2078'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2079'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation Synaptophysin---------------------------- */
-group CreateTransformObservationSynaptophysin(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2080'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2081'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2084'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2085'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2088'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationSynaptophysin(src, observation);
-        };
-    };
-}
-
-group TransformObservationSynaptophysin(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //Synaptophysin code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Synaptophysin');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2081'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2080'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-
-        // Antikörper
-        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2084'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2085'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2088'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation TTF1---------------------------- */
-group CreateTransformObservationTTF1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2089'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2090'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2093'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2094'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2097'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationTTF1(src, observation);
-        };
-    };
-}
-
-group TransformObservationTTF1(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //TTF1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'TTF1');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2090'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2089'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2093'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2094'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2097'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation ALK---------------------------- */
-group CreateTransformObservationALK(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2098'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2534'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2102'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2103'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2106'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationALK(src, observation);
-        };
-    };
-}
-
-group TransformObservationALK(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //ALK code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ALK');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2534'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2098'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-
-        // Antikörper
-        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2102'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2103'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2106'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation MET---------------------------- */
-group CreateTransformObservationMET(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2132'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2535'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2136'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2451'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2139'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2140'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2141'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationMET(src, observation);
-        };
-    };
-}
-
-group TransformObservationMET(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-    
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //MET code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'MET');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2535'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2132'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2136'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2451'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2139'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-
-        // Klassifikation
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2140'" then
-        {
-            values.value as klassifikation -> tgt.component = create('BackboneElement') as componentKlassifikation then
-            {
-                klassifikation -> componentKlassifikation.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/0-3+-klassifikation', klassifikation);
-                klassifikation -> componentKlassifikation.code = cc('http://ncit.nci.nih.gov', 'C25161');
-            };
-        };
-
-        // Expression High Level
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2141'" then
-        {
-            values.value as expression where "$this.value = 'yes'" then
-            {
-                expression -> tgt.component = create('BackboneElement') as componentExpression then
-                {
-                    expression -> componentExpression.valueBoolean = 'true';
-                    expression -> componentExpression.code = cc('http://ncit.nci.nih.gov', 'C129474');
-                };
-            };
-            values.value as expression where "$this.value = 'no'" then
-            {
-                expression -> tgt.component = create('BackboneElement') as componentExpression then
-                {
-                    expression -> componentExpression.valueBoolean = 'false';
-                    expression -> componentExpression.code = cc('http://ncit.nci.nih.gov', 'C129474');
-                };
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation PD-L1---------------------------- */
-group CreateTransformObservationPDL1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2172'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2173'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2176'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2177'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2180'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2181'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2182'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationPDL1(src, observation);
-        };
-    };
-}
-
-group TransformObservationPDL1(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //PD-L1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'PD-L1');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2173'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2172'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2176'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2177'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2180'" then
-            {
-                values.value where "$this.value = 'auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value as ergebnis where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-            };
-        };
-
-        // Menge an Tumorzellen
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2181'" then
-        {
-            values.value as ergebnis -> tgt.component = create('BackboneElement') as postumorzellencomponent then
-            {
-                ergebnis -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(ergebnis, quantity);
-                ergebnis -> postumorzellencomponent.code = cc('http://ncit.nci.nih.gov', 'C127771');
-            };
-        };
-
-        // Fläche positiver Immunzellen / Gesamttumorfläche
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2182'" then
-        {
-            values.value as ergebnis -> tgt.component = create('BackboneElement') as postumorzellencomponent then
-            {
-                ergebnis -> postumorzellencomponent.valueQuantity = create('Quantity') as quantity then MapPercentageValue(ergebnis, quantity);
-                ergebnis -> postumorzellencomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'tcell-surface-ratio');
-            };
-        };
-    };
-}
-
-/* ------------------------------ Observation ROS1---------------------------- */
-group CreateTransformObservationROS1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2211'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2536'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2215'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2216'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2219'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationROS1(src, observation);
-        };
-    };
-}
-
-group TransformObservationROS1(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
-
-    // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //ROS1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ROS1');
-
-    //IHC category
-    src then MapIHCCategory(src, tgt);
-
-    // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
-    {
-
-        // Netzwerkzentrum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
-                {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-                };
-            };
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2613'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as sopcomponent then
-            {
-                values.value as value where "%tgt.component.where(code = 'C48443').exists().not()" then
-                {
-                    sop -> sopcomponent.valueString = sop;
-                    sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-                };
-            };
-        };
-
-        // Date of Assessment end
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.end = dateOp(effectiveDT, 'date');
-        };
-
-        // Phänotyp
-        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2536'" then
-        {
-            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
-            {
-                values.value as phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
-                {
-                    phaenotyp->componentPhaenotyp.valueString = phaenotyp;
-                    phaenotyp->componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
-                };
-            };
-        };
-
-        // Date of Assessment
-        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2211'" then
-        {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
-        };
-
-        // Antikörper
-        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2215'" then
-        {
-            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
-            {
-                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
-                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
-            };
-        };
-
-        // Hersteller
-        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2216'" then
-        {
-            values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
-            {
-                hersteller -> componentHersteller.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/hersteller-molpatho', hersteller);
-                hersteller -> componentHersteller.code = cc('http://ncit.nci.nih.gov', 'C25392');
-            };
-        };
-
-        // Ergebnis
-        src.operations as operations, operations.data as data then
-        {
-            data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2219'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        };
-    };
-}
-
-
-/*-----------------HELPERS----------------------------*/
-
-group MapPercentageValue(source src: string, target tgt: Quantity)
-{
-    src -> tgt.value = src,
-            tgt.system = 'http://unitsofmeasure.org',
-            tgt.unit = 'percentage',
-            tgt.code = '%';
-}
-
-
-group MapIHCCategory(source src: CTS_Transport, target tgt: Observation)
-{
-    //IHC category
-    src -> tgt.category as category then
-    {
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://hl7.org/fhir/ValueSet/observation-category',
-                                                                coding.code = 'laboratory';                                                    
-    };
-}
-
-group MapIHCMethode(source src: CTS_Transport, target tgt: Observation)
-{
-    // IHC Methode
-    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23020');
 }
