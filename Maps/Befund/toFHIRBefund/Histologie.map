@@ -1,96 +1,44 @@
 /// version = 0.1
 /// title = "nNGM: Mapping Histologie FHIR"
 
-/*TODO
-    SPECIMEN -> CDS FIELD: Tumormaterial -> What is this field? What should be placed there? Shouldn´t there be a Valueset of possible tumormaterials?
-                                            Why is this a free text field in the CDS? This should be mapped to the collection field in the Specimen. 
-                                            Maybe add an extension for that?
-
-    OBSERVATION -> CDSS FIELD: ANTEIL AN SIEGELRINGZELLKARZINOMEN  -> "Anteil an Siegelringzellkarzinomen" has no code attached to the component.
-
-    Create Pathologie fall ID slice http://uk-koeln.de/fhir/NamingSystem/nNGM/pathologiefallid
-
-    
-
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR" = nNGM_Mapping_HistologieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
+
 
 /* ------------------------------ Bundle ---------------------------- */
 group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
 {
-    // Structure: Source Content -> Target Transform then Dependent Rules
-    // Source Content: Specifies one or more elements from the source that contribute to the mapping
-    // Target Transform: Specifications of how to use the source content to create the target content
-    // Dependent Rules: (Optional) Specifies a group or set of child rules to apply within the scope of the rule
-
     src -> bundle.id = uuid();
     src -> bundle.type = 'collection';
 
     src -> bundle.entry as entry then CreateSpecimenHistologie(src, entry);
+    src -> bundle.entry as entry then CreateTransformDiagnosticReportHistologie(src, entry);
     src -> bundle.entry as entry then CreateObservationHistologie(src, entry);
-    src -> bundle.entry as entry then CreateEpisodeOfCareHistologie(src, entry);
+    src -> bundle.entry as entry then CreateServiceRequestHistologie(src, entry);
 }
 
-/* ------------------------------ EpisodeOfCare ---------------------------- */
-
-/*check if there is a EpisodeOfCare required*/
-group CreateEpisodeOfCareHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Check if Specimen is required ---------------------------- */
+group CreateSpecimenHistologie(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'
+                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
+                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2516'
+                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
         {
-            src -> tgt.resource = create('EpisodeOfCare') as episodeofcare then TransformEpisodeOfCareHistologie(src, episodeofcare);
-        };
-    };
-}
-
-group TransformEpisodeOfCareHistologie(source src: CTS_Transport, target tgt: EpisodeOfCare)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
-
-    //status 
-    src -> tgt.status as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    //subject
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    //status 
-    src -> tgt.status = cast('active', 'FHIR.code');
-
-    src.operations as operations, operations.data as data then
-    {
-        //Untersuchungs-ID
-         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            values.value as value -> tgt.identifier = create('Identifier') as untersuchungsid, untersuchungsid.system = cast('http://uk-koeln.de/fhir/NamingSystem/nNGM/fallnummer', 'FHIR.uri'), untersuchungsid.value = value;
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenHistologie(src, specimen);
         };
     };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
-group CreateSpecimenHistologie(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
-        {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
-        };
-    };
-}
-
-group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+group TransformSpecimenHistologie(source src: CTS_Transport, target tgt: Specimen) 
 {
     // Metadata
     src -> tgt.id = uuid();
@@ -101,46 +49,85 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
 
     src.operations as operations, operations.data as data then 
     {
-        //Biopsy-ID
+        // Biopsy-ID -> biopsyId.value
          data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
         {
             values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
         };
 
-        //Pathologie-Fall-ID
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
-        {
-            values.value as value -> tgt.identifier as identifier, identifier.value = value, 
-                                                                    identifier.system = cast('http://uk-koeln.de/fhir/NamingSystem/nNGM/pathologiefallid', 'FHIR.uri');
-        };
-
-        //Eingang des Tumormaterials in der Pathologie
+        // Eingang des Tumormaterials in der Pathologie -> receivedTime
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
         {
-            values.value as value -> tgt.collection as collection, collection.collectedDateTime = dateOp(value, 'dateTime');
+            values.value as value -> tgt.receivedTime = dateOp(value, 'dateTime');
         };
 
-        //Eingangsnummer des Tumormaterials in der Pathologie
+        // Eingangsnummer des Tumormaterials in der Pathologie -> accessionIdentifier:eingangsnummerPatho
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2516'" then
         {
-            values.value as value -> tgt.accessionIdentifier as identifier, identifier.value = value;
+            values.value as value -> tgt.accessionIdentifier as identifier, identifier.system = cast('http://uk-koeln.de/NamingSystem/nNGM/eingangPathoNummer', 'FHIR.uri'), identifier.value = value;
         };
 
-        /*Tumormaterial
+        // Tumormaterial -> type.text
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
         {
-           //TODO
-        };*/
-    };
-
-    //Type (1..1)
-    src -> tgt.type as type, type.coding = create('Coding') as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+           values.value as value -> tgt.type as type, type.text = value, type.coding = create('Coding') as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
                                                                                         snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                    snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                                                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+                                                                                        snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason,
+                                                                                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                                                                                        dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+        };
+    };
 }
 
+/* ------------------------------ Check if DiagnosticReport is required ---------------------------- */
+group CreateTransformDiagnosticReportHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id' or 
+                                    blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
+        {
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportHistologie(src, diagnosticReport);
+        };
+    };
+}
 
+/* ------------------------------ DiagnosticReport ---------------------------- */
+group TransformDiagnosticReportHistologie(source src: CTS_Transport, target tgt: DiagnosticReport)
+{
+    // Metadata
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+
+    // Status
+    src -> tgt.status as status, status.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Status
+    src -> tgt.code as code, code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        // Untersuchungs-ID -> identifier:befundNummer.value
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as id -> tgt.identifier = create('identifier') as befundNummer,
+                                                            befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                            befundNummer.value = id;
+        };
+
+        // Pathologie-Fall-ID -> identifier:externePathoBefundNummer.value
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
+        {
+            values.value as id -> tgt.identifier = create('identifier') as externePathoBefundNummer,
+                                                            externePathoBefundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/externePathoBefundnummer',
+                                                            externePathoBefundNummer.value = id;
+        };
+    };
+}
 
 /* ------------------------------ Observation ---------------------------- */
 group CreateObservationHistologie(source src: CTS_Transport, target tgt: BackboneElement)
@@ -171,39 +158,50 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
     // Patient reference
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
 
-    // Category
-    src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'laboratory');
+    // Code
+    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C18000');
+
+    //status
+    src -> tgt.status as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Observation data 
     src.operations as operations, operations.data as data then 
     {
-
-        src then MapObservationStatusHistologie(src, tgt);
-        src then MapObservationAbschlussHistologie(src, tgt);
-
-        //Klassifikation
+        // Klassifikation -> component:klassifikation.valueCodeableConcept
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1658'" then
         {
-             values.value as value -> tgt.code = create('CodeableConcept') as cc, cc.coding as coding, coding.system = 'system: urn:oid:2.16.840.1.113883.6.43.1',
-                                                                                                            coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
-                                                                                                            coding.display = evaluate(value, '$this.split(\'\\t\').last()');
+            values.value as value -> tgt.component = create('CodeableConcept') as klassifikation,
+                                                    klassifikation.code = cc('http://ncit.nci.nih.gov', 'C25161'),
+                                                    klassifikation.valueCodeableConcept as vcc,
+                                                    vcc.coding as coding,
+                                                    coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/histologie-klassifikation', 
+                                                    coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
+                                                    coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
 
-        //Lokalisation
+        // Lokalisation -> bodysite
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2469'" then
         {
-            values.value as value -> tgt.bodySite = create('CodeableConcept') as cc, cc.coding as coding, coding.system = 'system: urn:oid:2.16.840.1.113883.6.43.1',
-                                                                                                            coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
-                                                                                                            coding.display = evaluate(value, '$this.split(\'\\t\').last()');
+            values.value as value -> tgt.bodySite = create('CodeableConcept') as cc, cc.coding as coding, 
+            coding.system = 'http://uk-koeln.de/fhir/ValueSet/icd-o-3-bodysite',
+            coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
+            coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
 
-        //Grading
+        // Grading
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2403'" then
         {
-            values.value as value -> tgt.valueCodeableConcept = cc('urn:oid:2.16.840.1.113883.15.16', value, value);
+            values.value as value -> tgt.valueCodeableConcept = create('CodeableConcept') as cc, cc.coding as coding, 
+            coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/grading',
+            coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
+            coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
 
-        //Wachstumsmuster bei Adenokarzinom lepidisch
+        
+        //Wachstumsmuster bei Adenokarzinom lepidisch -> component:wachtumsmusterBeiAdenokarzinomLepidisch.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1286'" then
         {
             values.value as wachstumsmuster -> tgt.component = create('BackboneElement') as component then
@@ -213,7 +211,7 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
             }; 
         };
 
-        //Wachstumsmuster bei Adenokarzinom azinär
+        //Wachstumsmuster bei Adenokarzinom azinaer -> component:wachtumsmusterBeiAdenokarzinomAzinaer.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1296'" then
         {
             values.value as wachstumsmuster -> tgt.component = create('BackboneElement') as component then
@@ -223,7 +221,7 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
             }; 
         };
 
-        // 18: Wachstumsmuster bei Adenokarzinom papillär
+        // 18: Wachstumsmuster bei Adenokarzinom papillaer -> component:wachtumsmusterBeiAdenokarzinomPapilaer.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1294'" then
         {
             values.value as wachstumsmuster -> tgt.component = create('BackboneElement') as component then
@@ -233,7 +231,7 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
             }; 
         };
         
-        //Wachstumsmuster bei Adenokarzinom mikropapillär
+        //Wachstumsmuster bei Adenokarzinom mikropapill�r -> component:wachtumsmusterBeiAdenokarzinomMikropapilaer.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1288'" then
         {
             values.value as wachstumsmuster -> tgt.component = create('BackboneElement') as component then
@@ -243,7 +241,7 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
             }; 
         };
 
-        //Wachstumsmuster bei Adenokarzinom solide
+        //Wachstumsmuster bei Adenokarzinom solide -> component:wachtumsmusterBeiAdenokarzinomSolide.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1292'" then
         {
             values.value as wachstumsmuster -> tgt.component = create('BackboneElement') as component then
@@ -253,24 +251,19 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
             }; 
         };
 
-        //Anteil an Siegelringzellkarzinomen   
+        //Anteil an Siegelringzellkarzinomen -> component:AnteilSiegelringzellkarzinomen.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2519'" then
         {
              values.value as wachstumsmuster -> tgt.component = create('BackboneElement') as component then
             {
                 wachstumsmuster -> component.valueQuantity = create('Quantity') as quantity then MapPercentageValue(wachstumsmuster, quantity);
+                wachstumsmuster -> component.code = cc('urn:oid:2.16.840.1.113883.6.43.1', '8490/3');
             }; 
-        };
-
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as value -> tgt.effectivePeriod = create('BackboneElement') as period, period.end = dateOp(value, 'dateTime');
         };
     };
 }
 
-
+/* ------------------------------ Helper function ---------------------------- */
 group MapPercentageValue(source src: string, target tgt: Quantity)
 {
     src -> tgt.value = src,
@@ -279,25 +272,96 @@ group MapPercentageValue(source src: string, target tgt: Quantity)
             tgt.code = '%';
 }
 
-group MapObservationStatusHistologie(source src: CTS_Transport, target tgt: Observation)
+/* ------------------------------ Check if ServiceRequest is required ---------------------------- */
+group CreateServiceRequestHistologie(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
+                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
         {
-            values.value as value -> tgt.status;
+            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequest(src, servicerequest);
         };
     };
 }
 
-group MapObservationAbschlussHistologie(source src: CTS_Transport, target tgt: Observation)
+/* ------------------------------ ServiceRequest ---------------------------- */
+group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    // Resource information
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    // intent
+    src -> tgt.intent = 'proposal';
+
+     // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Category
+    src -> tgt.category as category, 
+            category.coding as coding,
+            coding.code as code,
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+                
+    // code
+    src -> tgt.code as code, 
+            code.coding as coding,
+            coding.code as actualCode,
+            actualCode.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // authoredOn
+    src -> tgt.authoredOn as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    
+    src.operations as operations, operations.data as data then 
+    {
+        // Status
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
+        {
+            values.value as value -> tgt.status = cast(value, 'FHIR.code');
+        };
+    };
+
+    src then TransformHistologieStatusExtension(src, tgt);
+}
+
+/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
+group TransformHistologieStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
 {
     src.operations as operations, operations.data as data then
     {
+        // Status des Abschlusses
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
         {
-            values.value as value -> tgt.status as status, status.extension as extension collate, extension.url = 'http://uk-koeln.de/fhir/Extension/statusAbschluss',
-                                                                                            extension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/statusAbschluss', value, value);
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
+            };
+        };
+
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
+            };
         };
     };
 }

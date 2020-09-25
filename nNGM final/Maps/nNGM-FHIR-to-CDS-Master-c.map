@@ -1,0 +1,60 @@
+/// version = 0.1
+/// title = "nNGM: nNGMv09c - FHIR to CTS"
+
+// THIS IS THE MASTER MAP ID USED IN THE CENTRAL CDS INSTANCE OF nNGM
+map "http://uk-koeln.de/fhir/StructureMap/nNGMv09c" = nNGMv09c
+
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+// Antrag
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCTS"
+
+// Befund
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/CTSBeurteilung"
+
+// Operation
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS"
+
+
+group MapCDS(source src: Bundle, target tgt: CTS_Transport)
+{
+    src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+
+    // Patient ID
+    src.entry as entry then
+    {
+        entry.resource as patient where "resource is Patient" then
+        {
+            patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
+        };
+    };
+
+    // Antrag
+    src -> tgt.operations as operations then TransformStammdatenCTS(src, operations);
+    src -> tgt.operations as operations then TransformTNMCTS(src, operations);
+    src -> tgt.operations as operations then TransformResistenztestungCTS(src, operations);
+    src -> tgt.operations as operations then TransformAnforderungCTS(src, operations);
+    src -> tgt.operations as operations then TransformBasisangabenCTS(src, operations);
+
+    // Befund
+    src -> tgt.operations as operations then TransformFastTrackCTS(src, operations);
+    src -> tgt.operations as operations then TransformHistologieCTS(src, operations);
+    src -> tgt.operations as operations then TransformSonstigeUntersuchungCTS(src, operations);
+    src -> tgt.operations as operations then TransformImmunohistochemieCTS(src, operations);
+    src -> tgt.operations as operations then TransformBeurteilungCTS(src, operations);
+
+    // Operation
+    src -> tgt.operations as operations then TransformStrahlentherapieCTS(src, operations);
+    src -> tgt.operations as operations then TransformSonstigeTherapieCTS(src, operations);
+}

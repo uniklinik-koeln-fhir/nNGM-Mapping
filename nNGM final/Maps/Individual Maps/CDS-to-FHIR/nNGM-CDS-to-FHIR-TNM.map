@@ -1,0 +1,281 @@
+/*
+TODO
+- Observation.code.coding.code is mandatory in the profile, but not asked for in the form.
+  It is therefore marked as absent in the observation. If the form gets updated, this map 
+  and the reverse map should be updated as well.
+*/
+
+/// version = 0.1
+/// title = "TNMMap"
+/// CTS -> FHIR
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR" = nNGM_Mapping_TNMFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
+uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+
+ /* ------------------------------ Bundle ---------------------------- */
+group TransformBundleTNM(source src: CTS_Transport, target bundle: Bundle)
+{
+    src -> bundle.entry as entry then CreateSpecimenTNM(src, entry);
+    src -> bundle.entry as entry then CreateObservationTNM(src, entry);
+}
+
+/* ------------------------------ Check whether specimen needs to be created ---------------------------- */ 
+group CreateSpecimenTNM(source src: CTS_Transport, target tgt: BackboneElement) 
+{
+    // Check whether specimen needs to be created and create it if that is the case
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen); 
+        };
+    };
+}
+
+/* ------------------------------ Specimen ---------------------------- */ 
+group TransformSpecimenTNM(source src: CTS_Transport, target tgt: Specimen) 
+{ 
+    src -> tgt.id = uuid(); 
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Type
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
+ 
+    // Patient reference 
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    
+    src.operations as operations, operations.data as data then 
+    { 
+        // Biopsienummer -> tgt.identifier.value 
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601'" then 
+        { 
+            values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value); 
+        }; 
+    }; 
+}
+
+/* ------------------------------ Check whether the TNM observation needs to be created ---------------------------- */ 
+group CreateObservationTNM(source src: CTS_Transport, target tgt: BackboneElement) 
+{
+    // Check whether observation needs to be created and create it if that is the case
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1300'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1385'
+                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_2492'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_1378'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_1379'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_1380'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2493'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2495'
+                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2497'
+                                        or blockindex = 1 and groupindex = 1 and itemid = 'id_2498'
+                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1383'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationTNM(src, observation);
+        };
+    };
+}
+
+ /* ------------------------------ Observation ---------------------------- */
+group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium';
+    src -> tgt.status = 'final';
+    src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'survey');
+    
+    //data absent because not delivered from form but mandatory in profile
+    src -> tgt.code as topLevelCode, topLevelCode.coding as coding, coding.system = 'http://uk-koeln.de/fhir/ValueSet/cancer-base/tnm-art', coding.code as code, code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //Works for patient because patient id is always present in cts data for every form
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    src.operations as operations, operations.data as data then
+    {
+        // Angaben zum Tumorstadium
+        // Erstdiagnose -> extension tnmerstdiagnose
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1300'" then
+        {
+            values.value as erstdiagnose where "$this.value = 'yes'" then
+            {
+                values.value as value -> tgt.extension as angaben, 
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-erstdiagnose',
+                angaben.valueBoolean = cast(true, 'FHIR.boolean');
+            };
+
+            values.value as erstdiagnose where "$this.value = 'no'" then
+            {
+                values.value as value -> tgt.extension as angaben, 
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-erstdiagnose',
+                angaben.valueBoolean = cast(false, 'FHIR.boolean');
+            };
+        };
+
+        // Kurativ-operabel -> extension kurativoperabel
+         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1385'" then
+        {
+            values.value as erstdiagnose where "$this.value = 'yes'" then
+            {
+                values.value as value -> tgt.extension as angaben, 
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-kurativ-operabel',
+                angaben.valueBoolean = cast(true, 'FHIR.boolean');
+            };
+
+            values.value as erstdiagnose where "$this.value = 'no'" then
+            {
+                values.value as value -> tgt.extension as angaben, 
+                angaben.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-kurativ-operabel',
+                angaben.valueBoolean = cast(false, 'FHIR.boolean');
+            };
+        };
+
+        // TNM-Klassifikation -> valueCodeableConcept.coding.version
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2492'" then
+        {
+            values.value as value -> tgt.valueCodeableConcept = create('CodeableConcept') as valueCodeableConcept collate, valueCodeableConcept.coding as coding collate, coding.version = value;
+        };
+        
+        // Date of assessment -> effectiveDateTime
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1378'" then
+        {
+           values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
+        };
+
+        // Prafix
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1379'" then
+        {
+            values.value as value where "value = 'r - Rezidiv'" then
+            {
+              value -> tgt.component = create('BackboneElement') as r,
+              r.code =  cc('http://loinc.org', '21983-2'),
+              r.valueBoolean = cast(true, 'FHIR.boolean');
+            };
+            values.value as value where "value ='y - Zustand nach Therapie'" then
+            {
+              value -> tgt.component = create('BackboneElement') as y,
+              y.code =  cc('http://loinc.org', '59479-6'),
+              y.valueBoolean = cast(true, 'FHIR.boolean');
+            };
+        };
+        
+        // Tumor (T)
+        // Gre und Ausdehnung des Tumors
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1380'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as T then
+            {
+                src -> T.code =  cc('http://loinc.org', '21905-5'),
+                       T.valueCodeableConcept as vcc,
+                                                vcc.text = 'T slice',
+                                                vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-t-nngm', value);
+                    
+                src.operations as operations, operations.data as data then
+                {
+                    data.values as valuesprafix where "blockindex = 1 and groupindex = 0 and itemid = 'id_2493'" then
+                    {   
+                        valuesprafix.value as value then{
+                            src -> T.extension as praefixcpu,
+                            praefixcpu.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-praefix-cpu',
+                            
+                            //Create the coding so you can add slice info in text field
+                            praefixcpu.valueCodeableConcept as vcc,
+                            vcc.text = 'T-praefix slice',
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-praefix-cpu',value);
+                        };
+                    };
+                };
+                
+                src.operations as operations, operations.data as data then
+                {
+                    data.values as valuessuffix where "blockindex = 1 and groupindex = 0 and itemid = 'id_2495'" then
+                    {   
+                        valuessuffix.value as value then{
+                            src -> T.extension as suffixmiscy,
+                            suffixmiscy.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-suffix-miscy',
+                            suffixmiscy.valueCodeableConcept as vcc,
+                            vcc.text = 'T-suffix slice',
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-suffix-miscy',value);
+                        };
+                    };
+                };
+            };  
+        };
+
+        // Lymphknoten (N)
+        // Gre und Ausdehnung des Tumors 
+         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1381'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as N then
+            {
+                src -> N.code =  cc('http://loinc.org', '21906-3');
+
+                //add value valueCodeableConcept   
+                value as Nclass -> N.valueCodeableConcept as vcc,
+                                    vcc.text = 'N slice',
+                                    vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-n-nngm', Nclass);
+                
+                src.operations as operations, operations.data as data then
+                {
+                    data.values as valuesprafix where "blockindex = 1 and groupindex = 0 and itemid = 'id_2497'" then
+                    {   
+                        valuesprafix.value as value then
+                        {
+                            src -> N.extension as praefixcpu,
+                            praefixcpu.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-praefix-cpu',
+
+                            //Create the coding so you can add slice info in text field
+                            praefixcpu.valueCodeableConcept as vcc,
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-praefix-cpu' , value),
+                            vcc.text = 'N-praefix slice';
+                        };
+                    };
+                };
+            };
+        };
+
+        // Metastasen(M)
+        // Abwesenheit oder Vorhandensein von Metastasen
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1382'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as M then
+            {
+                src -> M.code =  cc('http://loinc.org', '21907-1');
+
+                // Add value valueCodeableConcept   
+                value as Mclass -> M.valueCodeableConcept as vcc,
+                                    vcc.text = 'M slice',
+                                    vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-m-nngm', Mclass);
+                
+                src.operations as operations, operations.data as data then
+                {
+                    data.values as valuesprafix where "blockindex = 1 and groupindex = 0 and itemid = 'id_2498'" then
+                    {   
+                        valuesprafix.value as value then
+                        {
+                            src -> M.extension as praefixcpu,
+                            praefixcpu.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-praefix-cpu',
+
+                            // Create the coding so you can add slice info in text field
+                            praefixcpu.valueCodeableConcept as vcc,
+                            vcc.coding = c('http://uk-koeln.de/fhir/ValueSet/nngm/tnm-praefix-cpu' , value),
+                            vcc.text = 'M-praefix slice';
+                        };
+                    };
+                };
+            };
+        };
+
+        // Stadium nach union internationale contre le cancer (UICC)
+        // UICC-Stadium
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1383'" then
+        {
+            values.value as value -> tgt.valueCodeableConcept = create('CodeableConcept') as valueCodeableConcept collate, valueCodeableConcept.coding as coding collate, coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/uicc-stage', coding.code = value;
+        };
+    };
+}

@@ -1,0 +1,177 @@
+/// version = 0.1
+/// title = "Beurteilung"
+
+map "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR" = BeurteilungFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
+uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
+
+group TransformBundleBeurteilung(source src: CTS_Transport, target tgt: Bundle)
+{
+    src -> tgt.id = uuid(); 
+    src -> tgt.type = 'collection';
+
+    src -> tgt.entry as entry then CreateTransformDiagnosticReportBeurteilung(src, entry);
+    src -> tgt.entry as entry then CreateTransformServiceRequestBeurteilung(src, entry);
+
+}
+
+group CreateTransformDiagnosticReportBeurteilung(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1352'
+        or blockindex = 0 and groupindex = 0 and itemid ='bu_creation_date'
+        or blockindex = 0 and groupindex = 0 and itemid ='bu_vesion'
+        or blockindex = 0 and groupindex = 0 and itemid ='id_2405'" then
+        {
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReport (src, diagnosticreport);
+        };
+    };
+}
+
+group CreateTransformServiceRequestBeurteilung(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2523'
+        or blockindex = 1 and groupindex = 0 and itemid ='id_bu_closing'
+        or blockindex = 1 and groupindex = 0 and itemid ='id_2524' 
+        or blockindex = 1 and groupindex = 0 and itemid ='id_2525'" then
+        {
+            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequest(src, servicerequest);
+        };
+    };
+}
+
+/* ------------------------------DiagnosticReport---------------------------- */
+group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/Beurteilung';
+
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+
+    src.operations as operations, operations.data as data then
+    {
+        /*--------------Erstelldatum------------*/
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'bu_creation_date'" then
+         {
+            values.value as date -> tgt.effectiveDateTime = dateOp(date, 'dateTime');
+         };
+
+		/*--------------Version------------*/
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'bu_version'" then
+         {   
+            values.value as code -> tgt.status = code; //cc('', code);
+         };   
+
+        /*--------------Klinische Information------------*/
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1352'" then
+        {  
+            values.value as value -> tgt.conclusion = value;
+        };
+
+        /*----------------Empfehlung einer systemischen Therapie------------*/
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2405'" then
+        {   
+            values.value as signature where "$this.value = 'Ja'" then
+            {
+                values.value as value -> tgt.conclusionCode as conclusioncode,
+                                        conclusioncode.extension as empfehlung, 
+                                        empfehlung.valueBoolean = true;
+            };
+
+            values.value as signature where "$this.value = 'Nein'" then
+            {
+                values.value as value -> tgt.conclusionCode as conclusioncode,
+                                        conclusioncode.extension as empfehlung, 
+                                        empfehlung.valueBoolean = false;
+            };
+        }; 
+    };
+}
+
+/* -------------------------------------- Service Request -------------------------------------------- */
+group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    src -> tgt.status = cast('active', 'FHIR.code'); 
+    src -> tgt.intent = cast('proposal', ' FHIR.code'); 
+
+    src -> tgt.category as category, 
+            category.coding as coding, 
+            coding.system as system, 
+            system.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-code', 'beurteilung');
+
+    src.operations as operations, operations.data as data then
+    {
+        //Status der Untersuchungen
+        //Durchfuehrung
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2523'" then
+        {
+            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            {
+                value -> tgt.status = 'active' collate;
+            };
+            values.value as value where "$this.value = 'abgeschlossen'" then 
+            {
+                value -> tgt.status = 'completed' collate;
+            };
+        };
+    };
+
+    // Extensions
+    src then TransformBeurteilungStatusExtension(src, tgt);
+}
+
+/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
+group TransformBeurteilungStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Status des Abschlusses
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'bu_closing'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
+            };
+        };
+
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2524'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
+            };
+        };
+
+        /*---------------Datum des versands -----------*/
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2525'" then
+        {   
+            values.value as datumversands -> tgt.extension as datumVersands,
+                                              datumVersands.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands',
+                                              datumVersands.value = dateOp(datumversands, 'dateTime');
+        };
+    };
+}

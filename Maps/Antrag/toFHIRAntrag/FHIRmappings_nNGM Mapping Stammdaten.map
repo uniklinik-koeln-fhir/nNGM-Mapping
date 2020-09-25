@@ -155,7 +155,6 @@ group CreateTransformCoverageStammdaten(source src: CTS_Transport, target tgt: B
 /* ------------------------------ Coverage ---------------------------- */
 group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverage)
 { 
-
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
 
@@ -163,11 +162,7 @@ group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverag
     src -> tgt.status = cast('active', 'FHIR.code'); 
     
     //beneficiary, beneficiary.reference
-    src -> tgt.beneficiary as beneficiary,
-           beneficiary.reference as reference, 
-           reference.extension as dataAbsentReason,
-           dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-           dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+    src.patid as patid -> tgt.beneficiary = create('Reference') as beneficiary, beneficiary.reference = evaluate(patid, '\'Patient/\' + $this');
     
     src.operations as operations, operations.data as data then
     {
@@ -184,11 +179,19 @@ group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverag
         };
 
         // PKV Tarif -> extension:pkvTarifform.valueCodeableConcept
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1270'" then
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1270'" then
         {
-            values.value as value -> tgt.extension as pkvTarifform,
+            values.value as value where "$this.value = 'Basistarif'" -> tgt.extension as pkvTarifform,
                                         pkvTarifform.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
-                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', value);
+                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'basis');
+            
+            values.value as value where "$this.value = 'Standardtarif'" -> tgt.extension as pkvTarifform,
+                                        pkvTarifform.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'standard');
+            
+            values.value as value where "$this.value = 'Vollversichert'" -> tgt.extension as pkvTarifform,
+                                        pkvTarifform.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
+                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'voll');
         };
 
         // Kooperationsvereinbarung -> Coverage.extension:kooperationsvereinbarung.valueBoolean
@@ -273,8 +276,8 @@ group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: Ep
         {
             values.value as value -> tgt.status as status,
                                      status.extension as nngmstatus, 
-                                     nngmstatus.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/nngmStatus',
-                                     nngmstatus.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngmStatus', value);
+                                     nngmstatus.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/FollowUpStatus',
+                                     nngmstatus.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/FollowUpStatus', value);
         };
    };
 }
