@@ -1,9 +1,11 @@
 /// version = 0.1
 /// title = "SonstigeUntersuchungenMap"
+
 /*
 TODO
 - The repeatindex for the observation is not implemented
 */
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR" = nNGM_Mapping_SonstigeUntersuchungenFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
@@ -16,34 +18,34 @@ uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 group TransformBundleSonstigeUntersuchungen(source src: CTS_Transport, target bundle: Bundle)
 {
     //Check if any fields are filled in before creating the Speciment
-    src -> bundle.entry as entry then CreateTransformSpecimen(src, entry);
+    src -> bundle.entry as entry then CreateSpecimenSonstigeUntersuchungen(src, entry);
 
     //Check if any fields are filled in before creating the DiagnosticReport
-    src -> bundle.entry as entry then CreateTransformDiagnosticReport(src, entry);
+    src -> bundle.entry as entry then CreateDiagnosticReportSonstigeUntersuchungen(src, entry);
 
     //Check if any fields are filled in before creating the Organization
-    src -> bundle.entry as entry then CreateTransformOrganization(src, entry);
+    src -> bundle.entry as entry then CreateOrganizationSonstigeUntersuchungen(src, entry);
 
     //Check if any fields are filled in before creating the observation
-    src -> bundle.entry as entry then CreateTransformObservation(src, entry);
+    src -> bundle.entry as entry then CreateObservationSonstigeUntersuchungen(src, entry);
 
     //Check if any fields are filled in before creating the ServiceRequest
-    src -> bundle.entry as entry then CreateTransformServiceRequest(src, entry);
+    src -> bundle.entry as entry then CreateServiceRequestSonstigeUntersuchungen(src, entry);
 }
 
-group CreateTransformSpecimen(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateSpecimenSonstigeUntersuchungen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
         {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenSonstigeUntersuchungen(src, specimen);
         };
     };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
+group TransformSpecimenSonstigeUntersuchungen(source src: CTS_Transport, target tgt: Specimen)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
@@ -70,28 +72,32 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
     };
 }
 
-group CreateTransformDiagnosticReport(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Check if DiagnosticReport needs to be created ---------------------------- */
+group CreateDiagnosticReportSonstigeUntersuchungen(source src: CTS_Transport, target tgt: BackboneElement)
 {
-
     src.operations as operations, operations.data as data then
     {   
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
         {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReport(src, diagnosticReport);
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportSonstigeUntersuchungen(src, diagnosticReport);
         };
     };
 }
 
-group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport)
+/* ------------------------------ DiagnosticReport ---------------------------- */
+group TransformDiagnosticReportSonstigeUntersuchungen(source src: CTS_Transport, target tgt: DiagnosticReport)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
+    // Status
     src ->  tgt.status as status, 
             status.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
+    // Code
     src ->  tgt.code as code, 
             code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
@@ -111,19 +117,19 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
 }
 
 /* ------------------------------ Organization ---------------------------- */
-group CreateTransformOrganization(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateOrganizationSonstigeUntersuchungen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
         {
-            src -> tgt.resource = create('Organization') as organization then TransformOrganization(src, organization);
+            src -> tgt.resource = create('Organization') as organization then TransformOrganizationSonstigeUntersuchungen(src, organization);
         };
     };
 }
 
 /* ------------------------------ Organization ---------------------------- */
-group TransformOrganization(source src: CTS_Transport, target tgt: Organization)
+group TransformOrganizationSonstigeUntersuchungen(source src: CTS_Transport, target tgt: Organization)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
@@ -140,8 +146,8 @@ group TransformOrganization(source src: CTS_Transport, target tgt: Organization)
     };
 }
 
-/* ------------------------------ Observation ---------------------------- */
-group CreateTransformObservation(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Check if Observation needs to be created ---------------------------- */
+group CreateObservationSonstigeUntersuchungen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
@@ -154,13 +160,13 @@ group CreateTransformObservation(source src: CTS_Transport, target tgt: Backbone
                                     or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2283'
                                     or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2031'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservation(src, observation);
+            src -> tgt.resource = create('Observation') as observation then TransformObservationSonstigeUntersuchungen(src, observation);
         };
     };
 }
 
 /* ------------------------------------ Observation ----------------------------------- */
-group TransformObservation(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, target tgt: Observation)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/weitere-untersuchung';
@@ -289,8 +295,8 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
 }
 
 
-/* -------------------------------------- Service Request -------------------------------------------- */
-group CreateTransformServiceRequest(source src: CTS_Transport, target tgt: BackboneElement)
+/* -------------------------------------- Check if ServiceRequest needs to be created -------------------------------------------- */
+group CreateServiceRequestSonstigeUntersuchungen(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
@@ -298,12 +304,13 @@ group CreateTransformServiceRequest(source src: CTS_Transport, target tgt: Backb
                                     or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
                                     or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
         {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequest(src, serviceRequest);
+            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestSonstigeUntersuchungen(src, serviceRequest);
         };
     };
 }
 
-group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+/* -------------------------------------- ServiceRequest -------------------------------------------- */
+group TransformServiceRequestSonstigeUntersuchungen(source src: CTS_Transport, target tgt: ServiceRequest)
 {
     // Metadata
     src -> tgt.id = uuid();
