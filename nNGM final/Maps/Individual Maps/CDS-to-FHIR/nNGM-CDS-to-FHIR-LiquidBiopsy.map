@@ -1,0 +1,429 @@
+/// version = 0.1
+/// title = "nNGM_Mapping_LiquidBiopsyFHIR"
+/*
+    TODO
+    OBSERVATION:
+    - Once the repeatindex has been implemented, this map needs to be adjusted as the LiquidBiopsy section can have multiple instances.
+*/
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyFHIR" = nNGM_Mapping_LiquidBiopsyFHIR
+
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
+uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
+uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
+uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
+
+group TransformBundleLiquidBiopsy(source src: CTS_Transport, target bundle: Bundle)
+{
+    //Check if any fields are filled in before creating the Specimen
+    src -> bundle.entry as entry then CreateSpecimenLiquidBiopsy(src, entry);
+    //Check if any fields are filled in before creating the DiagnosticReport
+    src -> bundle.entry as entry then CreateDiagnosticReportLiquidBiopsy(src, entry);
+    //Check if any fields are filled in before creating the Organization
+    src -> bundle.entry as entry then CreateOrganizationLiquidBiopsy(src, entry);
+    //Check if any fields are filled in before creating the Observation
+    src -> bundle.entry as entry then CreateObservationLiquidBiopsy(src, entry);
+    //Check if any fields are filled in before creating the Service Request
+    src -> bundle.entry as entry then CreateServiceRequestLiquidBiopsy(src, entry);
+}
+
+/* ------------------------------ Specimen ---------------------------- */
+group CreateSpecimenLiquidBiopsy(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenLiquidBiopsy(src, specimen);
+        };          
+    };
+}
+/* ------------------------------ Specimen ---------------------------- */
+group TransformSpecimenLiquidBiopsy(source src: CTS_Transport, target tgt: Specimen)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Type : Item required on simplifier
+    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system  = 'http://snomed.info/sct',
+                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                    snomedGlobalPatientSet.code    = 'UNKNOWN';
+
+    // Patient 
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    
+    src.operations as operations, operations.data as data then
+    {
+        /* ------------------------------ BIOPSIE REFERENZEN ---------------------------- */
+        //Biopsy-ID
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        {
+            values.value as value ->  tgt.identifier   = create('Identifier') as biopsieId, 
+                                      biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'),
+                                      biopsieId.value  = value;
+        };
+    };
+}
+/* ------------------------- DiagnosticReport ------------------------- */
+group CreateDiagnosticReportLiquidBiopsy(source src: CTS_Transport, target tgt: BackboneElement)
+{
+
+    src.operations as operations, operations.data as data then
+    {   
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportLiquidBiopsy(src, diagnosticReport);
+        };
+    };
+}
+/* ------------------------- DiagnosticReport ------------------------- */
+group TransformDiagnosticReportLiquidBiopsy(source src: CTS_Transport, target tgt: DiagnosticReport)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+
+    //status: Item required on simplifier
+    src ->  tgt.status as status, 
+            status.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //code: Item required on simplifier
+    src ->  tgt.code as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        /* -------------------------------- REFERENZEN ------------------------------- */
+        //Untersuchungs-ID
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as id -> tgt.identifier = create('Identifier') as befundNummer,
+                                                          befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                          befundNummer.value  = id;
+        };
+    };
+}
+/* -------------------------- Organization ---------------------------- */
+group CreateOrganizationLiquidBiopsy(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            src -> tgt.resource = create('Organization') as organization then TransformOrganizationLiquidBiopsy(src, organization);
+        };
+    };
+}
+/* -------------------------- Organization ---------------------------- */
+group TransformOrganizationLiquidBiopsy(source src: CTS_Transport, target tgt: Organization)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
+
+    src.operations as operations, operations.data as data then
+    {
+        /* ------------------------------ Netzwerkzentrum ---------------------------- */
+        // Standort
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {   
+            values.value as name -> tgt.name = name;
+        };
+
+    };
+}
+/* ---------------------------- Observation --------------------------- */
+group CreateObservationLiquidBiopsy(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where  " blockindex = 3 and groupindex = 0 and itemid = 'id_2601'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_2602'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'id_2528'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'id_1929'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'id_1928'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'id_1931'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'lb_referencetranscript_5_end_gene'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'lb_3_end_gene'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'lb_exon_3_end_gen'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'lb_referencetranscript_3_end_gen'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'id_1930'
+                                    or blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid = 'id_1932'" then
+        {
+            src -> tgt.resource = create('Observation') as observation then TransformObservationLiquidBiopsy(src, observation);
+        };
+    };
+}
+/* ---------------------------- Observation --------------------------- */
+group TransformObservationLiquidBiopsy(source src: CTS_Transport, target tgt: Observation)
+{
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/liquid-biopsy';
+
+    // Status : Item required on simplifier
+    src ->  tgt.status as status, 
+            status.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //FISH category
+    src -> tgt.category as category then
+    {
+        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                coding.code = 'laboratory';                                                    
+    };
+
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    
+    // code : Item required on simplifier : there is not code for LiquidBiopsy
+    src -> tgt.code as code, 
+            code.coding as coding, 
+            coding.system as system, 
+            system.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    //valueCodeableConcept : Item required on simplifier 
+    src -> tgt.valueCodeableConcept as valueCodeableConcept, 
+            valueCodeableConcept.coding as coding, 
+            coding.system as system, 
+            system.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Method : Item required on simplifier
+    src -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
+
+    src.operations as operations, operations.data as data then
+    {
+        /* ------------------------------ Netzwerkzentrum ---------------------------- */
+        // SOP-Versionsnummer des Standorts
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2614'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
+            {
+                sop -> componentSop.valueString = sop;
+                sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
+            };
+        };
+        /* --------------------------------- METHODIK ------------------------------ */
+        //Assay -> assay
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid ='id_2601'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ngs-assays',value);
+                value -> component.code = cc('http://ncit.nci.nih.gov', 'C60819');
+            };
+        };
+        //Hersteller -> hersteller
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid ='id_2602'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho',value);
+                value -> component.code = cc('http://ncit.nci.nih.gov', 'C25392');
+            };
+        };
+        /* ---------------------------- LIQUID BIOPSY ------------------------------ */
+        //Date of Assessment
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='id_2528'" then
+        {
+            values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
+        };
+        //Phänotyp -> phaenotyp
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='id_1929'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes',value);
+                value -> component.code = cc('http://ncit.nci.nih.gov', 'C16977');
+            };
+        };
+        //Gen -> gene-studied
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='id_1928'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueCodeableConcept = cc('http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc',value);
+                value -> component.code = cc('http://ncit.nci.nih.gov', '48018-6');
+            };
+        };
+        //Exon des 5' Gens -> exon
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='id_1931'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueInteger = cast(value, 'FHIR.integer');
+                value -> component.code = cc('http://ncit.nci.nih.gov', 'C13231');
+            };
+        };
+        //Referenztranskript 5' Gen -> referenztranskript
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='lb_referencetranscript_5_end_gene'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueString = value;
+                value -> component.code = cc('http://loinc.org', '51958-7');
+            };
+        };
+        //3' Gen der Fusion (2.Gen) -> 2ndGen
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='lb_3_end_gene'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueCodeableConcept = cc('http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc',value);
+                value -> component.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', '2ndGen');
+            };
+        };
+        //Exon des 3' Gens -> 2ndGenExon
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='lb_exon_3_end_gen'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueInteger = cast(value, 'FHIR.integer');
+                value -> component.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', '2ndGenExon');
+            };
+        };
+        //Referenztranskript 3' Gen -> 2ndGenTranskript
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='lb_referencetranscript_3_end_gen'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueString = value;
+                value -> component.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', '2ndGenTranskript');
+            };
+        };
+        //HGVS c. (Mutation cDNA) -> dna-chg
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='id_1930'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueString = value;
+                value -> component.code = cc('http://loinc.org', '48004-6');
+            };
+        };
+        //HGVS p. (Mutation Protein) -> amino-acid-chg
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = 0 and itemid ='id_1932'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueString = value;
+                value -> component.code = cc('http://loinc.org', '48005-3');
+            };
+        };
+    };
+}
+/* -------------------------- ServiceRequest -------------------------- */ 
+group CreateServiceRequestLiquidBiopsy(source src: CTS_Transport, target tgt: BackboneElement)
+{
+    src.operations as operations, operations.data as data then
+    {
+        data.values as values where   "blockindex = 5 and groupindex = 0 and itemid ='id_2520'
+                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2462'
+                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2521'" then
+        {
+            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestLiquidBiopsy(src, serviceRequest);
+        };
+    };
+}
+group TransformServiceRequestLiquidBiopsy(source src: CTS_Transport, target tgt: ServiceRequest)
+{   
+    src -> tgt.id = uuid();
+    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    // intent : Item required on simplifier
+    src -> tgt.intent = 'proposal';
+
+    // category : Item required on simplifier
+    src -> tgt.category as category, 
+            category.coding as coding, 
+            coding.system as system, 
+            system.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // code : Item required on simplifier
+    src -> tgt.code as code, 
+            code.coding as coding, 
+            coding.system as system, 
+            system.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // authoredOn : Item required on simplifier
+    src ->  tgt.authoredOn as authoredOn, 
+            authoredOn.extension as dataAbsentReason, 
+            dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    src.operations as operations, operations.data as data then
+    {
+        /*----------------Durchfuehrung------------*/
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid ='id_2520'" then
+        {   
+            values.value as durchfuerung where "$this.value = 'in Bearbeitung'" then
+            {
+                durchfuerung -> tgt.status = 'active'; 
+            };
+            values.value as durchfuerung where "$this.value = 'abgeschlossen'" then
+            {
+                durchfuerung -> tgt.status = 'completed'; 
+            };
+        };   
+    };
+    // Extensions
+    src then TransformLiquidBiopsyExtension(src, tgt);
+}
+/* ------------ Create double extensions for LiquidBiopsy -------------- */
+group TransformLiquidBiopsyExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+{
+    src.operations as operations, operations.data as data then
+    {
+        // Status des Abschlusses
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2462' and values.isother.exists().not()" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
+            };
+        };
+        // Status des Abschlusses
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2462' and values.isother = true" then
+        {
+            values.value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                values.value as value where "$this.isother = true" then
+                {
+                    value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                    {
+                        value -> statusExtension.valueString = value;
+                        value -> statusExtension.url = 'status';
+                    };
+                };
+            };
+        };
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
+            {
+                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
+            };
+        };
+    };
+}
