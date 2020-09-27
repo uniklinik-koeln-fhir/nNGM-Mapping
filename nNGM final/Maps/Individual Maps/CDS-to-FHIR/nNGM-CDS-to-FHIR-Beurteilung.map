@@ -97,14 +97,17 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
 /* -------------------------------------- Service Request -------------------------------------------- */
 group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
+    // Patient ID
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    src -> tgt.status = cast('active', 'FHIR.code'); 
+    
+    // Intent
     src -> tgt.intent = cast('proposal', ' FHIR.code'); 
 
+    // Category
     src -> tgt.category as category, 
             category.coding as coding, 
             coding.system as system, 
@@ -112,7 +115,14 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-code', 'beurteilung');
+    // Code
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'beurteilung');
+
+    // authoredOn
+    src -> tgt.authoredOn as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');    
 
     src.operations as operations, operations.data as data then
     {

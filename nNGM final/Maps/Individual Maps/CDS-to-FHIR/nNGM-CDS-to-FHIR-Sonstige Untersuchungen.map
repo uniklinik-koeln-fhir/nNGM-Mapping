@@ -303,12 +303,35 @@ group CreateTransformServiceRequest(source src: CTS_Transport, target tgt: Backb
     };
 }
 
-
 group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
 {
+    // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    // intent
     src -> tgt.intent = 'proposal';
+
+     // Subject
+    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+
+    // Category
+    src -> tgt.category as category, 
+            category.coding as coding,
+            coding.code as code,
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Code 
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'sonstige-untersuchungen');
+
+    // authoredOn
+    src -> tgt.authoredOn as code, 
+            code.extension as dataAbsentReason, 
+            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');    
+        
     src.operations as operations, operations.data as data then
     {
         //Status der Untersuchungen
@@ -323,7 +346,6 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
             {
                 value -> tgt.status = 'completed';
             };
-            
         };
     };
 
