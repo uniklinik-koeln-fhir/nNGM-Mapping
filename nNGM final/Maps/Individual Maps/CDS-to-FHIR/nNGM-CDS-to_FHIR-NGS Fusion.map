@@ -1,17 +1,9 @@
 ///version = 0.1
 ///title = "FusionNGSMAP"
 /*
-    OBSERVATION: (Hersteller) -> Validate the URL of valueCodeableConcept, due to, the value set on SeaTable is "http://uk-koeln.de/fhir/ValueSet/hersteller-molpatho"
-                 and on simplifier profile is "http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall"
-    OBSERVATION: (Phaenotyp) -> Validate this item, due to, SeaTable specified that phaenotyp must be mapped in a valueCodeableConcept but on the
-                simplifier profile the item value is ValueString
-    OBSERVATION: (fusionspartner) -> Validate this item, due to, SeaTable specified that phaenotyp must be mapped in a valueCodeableConcept but on the
-                simplifier profile the item value is ValueString
-    OBSERVATION : Sonstiges -> Validate the code value because there are two posibles values for this code
-    OBSERVATION : (erster-fusionspartner-exon[Component]) The sea Table specfies that this value must be mapped in ValueInteger
-                  but the data from CTS is String 
-    OBSERVATION : (fusionspartner-exon[Component]) The sea Table specfies that this value must be mapped in ValueInteger
-                  but the data from CTS is String
+
+    OBSERVATION : (erster-fusionspartner-exon[Component]) Missing feature to transform string --> Integer 
+    OBSERVATION : (fusionspartner-exon[Component]) Missing feature to transform string --> Integer
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR" = nNGM_Mapping_FusionNGSFHIR
@@ -21,7 +13,6 @@ uses "http://hl7.org/fhir/StructureDefinition/CST_Transport" as source
 
 uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
-uses "http://hl7.org/fhir/StructureDefinition/Organization" as target 
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceReqeust" as target
 
@@ -34,7 +25,6 @@ group TransformBundleNGSFusion(source src: CTS_Transport, target bundle: Bundle)
 
     src -> bundle.entry as entry then CreateTransformSpecimen(src, entry);
     src -> bundle.entry as entry then CreateTransformDiagnosticReport(src, entry);
-    src -> bundle.entry as entry then CreateTransformOrganization(src, entry);
     src -> bundle.entry as entry then CreateTransformObservationALK(src, entry);
     src -> bundle.entry as entry then CreateTransformObservationRET(src, entry);
     src -> bundle.entry as entry then CreateTransformObservationROS1(src, entry);
@@ -125,33 +115,7 @@ group TransformDiagnosticReport(source src: CTS_Transport, target tgt: Diagnosti
         };
     };
 }
-/* ------------------------------ Organization ---------------------------- */
-group CreateTransformOrganization(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            src -> tgt.resource = create('Organization') as organization then TransformOrganization(src, organization);
-        };
-    };
-}
-/* ------------------------------ Organization ---------------------------- */
-group TransformOrganization(source src: CTS_Transport, target tgt: Organization)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
-    src.operations as operations, operations.data as data then
-    {
-        /* ------------------------------ Netzwerkzentrum ---------------------------- */
-        // Standort
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as name -> tgt.name = name;
-        };
-    };
-}
 /* ------------------ Check if Observation ALK needs to be creared  --------------------- */
 group CreateTransformObservationALK(source src: CTS_Transport, target tgt: BackboneElement)
 {
@@ -192,25 +156,44 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
         //TODO
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2099'" then
         {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                phaenotyp -> componentPhaenotyp.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes',phaenotyp);
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+                {
+                    phaenotyp -> componentPhaenotyp.valueString = phaenotyp;
+                    phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                };
             };
         };
+        
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2127'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+                values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
+
+        
         //Fusionspartner
         //TODO
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2128'" then
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -220,6 +203,7 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -229,6 +213,7 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -238,6 +223,7 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://ncit.nci.nih.gov', 'C13231');
             };
         };
@@ -283,17 +269,33 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
         //TODO
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2184'" then
         {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                phaenotyp -> componentPhaenotyp.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes',phaenotyp);
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+                {
+                    phaenotyp -> componentPhaenotyp.valueString = phaenotyp;
+                    phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                };
             };
         };
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2206'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -301,7 +303,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -311,6 +313,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -320,6 +323,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -329,6 +333,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://ncit.nci.nih.gov', 'C13231');
             };
         };
@@ -374,17 +379,33 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
         //TODO
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2212'" then
         {
-            values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+            values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                phaenotyp -> componentPhaenotyp.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/phenotypes',phaenotyp);
-                phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                values.value as phaenotyp -> tgt.component = create('BackboneElement') as componentPhaenotyp then
+                {
+                    phaenotyp -> componentPhaenotyp.valueString = phaenotyp;
+                    phaenotyp -> componentPhaenotyp.code = cc('http://ncit.nci.nih.gov', 'C16977');
+                };
             };
         };
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2241'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -392,7 +413,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -402,6 +423,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -411,6 +433,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -420,6 +443,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://ncit.nci.nih.gov', 'C13231');
             };
         };
@@ -463,7 +487,20 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
         //Ergebnis
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2547'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -471,7 +508,7 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -481,6 +518,7 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -490,6 +528,7 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -533,7 +572,20 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
         //Ergebnis
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2596'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -541,7 +593,7 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -551,6 +603,7 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -560,6 +613,7 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -603,7 +657,20 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
         //Ergebnis
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2588'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -611,7 +678,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -621,6 +688,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -630,6 +698,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -673,7 +742,20 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
         //Ergebnis
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2580'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -681,7 +763,7 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -691,6 +773,7 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -700,6 +783,7 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -743,7 +827,20 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
         //Ergebnis
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2572'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -751,7 +848,7 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -761,6 +858,7 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -770,6 +868,7 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -813,7 +912,20 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
         //Ergebnis
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2564'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Fusionspartner
         //TODO
@@ -821,7 +933,7 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -831,6 +943,7 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -840,6 +953,7 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
                 value -> componentFusionsPartnerExon.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
@@ -887,7 +1001,20 @@ group TransformObservationSonstiges(source src: CTS_Transport, target tgt: Obser
         //Ergebnis
         data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2254'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', ergebnis);
+            values.value where "$this.value = 'positiv'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+                };
+
+                values.value where "$this.value = 'negativ'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+                };
+
+                values.value where "$this.value = 'nicht auswertbar'" then 
+                {
+                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+                };
         };
         //Erster Fusionspartner
         data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2255'" then
@@ -903,7 +1030,7 @@ group TransformObservationSonstiges(source src: CTS_Transport, target tgt: Obser
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
-                fusionspartner -> componentFusionspartner.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/hgnc-codes',fusionspartner);
+                fusionspartner -> componentFusionspartner.valueString = fusionspartner;
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
@@ -913,6 +1040,7 @@ group TransformObservationSonstiges(source src: CTS_Transport, target tgt: Obser
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
                 value -> componentAnzahlDerFusionsreads.valueInteger = value;
+                //value -> componentFusionsPartnerExon.valueInteger = cast(value, 'FHIR.Integer');
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
@@ -973,6 +1101,20 @@ group MapSOPAssayHerstellerCategoryMethodStatus(source src :CTS_Transport, targe
                 sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
             };
         };
+
+        // Netzwerkzentrum
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            {
+                values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
+                {
+                    nz -> nzcomponent.valueString = nz;
+                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+                };
+            };
+        };
+        
         /* ------------------------------Methodik---------------------------- */
         // Assay
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2538'" then
@@ -983,6 +1125,7 @@ group MapSOPAssayHerstellerCategoryMethodStatus(source src :CTS_Transport, targe
                 assay -> componentAssay.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/ngs-assays',assay) ;
             };
         };
+
         //Hersteller 
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2539'" then
         {
