@@ -4,9 +4,7 @@
 /*
 TODO
 
-2435 2617 only triggered in other maps?
 2509 (all passed into 2510)?
-2099, 2184, 2212 (unit predef) Fusion
 2147 missing nuance amplification due to incomplete VS?
 2462, 2520, 2521 triggered in every other map except this one
 
@@ -18,18 +16,17 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCTS" =
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Molekularpathologie_checkboxesCTS"
 
 group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneElement)
 {
     src -> tgt.type = 'save';
-    src -> tgt.crfid = 'MP1';
+    src -> tgt.crfid = '*-MP1';
 
-    src then TransformMolekularpathologieCheckboxes(src, tgt);
+    src then TransformMolekularpathologieCheckboxesCISHy(src, tgt);
+    //src then TransformMolekularpathologieCheckboxesFISH(src, tgt);
 
     src.entry as entry then
     {
-
         //------------------------ Specimen ------------------------
         entry.resource as specimen where "resource is Specimen" then
         {
@@ -60,6 +57,22 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
                     value -> data.values as values, values.value = value;
                 };
             };
+        };
+
+        /* --------------- Organization ---------------------- */
+        entry.resource as organization where "resource is Organization" then
+        {
+            //Standort -> 0, 0, id_2435
+            organization -> tgt.data as data then
+            {
+                organization.name as name then
+                {   
+                    organization -> data.blockindex = 0;
+                    organization -> data.groupindex = 0;
+                    organization -> data.itemid = 'id_2435';
+                    name -> data.values as values, values.value = name;
+                };
+            };                
         };
 
         /* --------------- ServiceRequest ---------------------- */
@@ -116,47 +129,50 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
                 };
             };
         };
+
+        /*---------------Predefined values----------------*/
+
+        // ALK Phaenotyp
+        src -> tgt.data as data then
+        {
+            src -> data.blockindex = 3;
+            src -> data.groupindex = 0;
+            src -> data.itemid = 'id_2099';
+            src -> data.values as values, values.unit = 'predef', values.value = 'Fusion';
+        };
+
+        // MET Phaenotyp
+        src -> tgt.data as data then
+        {
+            src -> data.blockindex = 4;
+            src -> data.groupindex = 0;
+            src -> data.itemid = 'id_2133';
+            src -> data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+        };
+
+        // RET
+        src -> tgt.data as data then
+        {
+            src -> data.blockindex = 5;
+            src -> data.groupindex = 0;
+            src -> data.itemid = 'id_2184';
+            src -> data.values as values, values.unit = 'predef', values.value = 'Fusion';
+        };
+
+        // ROS1
+        src -> tgt.data as data then
+        {
+            src -> data.blockindex = 6;
+            src -> data.groupindex = 0;
+            src -> data.itemid = 'id_2212';
+            src -> data.values as values, values.unit = 'predef', values.value = 'Fusion';
+        };
         
         /*---------------ALK CISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'ALK'" then
         {
-            
-            // Standort
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.valueCodeableConcept where "code.coding.code = 'C25341'" then
-                    {
-                        component.valueString as code then  
-                        {
-                            observation-> data.blockindex = 0;
-                            observation-> data.groupindex = 0;
-                            observation-> data.itemid = 'id_2435';
-                            code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-
-            // SOP number
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.valueCodeableConcept where "code.coding.code = 'C48443'" then
-                    {
-                        component.valueString as code then  
-                        {
-                            observation-> data.blockindex = 0;
-                            observation-> data.groupindex = 0;
-                            observation-> data.itemid = 'id_2617';
-                            code -> data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
 
             // Date Of Assesment
             observation -> tgt.data as data then
@@ -167,22 +183,6 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
                     observation-> data.groupindex = 0;
                     observation-> data.itemid = 'id_2098';
                     period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-                };
-            };
-
-            // Phaenotyp
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                        component.valueString as value then 
-                        {
-                            observation-> data.blockindex = 3;
-                            observation-> data.groupindex = 0;
-                            observation-> data.itemid = 'id_2099';
-                            value -> data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                        };
-                    
                 };
             };
 
@@ -281,6 +281,8 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
         /*---------------ALK FISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'ALK'" then
         {
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
         
             // Kit bezeichnung
             observation -> tgt.data as data then
@@ -392,7 +394,9 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
         /*---------------MET CISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'MET'" then
         {
-        
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
+
             // Date Of Assesment
             observation -> tgt.data as data then
             {
@@ -402,21 +406,6 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
                     observation-> data.groupindex = 0;
                     observation-> data.itemid = 'id_2132';
                     period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-                };
-            };
-
-            // Phaenotyp
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                        component.valueString as value then 
-                        {
-                            observation-> data.blockindex = 3;
-                            observation-> data.groupindex = 0;
-                            observation-> data.itemid = 'id_2099';
-                            value -> data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                        };
                 };
             };
 
@@ -539,6 +528,8 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
         /*---------------MET FISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'MET'" then
         {
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
         
             // Kit bezeichnung
             observation -> tgt.data as data then
@@ -798,6 +789,8 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
         /*---------------RET CISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'RET'" then
         {
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
         
             // Date Of Assesment
             observation -> tgt.data as data then
@@ -808,22 +801,6 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
                     observation-> data.groupindex = 0;
                     observation-> data.itemid = 'id_2183';
                     period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-                };
-            };
-
-            // Phaenotyp
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-
-                        component.valueString as value then 
-                        {
-                            observation-> data.blockindex = 5;
-                            observation-> data.groupindex = 0;
-                            observation-> data.itemid = 'id_2184';
-                            value -> data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                        };
                 };
             };
 
@@ -922,6 +899,8 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
         /*---------------RET FISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'RET'" then
         {
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
         
             // Kit bezeichnung
             observation -> tgt.data as data then
@@ -1034,6 +1013,8 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
          /*---------------ROS1 CISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'ROS1'" then
         {
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
         
             // Date Of Assesment
             observation -> tgt.data as data then
@@ -1044,22 +1025,6 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
                     observation-> data.groupindex = 0;
                     observation-> data.itemid = 'id_2211';
                     period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-                };
-            };
-
-            // Phaenotyp
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    
-                        component.valueString as value then 
-                        {
-                            observation-> data.blockindex = 6;
-                            observation-> data.groupindex = 0;
-                            observation-> data.itemid = 'id_2212';
-                            value -> data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                        };
                 };
             };
 
@@ -1173,7 +1138,9 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
         /*---------------ROS1 FISH OBSERVATION----------------*/
         entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'ROS1'" then
         {
-        
+            // SOP Number
+            observation then TransformSOPNumberMP(observation, tgt);
+
             // Kit bezeichnung
             observation -> tgt.data as data then
             {
@@ -1283,7 +1250,25 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
     }; 
 }
 
-group TransformMolekularpathologieCheckboxes(source src: Bundle, target tgt: BackboneElement)
+group TransformSOPNumberMP(source src: Observation, target tgt: BackboneElement)
+{
+    //SOP-Versionsnummer des Standorts -> 0, 0, id_2617
+    src -> tgt.data as data then
+    {
+        src.component as component then 
+        {
+            component.code where "code.coding.code = 'C48443' and %tgt.data.where(blockindex = 0 and groupindex = 0 and itemid = 'id_2617').exists().not()" then
+            {
+                src ->  data.blockindex = 0;
+                src ->  data.groupindex = 0;
+                src ->  data.itemid = 'id_2617';
+                component.valueString as valueString -> data.values as values, values.value = valueString;
+            };
+        };
+    };
+}
+
+group TransformMolekularpathologieCheckboxesCISH(source src: Bundle, target tgt: BackboneElement)
 {
     src.entry as entry then
     {
@@ -1304,22 +1289,6 @@ group TransformMolekularpathologieCheckboxes(source src: Bundle, target tgt: Bac
         };
 
         entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ALK'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2510';
-                };
-                observation -> data.values as values, values.value = 'ALK';
-            };
-        };
-
-        entry.resource as observation where "resource is Observation 
                                             and resource.code.coding.code = 'MET'
                                             and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
         {
@@ -1336,22 +1305,6 @@ group TransformMolekularpathologieCheckboxes(source src: Bundle, target tgt: Bac
         };
 
         entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'MET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2510';
-                };
-                observation -> data.values as values, values.value = 'MET';
-            };
-        };
-
-        entry.resource as observation where "resource is Observation 
                                             and resource.code.coding.code = 'RET'
                                             and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
         {
@@ -1362,22 +1315,6 @@ group TransformMolekularpathologieCheckboxes(source src: Bundle, target tgt: Bac
                     observation -> data.blockindex = 2;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'RET';
-            };
-        };
-
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'RET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2510';
                 };
                 observation -> data.values as values, values.value = 'RET';
             };
@@ -1396,6 +1333,173 @@ group TransformMolekularpathologieCheckboxes(source src: Bundle, target tgt: Bac
                     observation -> data.itemid = 'id_2509';
                 };
                 observation -> data.values as values, values.value = 'ROS1';
+            };
+        };
+    };
+}
+
+group TransformMolekularpathologieCheckboxesCISHy(source src: Bundle, target tgt: BackboneElement)
+{
+    src.entry as entry -> tgt.data as data then
+    {
+        entry.resource as observation where "resource is Observation 
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+        {
+            observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2509';
+            };
+            observation -> data.values as values then
+            {
+                entry.resource as observation where "resource is Observation 
+                                                and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+                {
+                    observation.code as code, code.coding as coding, coding.code as actualCode -> values.value = actualCode;
+                };
+            };
+            
+        };
+    };
+}
+
+group TransformMolekularpathologieCheckboxesFISHy(source src: Bundle, target tgt: BackboneElement)
+{
+    src.entry as entry -> tgt.data as data collate then
+    {
+        entry.resource as observation where "resource is Observation 
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        {
+            observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2510';
+            };
+            observation -> data.values as values then
+            {
+                entry.resource as observation where "resource is Observation 
+                                                and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+                {
+                    observation.code as code, code.coding as coding, coding.code as actualCode -> values.value = actualCode;
+                };
+            };
+            
+        };
+    };
+}
+
+group TransformMolekularpathologieCheckboxesCISHyy(source src: Bundle, target tgt: BackboneElement)
+{
+    src.entry as entry -> tgt.data as data then
+    {
+        entry where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
+        {
+            entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ALK'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2509';
+                };
+                observation -> data.values as values, values.value = 'ALK';
+            };
+
+            entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MET'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2509';
+                };
+                observation -> data.values as values, values.value = 'MET';
+            };
+
+            entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'RET'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2509';
+                };
+                observation -> data.values as values, values.value = 'RET';
+            };
+
+            entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ROS1'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2509';
+                };
+                observation -> data.values as values, values.value = 'ROS1';
+            };
+        };
+    };
+}
+
+group TransformMolekularpathologieCheckboxesFISH(source src: Bundle, target tgt: BackboneElement)
+{
+    src.entry as entry then
+    {
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'ALK'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2510';
+                };
+                observation -> data.values as values, values.value = 'ALK';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'MET'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2510';
+                };
+                observation -> data.values as values, values.value = 'MET';
+            };
+        };
+
+        entry.resource as observation where "resource is Observation 
+                                            and resource.code.coding.code = 'RET'
+                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        {
+            observation -> tgt.data as data collate then
+            {
+                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
+                {
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2510';
+                };
+                observation -> data.values as values, values.value = 'RET';
             };
         };
 
