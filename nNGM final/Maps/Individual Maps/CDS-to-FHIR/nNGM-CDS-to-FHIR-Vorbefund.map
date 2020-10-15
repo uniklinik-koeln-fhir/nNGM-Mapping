@@ -3,45 +3,16 @@
 /*
     TODO 
     - Once the repeatindex has been implemented, this map needs to be adjusted as the Vorbefund 
-      section can have multiple instances.
-    [Specimen] resource
-    - Biopsie-ID item form doesn't exist in Seatable. Logic to map this item was based on the 
-      logic of LiquidBiopse.
-    [EXTERNES TUMORMATERIAL] Section form 
-    - Eingang des Tumormaterials am nNGM-Standort item form doesn't exist in Sea Table.
-      Missing implementation to map in this script.
-    [Observation] resource Histologie
-    - boValueSetdySite: 
-        -"C38.	Herz, Mediastinum und Pleura" value of the form doesn't correspont to the value 
-                of the ValueSet on Simplifier. I've used the value of the form to assign display 
-                Value.  
-        -"C38.8.Herz, Mediastinum und Pleura, mehrere Teilbereiche überlappend" value of the 
-                form doesn't correspont to the value of the ValueSet on Simplifier. I've used 
-                the value of the form to assign display Value.
-        -"C39.8.Atemwege [Respirationstrakt] und intrathorakale Organe, mehrere Bereiche 
-                überlappend" value of the form doesn't correspont to the value of the ValueSet 
-                on Simplifier. I've used the value of the form to assign display Value.
+      section can have multiple instances. 
+
     [Observation] resource BRAF, CK7, MIB1, Napsin A, P40, Synaptophysin, TTF1, ALK, MET
     - Date of Assessment: Item in SeaTable specifies that this item must be mapped in 
       effectiveDateTime item resource. Logic was based as ImmunohistochemieFHIR mapping,
       where the value is mapped on effectivePeriod item.
-    [Observation] CK7, MIB1, Napsin A, P40, Synaptophysin, TTF1, ALK
-    -Items Id on SeaTable were updated, they didn't correspond to the properly Ids.
-    [Observation] resource SONSTIGE 
-    -Amplifikation -> amplification-level component: Check the value set conditions, I coudn't 
-     get the valueSets
-    [Observation] resource 
-    - Exon erster Fusionspartner: Missing implementation because Seatable specifies that this 
-      item must be mapped in the "erster-fusionspartner-exon" component which map a ValueInteger
-      and the export data for this item is a ValueString.
-    - Exon zweiter Fusionspartner: Missing implementation because Seatable specifies that this 
-      item must be mapped in the "fusionspartner-exon" component which map a ValueInteger and 
-      the export data is for this item a ValueString.
-    [Observation] Fast Track
-    I have used the http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack profile 
-    link for all observations of fast track section because in SeaTable has a wrong profile link
+    * In this case this is wrong because we dont have a section of 'Status der untersuchungen' in Vorbefund where a possible effectivePeriod.end could be stated.
 
 */
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR" = nNGM_Mapping_VorbefundFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
@@ -156,7 +127,8 @@ group CreateTransformSpecimenVorbefund(source src: CTS_Transport, target tgt: Ba
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 27 and groupindex = 0 and itemid = 'id_1601'" then
+        data.values as values where "blockindex = 27 and groupindex = 0 and itemid = 'id_1601'
+                                     or blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
         {
             src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenVorbefund(src, specimen);
         };          
@@ -186,6 +158,13 @@ group TransformSpecimenVorbefund(source src: CTS_Transport, target tgt: Specimen
                                       biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'),
                                       biopsieId.value  = value;
         };
+
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
+        {
+            values.value as value -> tgt.receivedTime = dateOp(value, 'dateTime');
+        };
+
+
     };
 }
 /* ------------------------- DiagnosticReport ------------------------- */
@@ -194,8 +173,7 @@ group CreateTransformDiagnosticReportVorbefund(source src: CTS_Transport, target
 
     src.operations as operations, operations.data as data then
     {   
-        data.values as values where   "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_1653'
+        data.values as values where   "blockindex = 0 and groupindex = 0 and itemid = 'id_1653'
                                     or blockindex = 0 and groupindex = 0 and itemid = 'id_1654'" then
         {
             src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportVorbefund(src, diagnosticReport);
@@ -223,9 +201,6 @@ group TransformDiagnosticReportVorbefund(source src: CTS_Transport, target tgt: 
     src.operations as operations, operations.data as data then
     {
         /* ------------------------- EXTERNES TUMORMATERIAL ----------------------------- */
-        //TODO: Missing implementation
-        //Eingang des Tumormaterials am nNGM-Standort
-
         //Befunddatum
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1653'" then
         {
@@ -326,11 +301,10 @@ group TransformObservationBRAFIHCVorbefund(source src: CTS_Transport, target tgt
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_group'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_phaenotype'" then
@@ -389,11 +363,10 @@ group TransformObservationCK7IHCVorbefund(source src: CTS_Transport, target tgt:
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2037'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2038'" then
@@ -452,11 +425,10 @@ group TransformObservationMIB1IHCVorbefund(source src: CTS_Transport, target tgt
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2055'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2056'" then
@@ -515,11 +487,11 @@ group TransformObservationNapsinAIHCVorbefund(source src: CTS_Transport, target 
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        
+        //Date of Assessment
         data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2064'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2065'" then
@@ -578,11 +550,10 @@ group TransformObservationP40IHCVorbefund(source src: CTS_Transport, target tgt:
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2073'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2074'" then
@@ -641,11 +612,10 @@ group TransformObservationSynaptophysinIHCVorbefund(source src: CTS_Transport, t
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2080'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2081'" then
@@ -704,11 +674,10 @@ group TransformObservationTTF1IHCVorbefund(source src: CTS_Transport, target tgt
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2089'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2090'" then
@@ -909,11 +878,10 @@ group TransformObservationPDL1IHCVorbefund(source src: CTS_Transport, target tgt
 
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2172'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2173'" then
@@ -1132,7 +1100,7 @@ group TransformObservationMETCISHVorbefund(source src: CTS_Transport, target tgt
                 value ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
             };
         };
-        //TODO
+        
         //Amplifikation -> amplification-level component
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2148'" then
         {
@@ -1423,7 +1391,7 @@ group TransformObservationMETFISHVorbefund(source src: CTS_Transport, target tgt
                 value ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
             };
         };
-        //TODO
+
         //Amplifikation -> amplification-level component
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2155'" then
         {
@@ -2000,11 +1968,10 @@ group TransformObservationNTRK1FusionNGSVorbefund(source src: CTS_Transport, tar
     src.operations as operations, operations.data as data then
     {
         /* ---------------------------- FusionNGS --------------------------------- */
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2540'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Ergebnis 
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2547'" then
@@ -2081,11 +2048,10 @@ group TransformObservationNTRK2FusionNGSVorbefund(source src: CTS_Transport, tar
     src.operations as operations, operations.data as data then
     {
         /* ---------------------------- FusionNGS --------------------------------- */
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2592'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Ergebnis 
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2596'" then
@@ -2162,11 +2128,10 @@ group TransformObservationNTRK3FusionNGSVorbefund(source src: CTS_Transport, tar
     src.operations as operations, operations.data as data then
     {
         /* ---------------------------- FusionNGS --------------------------------- */
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2584'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Ergebnis 
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2588'" then
@@ -2243,11 +2208,10 @@ group TransformObservationFGFR1FusionNGSVorbefund(source src: CTS_Transport, tar
     src.operations as operations, operations.data as data then
     {
         /* ---------------------------- FusionNGS --------------------------------- */
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2576'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Ergebnis 
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2580'" then
@@ -2325,11 +2289,10 @@ group TransformObservationFGFR2FusionNGSVorbefund(source src: CTS_Transport, tar
     src.operations as operations, operations.data as data then
     {
         /* ---------------------------- FusionNGS --------------------------------- */
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2568'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Ergebnis 
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2572'" then
@@ -2406,11 +2369,10 @@ group TransformObservationFGFR3FusionNGSVorbefund(source src: CTS_Transport, tar
     src.operations as operations, operations.data as data then
     {
         /* ---------------------------- FusionNGS --------------------------------- */
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2560'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Ergebnis 
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2564'" then
@@ -2489,11 +2451,11 @@ group TransformObservationSonstigesFusionNGSVorbefund(source src: CTS_Transport,
     src.operations as operations, operations.data as data then
     {
         /* ---------------------------- FusionNGS --------------------------------- */
-        //TODO
-        //Date of Assessment -> start 
+        
+        //Date of Assessment
         data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = 0 and itemid = 'id_2246'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Ergebnis 
         data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = 0 and itemid = 'id_2254'" then
@@ -2513,6 +2475,7 @@ group TransformObservationSonstigesFusionNGSVorbefund(source src: CTS_Transport,
                 value ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
             };
         };
+        
         //Erster Fusionspartner -> erster-fusionspartner component
         data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = 0 and itemid = 'id_2255'" then
         {
@@ -2540,10 +2503,30 @@ group TransformObservationSonstigesFusionNGSVorbefund(source src: CTS_Transport,
                 value -> component.code          = cc('http://loinc.org', '82121-5');
             };
         };
-        //TODO: Missing implementation
+
+        /*
         //Exon erster Fusionspartner
-        //TODO: Missing implementation
+        data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = 0 and itemid = 'id_2258'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueInteger  = cast(value, 'FHIR.integer');
+                value -> component.code          = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
+            };
+        };
+        
         //Exon zweiter Fusionspartner
+        data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = 0 and itemid = 'id_2259'" then
+        {
+            values.value as value -> tgt.component = create('BackboneElement') as component then
+            {
+                value -> component.valueInteger  = cast(value, 'FHIR.integer');
+                value -> component.code          = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'zweiter-fusionspartner-exon');
+            };
+        };
+        
+        */
+    
     };
 }
 /*------------------------------------------------------------------------------
@@ -3040,11 +3023,10 @@ group MapObservationALKDatePhaenotyp(source src: CTS_Transport, target tgt: Obse
 {
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2098'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2099'" then
@@ -3064,11 +3046,10 @@ group MapObservationMETDatePhaenotyp(source src: CTS_Transport, target tgt: Obse
 {
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2132'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2133'" then
@@ -3088,11 +3069,10 @@ group MapObservationRETDatePhaenotyp(source src: CTS_Transport, target tgt: Obse
 {
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2183'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'id_2184'" then
@@ -3112,11 +3092,10 @@ group MapObservationROS1DatePhaenotyp(source src: CTS_Transport, target tgt: Obs
 {
     src.operations as operations, operations.data as data then
     {
-        //TODO
-        //Date of Assessment -> start 
+        //Date of Assessment
         data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2211'" then
         {
-            values.value as effectiveDT -> tgt.effectivePeriod = create('Period') as period collate, period.start = dateOp(effectiveDT, 'date');
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2212'" then
