@@ -7,7 +7,8 @@ TODO
     - Once the repeatindex has been implemented, this map needs to be adjusted as the NGS Lung Panel section can have multiple instances.
     [OBSERVATION] resource
     - SOP: component doesn't exist in simplifier profile,
-    - "Position Start" and "Position Stop" do not work. The current attempt is in the group 'TransformValueRangeComponentNGSLungPanel' down below.
+    - "Position Start" and "Position Stop" missing
+    - ValueRange not working using collate, slowing down map execution using function call, displaying separate arrays without using collate
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelFHIR" = nNGM_Mapping_NGSLungPanelFHIR
@@ -379,16 +380,14 @@ group TransformObservationNGSLungPanel(source src: CTS_Transport, target tgt: Ob
         //TODO
         //Position Start (1-basiert) -> exact-start-end.low
 
-        //TODO
+        //TODOs
         //Position Stop (1-basiert) -> exact-start-end.high
-
-        //data then TransformValueRangeComponentNGSLungPanel(src, tgt);
 
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_43'" then
         {
             values.value as value where "%tgt.component.valueRange.low.exists().not()" then
             {
-                value -> tgt.component = create('BackboneElement') as component collate, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.low = create('Quantity') as qty then
+                value -> tgt.component = create('BackboneElement') as component, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.low = create('Quantity') as qty then
                 {
                     value -> qty.value = value;
                 };
@@ -399,7 +398,7 @@ group TransformObservationNGSLungPanel(source src: CTS_Transport, target tgt: Ob
         {
             values.value as value where "%tgt.component.valueRange.high.exists().not()" then
             {
-                value -> tgt.component = create('BackboneElement') as component collate, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.high = create('Quantity') as qty then
+                value -> tgt.component = create('BackboneElement') as component, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.high = create('Quantity') as qty then
                 {
                     value -> qty.value = value;
                 };
@@ -446,34 +445,7 @@ group TransformObservationNGSLungPanel(source src: CTS_Transport, target tgt: Ob
     };
 }
 
-/* -------------------------- ValueRange -------------------------- */ 
-group TransformValueRangeComponentNGSLungPanel(source src: CTS_Transport, target tgt: Observation)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_43'" then
-        {
-            values.value as value where "%tgt.component.valueRange.low.exists().not()" then
-            {
-                value -> tgt.component = create('BackboneElement') as component collate, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.low = create('Quantity') as qty then
-                {
-                    value -> qty.value = value;
-                };
-            };
-        };
 
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_44'" then
-        {
-            values.value as value where "%tgt.component.valueRange.high.exists().not()" then
-            {
-                value -> tgt.component = create('BackboneElement') as component collate, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.high = create('Quantity') as qty then
-                {
-                    value -> qty.value = value;
-                };
-            };
-        };
-    };
-}
 
 /* -------------------------- ServiceRequest -------------------------- */ 
 group CreateTransformServiceRequestNGSLungPanel(source src: CTS_Transport, target tgt: BackboneElement)
