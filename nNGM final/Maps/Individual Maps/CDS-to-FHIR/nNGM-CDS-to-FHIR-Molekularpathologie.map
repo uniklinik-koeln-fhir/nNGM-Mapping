@@ -4,24 +4,18 @@
 /*
 TODO
 
-Remove Organization sections depending on feedback PW/AZ
-Modify MET CISH instance of ergebnis to facilitate difference between 
- positiv (high-level amplification)
- positiv (moderate-level amplification) 
+- Modify MET CISH instance of ergebnis to facilitate difference between 
+    positiv (high-level amplification)
+    positiv (moderate-level amplification) 
 
-
-In the seatable the episode of care section is replaced with the diagnosticreport?
-
+- In the seatable the episode of care section is replaced with the diagnosticreport?
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR" = nNGM_Mapping_MolekularphatologieFHIR
 
 /* ------------------------------ Bundle ---------------------------- */
-group TransformBundle(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleMolekularpathologie(source src: CTS_Transport, target bundle: Bundle)
 {
-    src -> bundle.id = uuid();
-    src -> bundle.type = 'collection';
-
     src -> bundle.entry as entry then CreateDiagnosticReportMP(src, entry);
     src -> bundle.entry as entry then CreateOrganizationMP(src, entry);
     src -> bundle.entry as entry then CreateServiceRequestMP(src, entry);
@@ -46,24 +40,25 @@ group CreateSpecimenMP(source src: CTS_Transport, target tgt: BackboneElement)
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
         {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
+            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenMP(src, specimen);
         };
     };
 }
 
-group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
+group TransformSpecimenMP(source src: CTS_Transport, target tgt: Specimen) 
 {
     // Metadata
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // fixed status
-    src -> tgt.type = create('BackboneElement') as cc, cc.coding as type,,
-                      type.system = 'http://snomed.info/sct', 
-                      type.version = 'http://snomed.info/sct/900000000000207008',
-                      type.code as code, 
+    
+    // Type
+    src -> tgt.type = create('Type') as type,
+                      type.coding as coding,
+                      coding.system = 'http://snomed.info/sct', 
+                      coding.version = 'http://snomed.info/sct/900000000000207008',
+                      coding.code as code, 
                       code.extension as dataAbsentReason, 
                       dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
                       dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
@@ -74,38 +69,7 @@ group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen)
     // Biopsy-ID -> identifier.value
     src.operations as operations, operations.data as data then 
     {
-         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
-        {
-            values.value as value -> tgt.identifier as identifier, 
-                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
-                                     identifier.value = value;
-        };
-    };
-}
-
-/*-----------------DiagnosticReport-----------------------*/
-group CreateDiagnosticReportMP(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // fixed status
-    src -> tgt.type = create('BackboneElement') as type,
-                      type.system = 'http://snomed.info/sct', 
-                      type.version = 'http://snomed.info/sct/900000000000207008',
-                      type.code as code, 
-                      code.extension as dataAbsentReason, 
-                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // Biopsy-ID -> identifier.value
-    src.operations as operations, operations.data as data then 
-    {
-         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
         {
             values.value as value -> tgt.identifier as identifier, 
                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
@@ -121,12 +85,12 @@ group CreateDiagnosticReportMP(source src: CTS_Transport, target tgt: BackboneEl
     {
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'assessment_id'" then
         {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReport(src, diagnosticreport);
+            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReportMP(src, diagnosticreport);
         };
     };
 }
 
-group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport) 
+group TransformDiagnosticReportMP(source src: CTS_Transport, target tgt: DiagnosticReport) 
 {
     // Metadata
     src -> tgt.id = uuid();
@@ -155,15 +119,14 @@ group CreateOrganizationMP(source src: CTS_Transport, target tgt: BackboneElemen
 {
     src.operations as operations, operations.data as data then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2617'" then
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
         {
-            src -> tgt.resource = create('Organization') as organization then TransformOrganization(src, organization);
+            src -> tgt.resource = create('Organization') as organization then TransformOrganizationMP(src, organization);
         };
     };
 }
 
-group TransformOrganization(source src: CTS_Transport, target tgt: Organization) 
+group TransformOrganizationMP(source src: CTS_Transport, target tgt: Organization) 
 {
     // Metadata
     src -> tgt.id = uuid();
@@ -188,13 +151,13 @@ group CreateServiceRequestMP(source src: CTS_Transport, target tgt: BackboneElem
         or blockindex = 7 and groupindex = 0 and itemid = 'id_2462'
         or blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
         {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequest(src, serviceRequest);
+            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestMP(src, serviceRequest);
         };
     };
 }
 
 /* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformServiceRequestMP(source src: CTS_Transport, target tgt: ServiceRequest)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
@@ -203,7 +166,7 @@ group TransformServiceRequest(source src: CTS_Transport, target tgt: ServiceRequ
     src -> tgt.intent = cast('proposal', 'FHIR.code');
  
     // Code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/anforderung-code', 'molekularpathologie');
+    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'molekularpathologie');
 
     // Subject
     src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
@@ -308,28 +271,7 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
     src then MapALKDateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapALKPhaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapALKCode(src, tgt);
-
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-
-            };
-        };
-    };
 
     // SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -340,7 +282,6 @@ group TransformALKCISHObservation(source src: CTS_Transport, target tgt: Observa
             {
                 sop -> sopcomponent.valueString = sop;
                 sop -> sopcomponent.code = cc('http://ncit.nci.nih.gov', 'C48443');
-
             };
         };
     };
@@ -438,28 +379,7 @@ group TransformALKFISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
 
     src then MapALKDateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapALKPhaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapALKCode(src, tgt);
-
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-
-            };
-        };
-    };
 
     //  SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -580,28 +500,9 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
     src then MapMETDateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapMETPhaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapMETCode(src, tgt);
 
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
 
-            };
-        };
-    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -671,33 +572,10 @@ group TransformMETCISHObservation(source src: CTS_Transport, target tgt: Observa
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2148'" then
         {
             values.value where "$this.value = 'Amplifikation high-level'" then 
-<<<<<<< master
-=======
             {
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
                     amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA9193-9', 'High');
-
-                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
-                };
-            };
-
-            values.value where "$this.value = 'Amplifikation moderate-level'" then 
->>>>>>> completed to fhir map
-            {
-                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
-                {
-                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA8982-6', 'Medium');
-
-                    amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
-                };
-            };
-
-            values.value where "$this.value = 'keine Amplifikation'" then 
-            {
-                values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
-                {
-                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/high-medium-low', 'LA32-8', 'no');
 
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
@@ -765,28 +643,9 @@ group TransformMETFISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
 
     src then MapMETDateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapMETPhaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapMETCode(src, tgt);
 
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
 
-            };
-        };
-    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -1056,28 +915,9 @@ group TransformRETCISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
     src then MapRETDateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapRETPhaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapRETCode(src, tgt);
 
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
 
-            };
-        };
-    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -1186,28 +1026,9 @@ group TransformRETFISHObservation(source src: CTS_Transport, target tgt: Observa
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
 
     src then MapRETDateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapRETPhaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapRETCode(src, tgt);
 
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
 
-            };
-        };
-    };
 
     
     //SOP-Versionsnummer des Standorts
@@ -1330,28 +1151,7 @@ group TransformROS1CISHObservation(source src: CTS_Transport, target tgt: Observ
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23022');
 
     src then MapROS1DateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapROS1Phaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapROS1Code(src, tgt);
-
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-
-            };
-        };
-    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -1473,28 +1273,7 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
     src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C17563');
 
     src then MapROS1DateOfAssessment(src, tgt);
-<<<<<<< master
-<<<<<<< master
-=======
-    src then MapROS1Phaenotyp(src, tgt);
->>>>>>> completed to fhir map
-=======
->>>>>>> to fhir fixes, finished to cds
     src then MapROS1Code(src, tgt);
-
-    // Netzwerkzentrum
-    src.operations as operations, operations.data as data then 
-    {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
-        {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
-            {
-                nz -> nzcomponent.valueString = nz;
-                nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
-
-            };
-        };
-    };
 
     //SOP-Versionsnummer des Standorts
     src.operations as operations, operations.data as data then 
@@ -1540,8 +1319,7 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
     {
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2233'" then
         {
-            values.value where "$this.value = 'positiv (high-level amplification)'
-                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            values.value where "$this.value = 'positiv'" then 
             {
                 values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
             };
@@ -1589,16 +1367,6 @@ group TransformROS1FISHObservation(source src: CTS_Transport, target tgt: Observ
 /*------------------Functionality--------------------------------*/
 /*---------------------------------------------------------------*/
 
-group MapObservationStatus(source src: CTS_Transport, target tgt: Observation)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value -> tgt.status = cast('final', 'FHIR.code');
-        };
-    };
-}
 
 group MapALKDateOfAssessment(source src: CTS_Transport, target tgt: Observation)
 {
