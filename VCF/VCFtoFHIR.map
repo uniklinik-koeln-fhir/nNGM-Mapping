@@ -4,7 +4,8 @@
 /* 
 TODO
 
-Change optional fields to position based CSQ indexes 
+Exon codesystem
+
 
 */
 
@@ -69,7 +70,7 @@ group MapVCFRequiredHeader(source src: VCF, target obs : Observation)
         reference -> obs.component = create('BackboneElement') as component,
                                      component.code = cc('http://loinc.org', '62374-4'),
                                      component.value = cc('http://loinc.org', reference);
-    };x
+    };
 }
 
 group MapVCFRequiredBody(source records: BackboneElement, target obs : Observation)
@@ -79,13 +80,15 @@ group MapVCFRequiredBody(source records: BackboneElement, target obs : Observati
                                                            component.code = cc('http://loinc.org', '48001-2'),
                                                            component.value = cc(chrom);
 
-   // POS -> component:exact-start-end, logic for indel missing
+   // POS -> component:exact-start-end
+   // indel if -> len(REF)/len(ALT) != 1 || (length(REF)/len(ALT) !=1 && (REF.first() == ALT.last()) = true
     records.pos as pos ->  obs.component = create('BackboneElement') as component,
                                            component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'),
-                                           component.valueRange as range, range.low = create('Quantity') as quantity, quantity.value = pos;
+                                           component.valueRange as range, 
+                                           range.low = create('Quantity') as quantity, 
+                                           quantity.value = pos;
 
-    // component:exact-start-end -> TODO: Calcualte based on REF and ALT
-    
+    // component:exact-start-end -> POS + abs(len(ALT)-(len(REF)))
 
     // REF -> component:ref-allele
     records.ref as ref ->  obs.component = create('BackboneElement') as component,
@@ -101,47 +104,64 @@ group MapVCFRequiredBody(source records: BackboneElement, target obs : Observati
 
 group MapVCFOptionalBody(source records: BackboneElement, target obs : Observation)
 {   
-    // INFO.CP -> component:amino-acid-chg
-    records.info as cp, cp.value as value where "$this.name = 'CP'" -> obs.component = create('BackboneElement') as component,
-                                                                       component.code = cc('http://loinc.org', '48005-3'),
-                                                                       component.value = cc('http://varnomen.hgvs.org', value);
-    
-    // INFO.CcD -> component:dna-chg
-    records.info as ccd, ccd.value as value where "$this.name = 'CcD'" -> obs.component = create('BackboneElement') as component,
-                                                                          component.code = cc('http://loinc.org', '48004-6'),
-                                                                          component.value = cc('http://varnomen.hgvs.org', value);
-
-    
     // INFO.TN (Gen) -> component:gene-studied
-    records.info as ccd, ccd.value as value where "$this.name = 'TN'" -> obs.component = create('BackboneElement') as component,
+    records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
                                                                           component.code = cc('http://loinc.org', '48018-6'),
-                                                                          component.value = create('CodeableConcept') as cc, cc.coding as coding, coding.system = 'http://www.genenames.org/geneId', coding.code = evaluate(value, '$this.split(\'_\')[1]');
+                                                                          component.value = create('CodeableConcept') as cc, 
+                                                                          cc.coding as coding, 
+                                                                          coding.system = 'http://www.genenames.org/geneId', 
+                                                                          coding.code = evaluate(value, '$this.split(\'|\')[4]');
 
     // INFO.TN (Exon) -> component:exon
-    records.info as ccd, ccd.value as value where "$this.name = 'TN'" -> obs.component = create('BackboneElement') as component,
+    records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
                                                                           component.code = cc('http://vonk.fhir.ly/fhir/CodeSystem/VCF/tbd-codes', 'exon'),
-                                                                          component.value = evaluate(value, '$this.split(\'_\')[2]');
+                                                                          component.value = create('CodeableConcept') as cc, 
+                                                                          cc.coding as coding, 
+                                                                          coding.system = 'http://vonk.fhir.ly/fhir/CodeSystem/VCF/tbd-codes',
+                                                                          component.value = evaluate(value, '$this.split(\'|\')[9].split(\'_\').first()');
 
-    // INFO.HGVSC
+    // INFO.CcD -> component:dna-chg
+    records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                          component.code = cc('http://loinc.org', '48004-6'),
+                                                                          component.value = create('CodeableConcept') as cc, 
+                                                                          cc.coding as coding, 
+                                                                          coding.system = 'http://varnomen.hgvs.org',
+                                                                          component.value = evaluate(value, '$this.split(\'|\')[11].split(\':\').last()');
 
-    // INFO.HGVSP
-
+    // INFO.CP -> component:amino-acid-chg
+    records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                       component.code = cc('http://loinc.org', '48005-3'),
+                                                                       component.value = create('CodeableConcept') as cc, 
+                                                                       cc.coding as coding, 
+                                                                       coding.system = 'http://varnomen.hgvs.org',
+                                                                       component.value = evaluate(value, '$this.split(\'|\')[12].split(\':\').last()');
+    
     // FORMAT.ID=AF -> component:sample-allelic-frequency
     records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'AF'" ->  obs.component = create('BackboneElement') as component,
                                                                                                                  component.code = cc('http://loinc.org', '81258-6'),
                                                                                                                  component.value = create('Quantity') as quantity, 
                                                                                                                                    quantity.value = value,
-                                                                                                                                   quantity.unit = '{alternate allele}',
-                                                                                                                                   quantity.code = '{alternate allele}',
+                                                                                                                                   quantity.unit = 'decimal',
+                                                                                                                                   quantity.code = '{decimal}',
                                                                                                                                    quantity.system = 'http://unitsofmeasure.org';
 
-     //INFO.FEATURE
+    //INFO.FEATURE -> component:transcript-ref-seq
+    records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                       component.code = cc('http://loinc.org', '51958-7'),
+                                                                       component.value = create('CodeableConcept') as cc, 
+                                                                       cc.coding as coding, 
+                                                                       coding.system = 'http://www.ncbi.nlm.nih.gov/refseq',
+                                                                       component.value = evaluate(value, '$this.split(\'|\')[7]');
+    
 
     // FORMAT.ID=DP -> component:allelic-read-depth
     records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'DP'" -> obs.component = create('BackboneElement') as component,
                                                                                                                 component.code = cc('http://loinc.org', '82121-5'),
                                                                                                                 component.value = create('Quantity') as quantity, 
-                                                                                                                                   quantity.value = value;
+                                                                                                                                   quantity.value = value,
+                                                                                                                                   quantity.unit = 'reads per base pair',
+                                                                                                                                   quantity.code = '{reads}/{base}',
+                                                                                                                                   quantity.system = 'http://unitsofmeasure.org';
 
 }
 
