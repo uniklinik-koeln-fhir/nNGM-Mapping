@@ -3,7 +3,6 @@
 
 /*
 TODO
-- Passing all the necessary values into the corresponding checkboxes is impossible as of now. Field 2509 and field 2510 are affected.
 - 2147 Valueset does not allow for differentiation between high-level and moderate-level amplification
 */
 
@@ -18,8 +17,11 @@ group TransformMolekularpathologieCTS(source src: Bundle, target tgt: BackboneEl
     src -> tgt.type = 'save';
     src -> tgt.crfid = '*-MP1';
 
-    src then TransformMolekularpathologieCheckboxesCISHy(src, tgt);
-    //src then TransformMolekularpathologieCheckboxesFISH(src, tgt);
+    //Checkboxes for Chromogenic in-situ-Hybridisierung(CISH)
+    src then TransformChromogenicinsituHybridisierungCISHCheckboxes(src, tgt);
+
+    //Checkboxes for Fluoreszenz-in-situ-Hybridisierung (FISH)
+    src then TransformFluoreszenzinsituHybridisierungFISHCheckboxes(src, tgt);
 
     src.entry as entry then
     {
@@ -1296,255 +1298,75 @@ group TransformSOPNumberMP(source src: Observation, target tgt: BackboneElement)
     };
 }
 
-group TransformMolekularpathologieCheckboxesCISH(source src: Bundle, target tgt: BackboneElement)
+/*-- Create Checkboxes for Chromogenic in-situ-Hybridisierung(CISH)---*/
+group TransformChromogenicinsituHybridisierungCISHCheckboxes(source src: Bundle, target tgt: BackboneElement)
 {
     src.entry as entry then
     {
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ALK'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+        src-> tgt.data as data then
         {
-            observation -> tgt.data as data collate then
+            entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
             {
                 observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
                 {
                     observation -> data.blockindex = 2;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2509';
+                    
+                    observation where "%src.entry.resource.code.coding.where(code = 'ALK').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'ALK';
+                    };
+                    observation where "%src.entry.resource.code.coding.where(code = 'MET').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'MET';
+                    };
+                    observation where "%src.entry.resource.code.coding.where(code = 'RET').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'RET';
+                    };
+                    observation where "%src.entry.resource.code.coding.where(code = 'ROS1').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'ROS1';
+                    };
                 };
-                observation -> data.values as values, values.value = 'ALK';
-            };
-        };
-
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'MET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'MET';
-            };
-        };
-
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'RET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'RET';
-            };
-        };
-
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ROS1'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'ROS1';
             };
         };
     };
 }
-
-group TransformMolekularpathologieCheckboxesCISHy(source src: Bundle, target tgt: BackboneElement)
-{
-    src.entry as entry -> tgt.data as data then
-    {
-        entry.resource as observation where "resource is Observation 
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-        {
-            observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-            {
-                observation -> data.blockindex = 2;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2509';
-            };
-            observation -> data.values as values then
-            {
-                entry.resource as observation where "resource is Observation 
-                                                and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-                {
-                    observation.code as code, code.coding as coding, coding.code as actualCode -> values.value = actualCode;
-                };
-            };
-            
-        };
-    };
-}
-
-group TransformMolekularpathologieCheckboxesFISHy(source src: Bundle, target tgt: BackboneElement)
-{
-    src.entry as entry -> tgt.data as data collate then
-    {
-        entry.resource as observation where "resource is Observation 
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-            {
-                observation -> data.blockindex = 2;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2510';
-            };
-            observation -> data.values as values then
-            {
-                entry.resource as observation where "resource is Observation 
-                                                and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-                {
-                    observation.code as code, code.coding as coding, coding.code as actualCode -> values.value = actualCode;
-                };
-            };
-            
-        };
-    };
-}
-
-group TransformMolekularpathologieCheckboxesCISHyy(source src: Bundle, target tgt: BackboneElement)
-{
-    src.entry as entry -> tgt.data as data then
-    {
-        entry where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-        {
-            entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ALK'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'ALK';
-            };
-
-            entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'MET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'MET';
-            };
-
-            entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'RET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'RET';
-            };
-
-            entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ROS1'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2509';
-                };
-                observation -> data.values as values, values.value = 'ROS1';
-            };
-        };
-    };
-}
-
-group TransformMolekularpathologieCheckboxesFISH(source src: Bundle, target tgt: BackboneElement)
+/*-- Create Checkboxes for Fluoreszenz-in-situ-Hybridisierung (FISH)-- */
+group TransformFluoreszenzinsituHybridisierungFISHCheckboxes(source src: Bundle, target tgt: BackboneElement)
 {
     src.entry as entry then
     {
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ALK'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        src-> tgt.data as data then
         {
-            observation -> tgt.data as data collate then
+            entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
             {
                 observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
                 {
                     observation -> data.blockindex = 2;
                     observation -> data.groupindex = 0;
                     observation -> data.itemid = 'id_2510';
-                };
-                observation -> data.values as values, values.value = 'ALK';
-            };
-        };
 
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'MET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2510';
+                    observation where "%src.entry.resource.code.coding.where(code = 'ALK').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'ALK';
+                    };
+                    observation where "%src.entry.resource.code.coding.where(code = 'MET').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'MET';
+                    };
+                    observation where "%src.entry.resource.code.coding.where(code = 'RET').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'RET';
+                    };
+                    observation where "%src.entry.resource.code.coding.where(code = 'ROS1').exists()" then
+                    {
+                        observation -> data.values as values, values.value = 'ROS1';
+                    };
                 };
-                observation -> data.values as values, values.value = 'MET';
             };
-        };
-
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'RET'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2510';
-                };
-                observation -> data.values as values, values.value = 'RET';
-            };
-        };
-
-        entry.resource as observation where "resource is Observation 
-                                            and resource.code.coding.code = 'ROS1'
-                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation -> tgt.data as data collate then
-            {
-                observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2510';
-                };
-                observation -> data.values as values, values.value = 'ROS1';
-            };
-        };
+        };       
     };
 }
