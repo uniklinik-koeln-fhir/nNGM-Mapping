@@ -1,0 +1,207 @@
+
+/* Map a Variant Call Format (VCF) file from FHIR resources based on the Clinical Genmoics Implementation Guide (http://hl7.org/fhir/uv/genomics-reporting/) to the CTS_Transport format */
+
+/// version = 0.1
+
+map "http://vonk.fire.ly/fhir/StructureMap/nNGM_NGS_LUNGPANEL_CDS" = "nNGM NGS LUNG PANEL CDS"
+
+uses "http://vonk.fire.ly/fhir/StructureDefinition/VCF" as source
+uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
+
+group MapVCF(source src: VCF, target tgt: CTS_Transport)
+{
+    src then MapCDSMeta(src, tgt), 
+             MapVCFRequiredHeader(src, tgt),
+             MapVCFRequiredBody(src, tgt),
+             MapVCFOptionalBody(src, tgt);
+}
+
+group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
+{
+    src -> tgt.version = '1.1';
+    src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
+    src -> tgt.operations as operations collate, operations.crfid = '1_LP1';
+    src -> tgt.operations as operations collate, operations.type = 'save';
+
+    src.records as records, records.sample as sample, sample.sampleId as sampleId  then 
+    {
+        sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0] + \'-\' + $index.toString()');
+    };
+
+    src -> tgt.operations as operations collate then 
+    {
+        src -> operations.data as data then 
+        {
+            src -> data.blockindex = 5;
+            src -> data.groupindex = 0;
+            src -> data.itemid = 'id_2462';
+            src -> data.values as values, values.value = 'vollständig';
+        };
+    };
+}
+
+group MapVCFRequiredHeader(source src: VCF, target tgt : CTS_Transport)
+{
+
+    // ##reference -> LP__4_0_0__id_41
+    src.records as records, src.header as header, header.optional as optional, optional.value as reference where "$this.name = 'reference'" then 
+    {
+        reference -> tgt.operations as operations collate then 
+        {
+            reference -> operations.data as data then 
+            {
+                reference -> data.blockindex = 4;
+                reference -> data.groupindex = 0;
+                reference -> data.repeatindex = evaluate(records, '$index');
+                reference -> data.itemid = 'id_41';
+                reference -> data.values as values, values.value = reference;
+            };
+        };
+    };
+}
+
+group MapVCFRequiredBody(source src: VCF, target tgt : CTS_Transport)
+{
+    src.records as records then 
+    {
+        // #CHROM -> LP__4_0_0__id_42
+        records.chrom as chrom ->  tgt.operations as operations collate then 
+        {
+            chrom -> operations.data as data then 
+            {
+                chrom -> data.blockindex = 4;
+                chrom -> data.groupindex = 0;
+                chrom -> data.repeatindex = evaluate(records, '$index');
+                chrom -> data.itemid = 'id_42';
+                chrom -> data.values as values, values.value = chrom;
+            };
+        };
+
+        // POS -> LP__4_0_0__id_43
+        records.pos as pos ->  tgt.operations as operations collate then 
+        {
+            pos -> operations.data as data then 
+            {
+                pos -> data.blockindex = 4;
+                pos -> data.groupindex = 0;
+                pos -> data.repeatindex = evaluate(records, '$index');
+                pos -> data.itemid = 'id_43';
+                pos -> data.values as values, values.value = pos;
+            };
+        };
+
+        // STOP POS -> TODO: Calcualte based on REF and ALT
+
+        // ALT -> LP__4_0_0__id_46
+        records.alt as alt ->  tgt.operations as operations collate then 
+        {
+            alt -> operations.data as data then 
+            {
+                alt -> data.blockindex = 4;
+                alt -> data.groupindex = 0;
+                alt -> data.repeatindex = evaluate(records, '$index');
+                alt -> data.itemid = 'id_46';
+                alt -> data.values as values, values.value = alt;
+            };
+        };
+
+        // REF -> LP__4_0_0__id_45
+        records.ref as ref -> tgt.operations as operations collate then 
+        {
+            ref -> operations.data as data then 
+            {
+                ref -> data.blockindex = 4;
+                ref -> data.groupindex = 0;
+                ref -> data.repeatindex = evaluate(records, '$index');
+                ref -> data.itemid = 'id_45';
+                ref -> data.values as values, values.value = ref;
+            };
+        };
+    };
+}
+
+group MapVCFOptionalBody(source src: VCF, target tgt : CTS_Transport)
+{
+    src.records as records then 
+    {
+        // FORMAT.ID=AF -> LP__4_0_0__id_38
+        records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'AF'" ->  tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_38';
+                value -> data.values as values, values.value = value, values.unit = 'percent';
+            };
+        };
+
+        // FORMAT.ID=DP -> LP__4_0_0__ngs_panel_coverage
+        records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'DP'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'ngs_panel_coverage';
+                value -> data.values as values, values.value = value;
+            };
+        };
+
+            
+        // INFO.CP -> LP__4_0_0__id_37
+        records.info as cp, cp.value as value where "$this.name = 'CP'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_37';
+                value -> data.values as values, values.value = value;
+            };
+        };
+
+        // INFO.CcD -> LP__4_0_0__id_36
+        records.info as ccd, ccd.value as value where "$this.name = 'CcD'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_36';
+                value -> data.values as values, values.value = value;
+            };
+        };
+
+        // INFO.TN (Exon) -> LP__4_0_0__id_35
+        records.info as ccd, ccd.value as value where "$this.name = 'TN'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_35';
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'_\')[2]');
+            };
+        };
+
+        // INFO.TN (Gen) -> LP__4_0_0__id_1159
+        records.info as ccd, ccd.value as value where "$this.name = 'TN'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_1159';
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'_\')[1]');
+            };
+        };
+
+    };
+}
