@@ -1,12 +1,19 @@
 
 /* Map a Variant Call Format (VCF) file from FHIR resources based on the Clinical Genmoics Implementation Guide (http://hl7.org/fhir/uv/genomics-reporting/) to the CTS_Transport format */
 
-/// version = 0.1
+/* TODO
+POS STOP (id_44) calculation: 
+        Doesn't work for Duplication: G -> GATG =  +3 
+        Doesn't work for Inversion:   ATG -> AGT = +2
+        abs() not implemented, check again at 2.0 release
 
-/*
-Panel version and Sequencer will be added in header.format at some point
+HGSV p. (id_37) does the '=' belong in a value? example p.Gly134= or p.Gly134
+
+Biologische/molekulare bewertung (ngs_panel_coverage) is it equal to body.QUAL?
+
 */
 
+/// version = 0.1
 
 map "http://vonk.fire.ly/fhir/StructureMap/nNGM_NGS_LUNGPANEL_CDS" = "nNGM NGS LUNG PANEL CDS"
 
@@ -30,7 +37,8 @@ group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
 
     src.records as records, records.sample as sample, sample.sampleId as sampleId  then 
     {
-        sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0] + \'-\' + $index.toString()');
+        // sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0] + \'-\' + $index.toString()');
+        sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1]');
     };
 
     src -> tgt.operations as operations collate then 
@@ -47,7 +55,6 @@ group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
 
 group MapVCFRequiredHeader(source src: VCF, target tgt : CTS_Transport)
 {
-
     // ##reference -> LP__4_0_0__id_41
     src.records as records, src.header as header, header.optional as optional, optional.value as reference where "$this.name = 'reference'" then 
     {
@@ -82,7 +89,7 @@ group MapVCFRequiredBody(source src: VCF, target tgt : CTS_Transport)
             };
         };
 
-        // POS -> LP__4_0_0__id_43
+        // POS START -> LP__4_0_0__id_43
         records.pos as pos ->  tgt.operations as operations collate then 
         {
             pos -> operations.data as data then 
@@ -95,20 +102,20 @@ group MapVCFRequiredBody(source src: VCF, target tgt : CTS_Transport)
             };
         };
 
-        // STOP POS -> TODO: Calcualte based on REF and ALT
-
-        // ALT -> LP__4_0_0__id_46
-        records.alt as alt ->  tgt.operations as operations collate then 
+        /*
+        // POS STOP -> LP__4_0_0__id_43
+        records.pos as pos ->  tgt.operations as operations collate then 
         {
-            alt -> operations.data as data then 
+            pos -> operations.data as data then 
             {
-                alt -> data.blockindex = 4;
-                alt -> data.groupindex = 0;
-                alt -> data.repeatindex = evaluate(records, '$index');
-                alt -> data.itemid = 'id_46';
-                alt -> data.values as values, values.value = alt;
+                pos -> data.blockindex = 4;
+                pos -> data.groupindex = 0;
+                pos -> data.repeatindex = evaluate(records, '$index');
+                pos -> data.itemid = 'id_44';
+                pos -> data.values as values, values.value = evaluate(records, 'src.POS.toInteger() + (src.ALT.length().toInteger() - src.REF.length().toInteger()).abs()');
             };
         };
+        */
 
         // REF -> LP__4_0_0__id_45
         records.ref as ref -> tgt.operations as operations collate then 
@@ -122,6 +129,19 @@ group MapVCFRequiredBody(source src: VCF, target tgt : CTS_Transport)
                 ref -> data.values as values, values.value = ref;
             };
         };
+
+        // ALT -> LP__4_0_0__id_46
+        records.alt as alt ->  tgt.operations as operations collate then 
+        {
+            alt -> operations.data as data then 
+            {
+                alt -> data.blockindex = 4;
+                alt -> data.groupindex = 0;
+                alt -> data.repeatindex = evaluate(records, '$index');
+                alt -> data.itemid = 'id_46';
+                alt -> data.values as values, values.value = alt;
+            };
+        };
     };
 }
 
@@ -129,6 +149,58 @@ group MapVCFOptionalBody(source src: VCF, target tgt : CTS_Transport)
 {
     src.records as records then 
     {
+        // INFO.TN (Gen) / CSQ[3] -> LP__4_0_0__id_1159
+        records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_1159';
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[3]');
+            };
+        };
+
+        // INFO.TN (Exon)/ CSQ[8] first char before / -> LP__4_0_0__id_35
+        records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_35';
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[8].split(\'/\').first()');
+            };
+        };
+
+        // INFO.CcD / CSQ.9 char behind : -> LP__4_0_0__id_36  
+        records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_36';
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[9].split(\':\').last()');
+            };
+        };
+
+        // INFO.CP / CSQ.10 -> LP__4_0_0__id_37  
+        records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'id_37';
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[10].split(\':\').last().split(\'=\').first()');
+            };
+        };
+
         // FORMAT.ID=AF -> LP__4_0_0__id_38
         records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'AF'" ->  tgt.operations as operations collate then 
         {
@@ -139,6 +211,19 @@ group MapVCFOptionalBody(source src: VCF, target tgt : CTS_Transport)
                 value -> data.repeatindex = evaluate(records, '$index');
                 value -> data.itemid = 'id_38';
                 value -> data.values as values, values.value = value, values.unit = 'percent';
+            };
+        };
+        
+        // CSQ.6 -> LP1__4_0_0__ngs_panel_reftranscript
+        records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+        {
+            value -> operations.data as data then 
+            {
+                value -> data.blockindex = 4;
+                value -> data.groupindex = 0;
+                value -> data.repeatindex = evaluate(records, '$index');
+                value -> data.itemid = 'ngs_panel_reftranscript';
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[6]');
             };
         };
 
@@ -155,58 +240,19 @@ group MapVCFOptionalBody(source src: VCF, target tgt : CTS_Transport)
             };
         };
 
-            
-        // INFO.CP -> LP__4_0_0__id_37
-        records.info as cp, cp.value as value where "$this.name = 'CP'" -> tgt.operations as operations collate then 
+        /*
+        // Body.qual -> LP__4_0_0__ngs_panel_coverage
+        records.qual as qual ->  tgt.operations as operations collate then 
         {
-            value -> operations.data as data then 
+            qual -> operations.data as data then 
             {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_37';
-                value -> data.values as values, values.value = value;
+                qual -> data.blockindex = 4;
+                qual -> data.groupindex = 0;
+                qual -> data.repeatindex = evaluate(records, '$index');
+                qual -> data.itemid = 'id_47';
+                qual -> data.values as values, values.value = qual;
             };
         };
-
-        // INFO.CcD -> LP__4_0_0__id_36
-        records.info as ccd, ccd.value as value where "$this.name = 'CcD'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_36';
-                value -> data.values as values, values.value = value;
-            };
-        };
-
-        // INFO.TN (Exon) -> LP__4_0_0__id_35
-        records.info as ccd, ccd.value as value where "$this.name = 'TN'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_35';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'_\')[2]');
-            };
-        };
-
-        // INFO.TN (Gen) -> LP__4_0_0__id_1159
-        records.info as ccd, ccd.value as value where "$this.name = 'TN'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_1159';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'_\')[1]');
-            };
-        };
-
+        */
     };
 }
