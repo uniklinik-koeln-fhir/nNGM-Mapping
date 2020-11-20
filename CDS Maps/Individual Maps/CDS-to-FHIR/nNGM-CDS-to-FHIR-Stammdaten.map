@@ -99,12 +99,6 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
             values.value as value -> tgt.name as name, name.given = value;
         };
 
-        // Geburtsdatum -> birthDate
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1126'" then
-        {
-            values.value as value -> tgt.birthdate = dateOp(value, 'dateTime');
-        };
-
         // Strasse -> address.line
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1127'" then
         {
@@ -127,6 +121,20 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1280'" then
         {
             values.value as country -> tgt.address as tgtAddress, tgtAddress.country = country;
+        };
+
+        // DeceasedBoolean
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1139'" then
+        {
+            values.value as value where "$this.value = 'lebt' or $this.value = 'lost to follow-up'" then
+            {
+                values.value as value -> tgt.deceasedBoolean = cast('false', 'FHIR.boolean');
+            };
+
+            values.value as value where "$this.value = 'tot'" then
+            {
+                values.value as value -> tgt.deceasedBoolean = cast('true', 'FHIR.boolean');
+            };
         };
 
         // DeceasedDateTime
