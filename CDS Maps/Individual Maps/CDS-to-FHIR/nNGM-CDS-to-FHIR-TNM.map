@@ -4,60 +4,57 @@
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR" = nNGM_Mapping_TNMFHIR
 
-uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
+uses "http://hl7.org/fhir/StructureDefinition/BackboneElement" as source
 uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 
  /* ------------------------------ Bundle ---------------------------- */
-group TransformBundleTNM(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleTNM(source operations: BackboneElement, target bundle: Bundle)
 {
-    src -> bundle.entry as entry then CreateSpecimenTNM(src, entry);
-    src -> bundle.entry as entry then CreateObservationTNM(src, entry);
+    operations -> bundle.entry as entry then CreateSpecimenTNM(operations, entry);
+    //data -> bundle.entry as entry then CreateObservationTNM(data, entry);
 }
 
 /* ------------------------------ Check whether specimen needs to be created ---------------------------- */ 
-group CreateSpecimenTNM(source src: CTS_Transport, target tgt: BackboneElement) 
+group CreateSpecimenTNM(source operations: BackboneElement, target tgt: BackboneElement) 
 {
-    // Check whether specimen needs to be created and create it if that is the case
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // Check whether specimen needs to be created and create it if that is the case
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1601'" then
         {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenTNM(src, specimen); 
+            data -> tgt.resource = create('Specimen') as specimen then TransformSpecimenTNM(data, specimen); 
         };
     };
 }
 
 /* ------------------------------ Specimen ---------------------------- */ 
-group TransformSpecimenTNM(source src: CTS_Transport, target tgt: Specimen) 
+group TransformSpecimenTNM(source data: BackboneElement, target tgt: Specimen) 
 { 
     // Metadata
-    src -> tgt.id = uuid(); 
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+    data -> tgt.id = uuid(); 
+    data -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
     // Type
-    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+    data -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
                                                                     snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
                                                                     snomedGlobalPatientSet.code = 'UNKNOWN';
  
     // Patient reference 
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    //src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
     
-    src.operations as operations, operations.data as data then 
+    // Biopsienummer -> tgt.identifier.value 
+    data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601'" then 
     { 
-        // Biopsienummer -> tgt.identifier.value 
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601'" then 
-        { 
-            values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value); 
-        }; 
+        values.value as value -> tgt.identifier = id('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', value); 
     }; 
 }
 
 /* ------------------------------ Check whether the TNM observation needs to be created ---------------------------- */ 
-group CreateObservationTNM(source src: CTS_Transport, target tgt: BackboneElement) 
+group CreateObservationTNM(source src: BackboneElement, target tgt: BackboneElement) 
 {
     // Check whether observation needs to be created and create it if that is the case
-    src.operations as operations, operations.data as data then
+    src.data as data then
     {
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1300'
                                         or blockindex = 0 and groupindex = 0 and itemid = 'id_1385'
@@ -77,7 +74,7 @@ group CreateObservationTNM(source src: CTS_Transport, target tgt: BackboneElemen
 }
 
  /* ------------------------------ Observation ---------------------------- */
-group TransformObservationTNM(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationTNM(source src: BackboneElement, target tgt: Observation)
 {
     src -> tgt.id = uuid();
     src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium';

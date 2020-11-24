@@ -15,22 +15,23 @@ uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
-group TransformBundleSonstigeUntersuchungen(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target index: RepeatIndex)
 {
     //Check if any fields are filled in before creating the Speciment
-    src -> bundle.entry as entry then CreateSpecimenSonstigeUntersuchungen(src, entry);
+    //src -> bundle.entry as entry then CreateSpecimenSonstigeUntersuchungen(src, entry);
 
+    /*
     //Check if any fields are filled in before creating the DiagnosticReport
     src -> bundle.entry as entry then CreateDiagnosticReportSonstigeUntersuchungen(src, entry);
 
     //Check if any fields are filled in before creating the Organization
     src -> bundle.entry as entry then CreateOrganizationSonstigeUntersuchungen(src, entry);
 
-    //Check if any fields are filled in before creating the observation
-    src -> bundle.entry as entry then CreateObservationSonstigeUntersuchungen(src, entry);
-
     //Check if any fields are filled in before creating the ServiceRequest
     src -> bundle.entry as entry then CreateServiceRequestSonstigeUntersuchungen(src, entry);
+    */
+    //Check if any fields are filled in before creating the observation
+    operations then CreateObservationSonstigeUntersuchungen(operations, bundle, index);
 }
 
 group CreateSpecimenSonstigeUntersuchungen(source src: CTS_Transport, target tgt: BackboneElement)
@@ -147,43 +148,49 @@ group TransformOrganizationSonstigeUntersuchungen(source src: CTS_Transport, tar
 }
 
 /* ------------------------------ Check if Observation needs to be created ---------------------------- */
-group CreateObservationSonstigeUntersuchungen(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target index: RepeatIndex)
 {
-    src.operations as operations, operations.data as data then
+    operations then InitSectionIndex(operations, index);
+    operations.data as data then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_2618'
-                                    or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2527'
-                                    or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2026'
-                                    or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2027'
-                                    or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2028'
-                                    or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2282'
-                                    or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2283'
-                                    or blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2031'" then
+        data.values as values where "repeatindex = %index.sectionIndex" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationSonstigeUntersuchungen(src, observation);
+            operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then TransformObservationSonstigeUntersuchungen(operations, observation, index);
+            operations then IncrementSectionIndex(operations, index);
         };
     };
 }
 
 /* ------------------------------------ Observation ----------------------------------- */
-group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationSonstigeUntersuchungen(source operations: BackboneElement, target tgt: Observation, target index: RepeatIndex)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/weitere-untersuchung';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/weitere-untersuchung';
     
-    src ->  tgt.status as status, 
+    operations ->  tgt.status as status, 
             status.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
 
-    src -> tgt.method as method,
+    operations -> tgt.method as method,
             method.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'foo'" then
+        {
+            values.value as value -> tgt.id = value;
+        };
+
+        // Reference
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'bar'" then
+        {
+            values.value as value -> tgt.id = value;
+        };
+
         // SOP-Versionsnummer des Standorts
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2618'" then
         {
@@ -194,12 +201,12 @@ group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, targ
             };
         };
         // Date of Assessment
-        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2527'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2527'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
         //Bezeichnung
-        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2026'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2026'" then
         {
             values.value as value -> tgt.code = create('CodeableConcept') as code then
             {
@@ -210,7 +217,7 @@ group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, targ
             };
         };
         // Assay
-        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2027'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2027'" then
         {
             values.value as assay -> tgt.component = create('BackboneElement') as componentAssay then
             {
@@ -220,7 +227,7 @@ group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, targ
         };
 
         // Hersteller
-        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2028'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2028'" then
         {
             values.value as hersteller -> tgt.component = create('BackboneElement') as componentHersteller then
             {
@@ -230,7 +237,7 @@ group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, targ
         };
         
         //Gen
-        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2282'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2282'" then
         {
             values.value as geneStudied -> tgt.component = create('BackboneElement') as componentGeneStudied then
             {
@@ -239,7 +246,7 @@ group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, targ
             };
         };
         //Phaenotyp
-        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = 0 and itemid ='id_2283'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2283'" then
         {
             
             values.value as phaenotyp where "$this.value = 'Expression'" then 
@@ -276,7 +283,7 @@ group TransformObservationSonstigeUntersuchungen(source src: CTS_Transport, targ
             };
         };
         // Ergebnis
-        data.values as values where "blockindex = 3 and groupindex = 0  and repeatindex = 0 and itemid = 'id_2031'" then
+        data.values as values where "blockindex = 3 and groupindex = 0  and repeatindex = %index.sectionIndex and itemid = 'id_2031'" then
         {
             values.value as ergebnis where "$this.value = 'positiv'" then 
             {
