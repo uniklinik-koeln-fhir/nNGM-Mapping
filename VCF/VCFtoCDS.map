@@ -1,15 +1,16 @@
-
 /* Map a Variant Call Format (VCF) file from FHIR resources based on the Clinical Genmoics Implementation Guide (http://hl7.org/fhir/uv/genomics-reporting/) to the CTS_Transport format */
 
 /* TODO
-POS STOP (id_44) calculation: 
+
+* POS STOP only in last INFO entry?
         Doesn't work for Duplication: G -> GATG =  +3 
         Doesn't work for Inversion:   ATG -> AGT = +2
-        abs() not implemented, check again at 2.0 release
 
-HGSV p. (id_37) does the '=' belong in a value? example p.Gly134= or p.Gly134
+* Where is the info on which CSQ entry to select?
 
-Biologische/molekulare bewertung (ngs_panel_coverage) is it equal to body.QUAL?
+* HGSV p. (id_37) does the '=' belong in a value? example p.Gly134= or p.Gly134
+
+* Biologische/molekulare bewertung (ngs_panel_coverage) is it equal to body.QUAL?
 
 */
 
@@ -22,10 +23,37 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group MapVCF(source src: VCF, target tgt: CTS_Transport)
 {
-    src then MapCDSMeta(src, tgt), 
-             MapVCFRequiredHeader(src, tgt),
-             MapVCFRequiredBody(src, tgt),
-             MapVCFOptionalBody(src, tgt);
+    // create repeatindex 
+    let index = create('RepeatIndex');
+
+    src then InitSectionIndex(src, index);
+    
+    // generate CDS metadata
+    src then MapCDSMeta(src, tgt);
+
+    // Set iteration scope
+    src.records as records then
+    {   
+        // interate through constant header part
+        records then MapVCFRequiredHeader(src, tgt, index),
+        
+        // iterate through repeated records of body part
+        MapVCFRequiredBody(records, tgt, index),
+        MapVCFOptionalBody(records, tgt, index),
+        
+        //Increment repeatindex
+        IncrementSectionIndex(src, index);
+    };
+}
+
+group InitSectionIndex(source src: VCF, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = 0;
+}
+
+group IncrementSectionIndex(source src: VCF, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = evaluate(index, '$this.sectionIndex + 1');
 }
 
 group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
@@ -35,12 +63,14 @@ group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
     src -> tgt.operations as operations collate, operations.crfid = '1_LP1';
     src -> tgt.operations as operations collate, operations.type = 'save';
 
+    /*
     src.records as records, records.sample as sample, sample.sampleId as sampleId  then 
     {
         // sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0] + \'-\' + $index.toString()');
         sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1]');
     };
-
+    */
+    
     src -> tgt.operations as operations collate then 
     {
         src -> operations.data as data then 
@@ -53,10 +83,10 @@ group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
     };
 }
 
-group MapVCFRequiredHeader(source src: VCF, target tgt : CTS_Transport)
+group MapVCFRequiredHeader(source src: VCF, target tgt : CTS_Transport, target index: RepeatIndex)
 {
     // ##reference -> LP__4_0_0__id_41
-    src.records as records, src.header as header, header.optional as optional, optional.value as reference where "$this.name = 'reference'" then 
+    src.header as header, header.optional as optional, optional.value as reference where "$this.name = 'reference'" then 
     {
         reference -> tgt.operations as operations collate then 
         {
@@ -64,7 +94,7 @@ group MapVCFRequiredHeader(source src: VCF, target tgt : CTS_Transport)
             {
                 reference -> data.blockindex = 4;
                 reference -> data.groupindex = 0;
-                reference -> data.repeatindex = evaluate(records, '$index');
+                reference -> data.repeatindex = evaluate(index, '$this.sectionIndex');
                 reference -> data.itemid = 'id_41';
                 reference -> data.values as values, values.value = reference;
             };
@@ -72,187 +102,183 @@ group MapVCFRequiredHeader(source src: VCF, target tgt : CTS_Transport)
     };
 }
 
-group MapVCFRequiredBody(source src: VCF, target tgt : CTS_Transport)
+group MapVCFRequiredBody(source src: BackboneElement, target tgt : CTS_Transport, target index: RepeatIndex)
 {
-    src.records as records then 
+    
+    // #CHROM -> LP__4_0_0__id_42
+    src as records, records.chrom as chrom ->  tgt.operations as operations collate then 
     {
-        // #CHROM -> LP__4_0_0__id_42
-        records.chrom as chrom ->  tgt.operations as operations collate then 
+        chrom -> operations.data as data then 
         {
-            chrom -> operations.data as data then 
-            {
-                chrom -> data.blockindex = 4;
-                chrom -> data.groupindex = 0;
-                chrom -> data.repeatindex = evaluate(records, '$index');
-                chrom -> data.itemid = 'id_42';
-                chrom -> data.values as values, values.value = chrom;
-            };
+            chrom -> data.blockindex = 4;
+            chrom -> data.groupindex = 0;
+            chrom -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            chrom -> data.itemid = 'id_42';
+            chrom -> data.values as values, values.value = chrom;
         };
+    };
 
-        // POS START -> LP__4_0_0__id_43
-        records.pos as pos ->  tgt.operations as operations collate then 
+    // POS START -> LP__4_0_0__id_43
+    src as records, records.pos as pos ->  tgt.operations as operations collate then 
+    {
+        pos -> operations.data as data then 
         {
-            pos -> operations.data as data then 
-            {
-                pos -> data.blockindex = 4;
-                pos -> data.groupindex = 0;
-                pos -> data.repeatindex = evaluate(records, '$index');
-                pos -> data.itemid = 'id_43';
-                pos -> data.values as values, values.value = pos;
-            };
+            pos -> data.blockindex = 4;
+            pos -> data.groupindex = 0;
+            pos -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            pos -> data.itemid = 'id_43';
+            pos -> data.values as values, values.value = pos;
         };
+    };
 
-        /*
-        // POS STOP -> LP__4_0_0__id_43
-        records.pos as pos ->  tgt.operations as operations collate then 
+    /*
+    // POS STOP -> LP__4_0_0__id_43
+    src as records, records.pos as pos ->  tgt.operations as operations collate then 
+    {
+        pos -> operations.data as data then 
         {
-            pos -> operations.data as data then 
-            {
-                pos -> data.blockindex = 4;
-                pos -> data.groupindex = 0;
-                pos -> data.repeatindex = evaluate(records, '$index');
-                pos -> data.itemid = 'id_44';
-                pos -> data.values as values, values.value = evaluate(records, 'src.POS.toInteger() + (src.ALT.length().toInteger() - src.REF.length().toInteger()).abs()');
-            };
+            pos -> data.blockindex = 4;
+            pos -> data.groupindex = 0;
+            pos -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            pos -> data.itemid = 'id_44';
+            pos -> data.values as values, values.value = evaluate(records, 'src.POS.toInteger() + (src.ALT.length().toInteger() - src.REF.length().toInteger()).abs()');
         };
-        */
+    };
+    */
 
-        // REF -> LP__4_0_0__id_45
-        records.ref as ref -> tgt.operations as operations collate then 
+    // REF -> LP__4_0_0__id_45
+    src as records, records.ref as ref -> tgt.operations as operations collate then 
+    {
+        ref -> operations.data as data then 
         {
-            ref -> operations.data as data then 
-            {
-                ref -> data.blockindex = 4;
-                ref -> data.groupindex = 0;
-                ref -> data.repeatindex = evaluate(records, '$index');
-                ref -> data.itemid = 'id_45';
-                ref -> data.values as values, values.value = ref;
-            };
+            ref -> data.blockindex = 4;
+            ref -> data.groupindex = 0;
+            ref -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            ref -> data.itemid = 'id_45';
+            ref -> data.values as values, values.value = ref;
         };
+    };
 
-        // ALT -> LP__4_0_0__id_46
-        records.alt as alt ->  tgt.operations as operations collate then 
+    // ALT -> LP__4_0_0__id_46
+    src as records, records.alt as alt ->  tgt.operations as operations collate then 
+    {
+        alt -> operations.data as data then 
         {
-            alt -> operations.data as data then 
-            {
-                alt -> data.blockindex = 4;
-                alt -> data.groupindex = 0;
-                alt -> data.repeatindex = evaluate(records, '$index');
-                alt -> data.itemid = 'id_46';
-                alt -> data.values as values, values.value = alt;
-            };
+            alt -> data.blockindex = 4;
+            alt -> data.groupindex = 0;
+            alt -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            alt -> data.itemid = 'id_46';
+            alt -> data.values as values, values.value = alt;
         };
     };
 }
 
-group MapVCFOptionalBody(source src: VCF, target tgt : CTS_Transport)
+group MapVCFOptionalBody(source src: BackboneElement, target tgt : CTS_Transport, target index: RepeatIndex)
 {
-    src.records as records then 
+    
+    // INFO.TN (Gen) / CSQ[3] -> LP__4_0_0__id_1159
+    src as records, records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then
     {
-        // INFO.TN (Gen) / CSQ[3] -> LP__4_0_0__id_1159
-        records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then
+        value -> operations.data as data then 
         {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_1159';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[3]');
-            };
+            value -> data.blockindex = 4;
+            value -> data.groupindex = 0;
+            value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            value -> data.itemid = 'id_1159';
+            value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[3]');
         };
-
-        // INFO.TN (Exon)/ CSQ[8] first char before / -> LP__4_0_0__id_35
-        records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_35';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[8].split(\'/\').first()');
-            };
-        };
-
-        // INFO.CcD / CSQ.9 char behind : -> LP__4_0_0__id_36  
-        records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_36';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[9].split(\':\').last()');
-            };
-        };
-
-        // INFO.CP / CSQ.10 -> LP__4_0_0__id_37  
-        records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_37';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[10].split(\':\').last().split(\'=\').first()');
-            };
-        };
-
-        // FORMAT.ID=AF -> LP__4_0_0__id_38
-        records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'AF'" ->  tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'id_38';
-                value -> data.values as values, values.value = value, values.unit = 'percent';
-            };
-        };
-        
-        // CSQ.6 -> LP1__4_0_0__ngs_panel_reftranscript
-        records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'ngs_panel_reftranscript';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[6]');
-            };
-        };
-
-        // FORMAT.ID=DP -> LP__4_0_0__ngs_panel_coverage
-        records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'DP'" -> tgt.operations as operations collate then 
-        {
-            value -> operations.data as data then 
-            {
-                value -> data.blockindex = 4;
-                value -> data.groupindex = 0;
-                value -> data.repeatindex = evaluate(records, '$index');
-                value -> data.itemid = 'ngs_panel_coverage';
-                value -> data.values as values, values.value = value;
-            };
-        };
-
-        /*
-        // Body.qual -> LP__4_0_0__ngs_panel_coverage
-        records.qual as qual ->  tgt.operations as operations collate then 
-        {
-            qual -> operations.data as data then 
-            {
-                qual -> data.blockindex = 4;
-                qual -> data.groupindex = 0;
-                qual -> data.repeatindex = evaluate(records, '$index');
-                qual -> data.itemid = 'id_47';
-                qual -> data.values as values, values.value = qual;
-            };
-        };
-        */
     };
+
+    // INFO.TN (Exon)/ CSQ[8] first char before / -> LP__4_0_0__id_35
+    src as records, records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+    {
+        value -> operations.data as data then 
+        {
+            value -> data.blockindex = 4;
+            value -> data.groupindex = 0;
+            value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            value -> data.itemid = 'id_35';
+            value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[8].split(\'/\').first()');
+        };
+    };
+
+    // INFO.CcD / CSQ.9 char behind : -> LP__4_0_0__id_36  
+    src as records, records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+    {
+        value -> operations.data as data then 
+        {
+            value -> data.blockindex = 4;
+            value -> data.groupindex = 0;
+            value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            value -> data.itemid = 'id_36';
+            value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[9].split(\':\').last()');
+        };
+    };
+
+    // INFO.CP / CSQ.10 -> LP__4_0_0__id_37  
+    src as records, records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+    {
+        value -> operations.data as data then 
+        {
+            value -> data.blockindex = 4;
+            value -> data.groupindex = 0;
+            value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            value -> data.itemid = 'id_37';
+            value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[10].split(\':\').last().split(\'=\').first()');
+        };
+    };
+
+    // FORMAT.ID=AF -> LP__4_0_0__id_38
+    src as records, records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'AF'" ->  tgt.operations as operations collate then 
+    {
+        value -> operations.data as data then 
+        {
+            value -> data.blockindex = 4;
+            value -> data.groupindex = 0;
+            value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            value -> data.itemid = 'id_38';
+            value -> data.values as values, values.value = value, values.unit = 'percent';
+        };
+    };
+
+    // CSQ.6 -> LP1__4_0_0__ngs_panel_reftranscript
+    src as records, records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> tgt.operations as operations collate then 
+    {
+        value -> operations.data as data then 
+        {
+            value -> data.blockindex = 4;
+            value -> data.groupindex = 0;
+            value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            value -> data.itemid = 'ngs_panel_reftranscript';
+            value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[6]');
+        };
+    };
+
+    // FORMAT.ID=DP -> LP__4_0_0__ngs_panel_coverage
+    src as records, records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'DP'" -> tgt.operations as operations collate then 
+    {
+        value -> operations.data as data then 
+        {
+            value -> data.blockindex = 4;
+            value -> data.groupindex = 0;
+            value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            value -> data.itemid = 'ngs_panel_coverage';
+            value -> data.values as values, values.value = value;
+        };
+    };
+
+    /*
+    // Body.qual -> LP__4_0_0__ngs_panel_coverage
+    src as records, records.qual as qual ->  tgt.operations as operations collate then 
+    {
+        qual -> operations.data as data then 
+        {
+            qual -> data.blockindex = 4;
+            qual -> data.groupindex = 0;
+            qual -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            qual -> data.itemid = 'id_47';
+            qual -> data.values as values, values.value = qual;
+        };
+    };
+    */
 }
