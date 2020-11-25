@@ -4,7 +4,7 @@
 /* 
 TODO
 position start/stop doesnt have appropriate codesystem
-Transaction requests uri 
+position stop not implemented
 Each CSQ adds information in same resource of same record, no selection of preferred csq implemented
 */
 
@@ -27,17 +27,19 @@ group MapVCF(source src: VCF, target bundle: Bundle)
                                                                                  MapVCFRequiredBody(records, obs),
                                                                                  MapVCFOptionalBody(records, obs),
                                                                                  MapTransactionMeta(records, entry);
-
+    /*
     src -> bundle.entry as entry, 
                                 entry.request as request, 
                                 request.method = 'POST', 
                                 request.url = 'Device', 
                                 entry.resource = create('Device') as dev then MapVCFDevice(src, dev);
+    
+    */
 }
 
 group MapTransactionMeta(source records : BackboneElement, target entry: BackboneElement)
 {
-    //records -> entry.fullUrl = uuid(), entry.fullUrl = evaluate(entry, '\'urn:uuid:\' + $this.fullUrl');
+    records -> entry.fullUrl = uuid(), entry.fullUrl = evaluate(entry, '\'urn:uuid:\' + $this.fullUrl');
     records -> entry.request as request collate, request.method = 'PUT';
     records -> entry.request as request collate, request.url = evaluate(entry, '\'Observation?identifier=http://uk-koeln.de/fhir/CodeSystem/nNGM/ClinicalDocumentationSuiteImportIdentifier|\'+ ($this.resource as Observation).identifier[2].value' );
 }
@@ -91,14 +93,6 @@ group MapVCFRequiredBody(source records: BackboneElement, target obs : Observati
                                            range.low = create('Quantity') as quantity, 
                                            quantity.value = pos;
 
-    /* 
-    // Position end from CSQ
-    records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> create('BackboneElement') as component,
-                                                                          component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'),
-                                                                          component.valueRange as range, 
-                                                                          range.high = create('Quantity') as quantity,
-                                                                          coding.code = evaluate(value, '$this.split(\'|\')[33]');
-    */
 
     // REF -> component:ref-allele
     records.ref as ref ->  obs.component = create('BackboneElement') as component,
@@ -187,6 +181,7 @@ group MapVCFDevice(source src: VCF, target dev : Device)
     src.header as header, header.optional as optional, optional.value as sr where "$this.name = 'source'" then
     {
         sr -> dev.deviceName = create('BackboneElement') as dn,
+        dn.type = cast('other', 'FHIR.code'),
         dn.name = sr;
     };
 }
