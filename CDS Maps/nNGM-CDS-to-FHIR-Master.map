@@ -124,7 +124,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     // Stammdaten (Only present once)
     //src then TransformBundleStammdaten(src, tgt);
 
-    src.operations as references, references where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" then
+    src.operations as operations, operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" then
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
         let caseIndex = evaluate(index, '$this.caseIndex');
@@ -145,7 +145,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
             src -> compositionAntrag.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
 
             // Subject
-            src.patid as patid -> compositionAntrag.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+            operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionAntrag.subject = create('Reference') as subject, subject.reference = value;
 
             // Date
             src.operations as operations, operations.timestamp as timestamp -> compositionAntrag.date = dateOp(timestamp, 'dateTime');
@@ -177,7 +177,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
                 src -> compositionBefund.status = cast('final', 'FHIR.code');
 
                 // Subject
-                src.patid as patid -> compositionBefund.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+                operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionBefund.subject = create('Reference') as subject, subject.reference = value;
 
                 // Date
                 src.operations as operations, operations.timestamp as timestamp -> compositionBefund.date = dateOp(timestamp, 'dateTime');
@@ -185,8 +185,24 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
                 // Author
                 src.operations as operations, operations.editor as author where "%tgt.entry.resource.author.reference.exists().not()" -> compositionBefund.author = create('Reference') as subject, subject.reference = author;
 
-                // Initate caseIndex
-                src then InitCaseIndex(src, index);                
+                // Relate both compositions to one another
+                src -> compositionBefund.relatesTo = create('BackboneElement') as relatesTo,
+                    relatesTo.code = 'append',
+                    relatesTo.targetReference = create('Reference') as targetReference, 
+                    targetReference.reference = evaluate(compositionAntrag, '\'Composition/\' + $this.id');
+                
+                src -> compositionAntrag.relatesTo = create('BackboneElement') as relatesTo,
+                    relatesTo.code = 'append',
+                    relatesTo.targetReference = create('Reference') as targetReference, 
+                    targetReference.reference = evaluate(compositionBefund, '\'Composition/\' + $this.id');
+                
+                // Start actual mapping
+                src then InitFormIndex(src, index);
+                src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'" then
+                {
+                    src then TransformBundleSonstigeUntersuchungen(operations, tgt, compositionBefund, index);
+                    src then IncrementFormIndex(src, index);
+                };
             };
         };
 
@@ -215,7 +231,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         // Befund
         src then TransformBundleFastTrack(src, tgt);
         src then TransformBundleHistologie(src, tgt);
-        */
+        
 
         src then InitFormIndex(src, index);
         src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'" then
@@ -224,7 +240,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
             src then IncrementFormIndex(src, index);
         };
 
-        /*
+        
         src then TransformBundleImmunhistochemie(src, tgt);
         src then TransformBundleBeurteilung(src, tgt);
         src then TransformBundleNGSLungPanel(src, tgt);
