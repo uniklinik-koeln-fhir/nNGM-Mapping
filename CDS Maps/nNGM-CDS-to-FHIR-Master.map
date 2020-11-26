@@ -124,6 +124,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     // Stammdaten (Only present once)
     //src then TransformBundleStammdaten(src, tgt);
 
+    // This is the initial for loop which executes as many times as there are diagnostic cases 
     src.operations as operations, operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" then
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
@@ -145,7 +146,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
             src -> compositionAntrag.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
 
             // Subject
-            operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionAntrag.subject = create('Reference') as subject, subject.reference = value;
+            src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionAntrag.subject = create('Reference') as subject, subject.reference = value;
 
             // Date
             src.operations as operations, operations.timestamp as timestamp -> compositionAntrag.date = dateOp(timestamp, 'dateTime');
@@ -177,7 +178,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
                 src -> compositionBefund.status = cast('final', 'FHIR.code');
 
                 // Subject
-                operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionBefund.subject = create('Reference') as subject, subject.reference = value;
+                src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionBefund.subject = create('Reference') as subject, subject.reference = value;
 
                 // Date
                 src.operations as operations, operations.timestamp as timestamp -> compositionBefund.date = dateOp(timestamp, 'dateTime');
@@ -196,7 +197,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
                     relatesTo.targetReference = create('Reference') as targetReference, 
                     targetReference.reference = evaluate(compositionBefund, '\'Composition/\' + $this.id');
                 
-                // Start actual mapping
+                // Start actual mapping -----------------------------------------------------------------------------------------------------------------------------
                 src then InitFormIndex(src, index);
                 src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'" then
                 {
