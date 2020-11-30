@@ -15,70 +15,79 @@ uses "http://hl7.org/fhir/StructureDefinition/Consent" as target
 uses "http://hl7.org/fhir/StructureDefinition/Practitioner" as target
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 
-group TransformBundleBasisangaben(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
 {   
-    // Organization
-    src -> bundle.entry as entry then CreateOrganizationReferenzenBasisangaben(src, entry);
+    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'stammdaten') then
+    {
+        // Organization
+        operations then CreateOrganizationReferenzenBasisangaben(operations, bundle, composition, section);
 
-    // Patient
-    src -> bundle.entry as entry then CreatePatientBasisangaben(src, entry);
+        // Tumorboard
+        //operations then CreateServiceRequestBasisangaben(operations, bundle, composition, section);
+        
+        /*
+        // Coverage
+        operations -> bundle.entry as entry then CreateCoverageBasisangaben(operations, entry);
+        
+        // Observations
+        operations -> bundle.entry as entry then CreateObservationHeightBasisangaben(operations, entry);
+        operations -> bundle.entry as entry then CreateObservationWeightBasisangaben(operations, entry);
+        operations -> bundle.entry as entry then CreateObservationECOGBasisangaben(operations, entry);
+        operations -> bundle.entry as entry then CreateObservationSmokingBasisangaben(operations, entry);
 
-    // Tumorboard
-    src -> bundle.entry as entry then CreateServiceRequestBasisangaben(src, entry);
-    
-    // Coverage
-    src -> bundle.entry as entry then CreateCoverageBasisangaben(src, entry);
-    
-    // Observations
-    src -> bundle.entry as entry then CreateObservationHeightBasisangaben(src, entry);
-    src -> bundle.entry as entry then CreateObservationWeightBasisangaben(src, entry);
-    src -> bundle.entry as entry then CreateObservationECOGBasisangaben(src, entry);
-    src -> bundle.entry as entry then CreateObservationSmokingBasisangaben(src, entry);
-
-    // Practitioner
-    src -> bundle.entry as entry then CreatePractitionerBasisangaben(src, entry);
-    
-    // Consent
-    src -> bundle.entry as entry then CreateConsentTeilnahme(src, entry);
-    src -> bundle.entry as entry then CreateConsentDatenschutz(src, entry);
-    src -> bundle.entry as entry then CreateConsentEinwilligung1aBasisangaben(src, entry);
-    src -> bundle.entry as entry then CreateConsentEinwilligung1bBasisangaben(src, entry);
-    src -> bundle.entry as entry then CreateConsentEinwilligung2(src, entry);
-    src -> bundle.entry as entry then CreateConsentVersorgung1(src, entry);
-    src -> bundle.entry as entry then CreateConsentVersorgung2(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung1(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung2(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung3(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung4(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung5(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung6(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung7(src, entry);
-    src -> bundle.entry as entry then CreateConsentForschung8(src, entry);
+        // Practitioner
+        operations -> bundle.entry as entry then CreatePractitionerBasisangaben(operations, entry);
+        
+        // Consent
+        operations -> bundle.entry as entry then CreateConsentTeilnahme(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentDatenschutz(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentEinwilligung1aBasisangaben(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentEinwilligung1bBasisangaben(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentEinwilligung2(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentVersorgung1(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentVersorgung2(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung1(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung2(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung3(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung4(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung5(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung6(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung7(operations, entry);
+        operations -> bundle.entry as entry then CreateConsentForschung8(operations, entry);
+        */
+    };
 }
 
 /* ------------------------------ Check if Organization needs to be created ---------------------------- */
-group CreateOrganizationReferenzenBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateOrganizationReferenzenBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_2435'
+                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'
-                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2435'
-                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
+        operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then
         {
-            src -> tgt.resource = create('Organization') as organization then TransformOrganizationReferenzenBasisangaben(src, organization);
+            operations then TransformOrganizationReferenzenBasisangaben(operations, organization, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ Organization ---------------------------- */
-group TransformOrganizationReferenzenBasisangaben(source src: CTS_Transport, target tgt: Organization)
+group TransformOrganizationReferenzenBasisangaben(source operations: BackboneElement, target tgt: Organization, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as ref, ref.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
         // Netzwerkzentrum-id -> tgt.identifier
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'" then
         {
@@ -99,108 +108,55 @@ group TransformOrganizationReferenzenBasisangaben(source src: CTS_Transport, tar
     };
 }
 
-/* ------------------------------ Check if Patient needs to be created ---------------------------- */
-group CreatePatientBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1131'
-                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1125'
-                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1124'
-                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1126'
-                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1127'
-                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1128'
-                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1129'
-                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1280'" then
-        {
-            src -> tgt.resource = create('Patient') as patient then TransformPatientBasisangaben(src, patient);
-        };
-    };
-}
-
-/* ------------------------------ Patient ---------------------------- */
-group TransformPatientBasisangaben(source src: CTS_Transport, target tgt: Patient)
-{
-    // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
-
-    src.operations as operations, operations.data as data then
-    {
-        // Geschlecht
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1131'" then
-        {
-             values.value where "$this.value = 'männlich' or $this.value = 'm\u00e4nnlich'" then 
-            {
-                values.value as za -> tgt.gender = cast('male', 'FHIR.code');
-            };
-
-            values.value where "$this.value = 'weiblich'" then 
-            {
-               values.value as za -> tgt.gender = cast('female', 'FHIR.code');
-            };
-            
-            values.value where "$this.value = 'divers'" then 
-            {
-                values.value as za -> tgt.extension as genderext, 
-                                    genderext.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de', 
-                                    genderext.valueCodeableConcept = cc('http://fhir.de/ValueSet/gender-amtlich-de', 'D', 'divers');
-            };
-        };
-
-        // Land
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1280'" then
-        {
-            values.value as country -> tgt.address as tgtAddress collate, tgtAddress.country = country;
-        };
-    };
-}
-
 /* ------------------------------ Check if ServiceRequest needs to be created ---------------------------- */
-group CreateServiceRequestBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateServiceRequestBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'
+                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1576'
+                                    or blockindex = 10 and groupindex = 0 and itemid = 'id_2296'
+                                    or blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
     {
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'
-                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1576'
-                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2296'
-                                        or blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
+        operations -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then
         {
-            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestBasisangaben(src, servicerequest);
+            operations then TransformServiceRequestBasisangaben(operations, servicerequest, composition);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(servicerequest, '\'ServiceRequest/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ ServiceRequest ---------------------------- */
-group TransformServiceRequestBasisangaben(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformServiceRequestBasisangaben(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorboard';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorboard';
 
     // Status
-    src -> tgt.status = cast('active', 'FHIR.code'); 
+    operations -> tgt.status = cast('active', 'FHIR.code'); 
     
     // Intent
-    src -> tgt.intent = 'proposal';
+    operations -> tgt.intent = 'proposal';
 
     // Code
-    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
+    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
     
-    // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
     // Requester not available
-    src -> tgt.requester as requester, 
+    operations -> tgt.requester as requester, 
            requester.reference as reference, 
            reference.extension as dataAbsentReason, 
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
     
-    src then TransformServiceRequestRequesterExtension(src, tgt);
+           operations then TransformServiceRequestRequesterExtension(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
         // Anforderungsdatum -> authoredOn
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'" then
         {
