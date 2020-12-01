@@ -20,15 +20,15 @@ group TransformBundleBasisangaben(source operations: BackboneElement, target bun
     operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'stammdaten') then
     {
         // Organization
-        operations then CreateOrganizationReferenzenBasisangaben(operations, bundle, composition, section);
+        //operations then CreateOrganizationReferenzenBasisangaben(operations, bundle, composition, section);
 
         // Tumorboard
         //operations then CreateServiceRequestBasisangaben(operations, bundle, composition, section);
         
-        /*
         // Coverage
-        operations -> bundle.entry as entry then CreateCoverageBasisangaben(operations, entry);
+        operations then CreateCoverageBasisangaben(operations, bundle, composition, section);
         
+        /*
         // Observations
         operations -> bundle.entry as entry then CreateObservationHeightBasisangaben(operations, entry);
         operations -> bundle.entry as entry then CreateObservationWeightBasisangaben(operations, entry);
@@ -61,15 +61,22 @@ group TransformBundleBasisangaben(source operations: BackboneElement, target bun
 /* ------------------------------ Check if Organization needs to be created ---------------------------- */
 group CreateOrganizationReferenzenBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
     operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_ba_siteid'
                                     or blockindex = 2 and groupindex = 0 and itemid = 'id_2435'
                                     or blockindex = 2 and groupindex = 0 and itemid = 'id_2458'" then
     {
-        operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then
-        {
-            operations then TransformOrganizationReferenzenBasisangaben(operations, organization, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Organization') as organization then
+    {
+        operations then TransformOrganizationReferenzenBasisangaben(operations, organization, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
     };
 }
 
@@ -111,16 +118,22 @@ group TransformOrganizationReferenzenBasisangaben(source operations: BackboneEle
 /* ------------------------------ Check if ServiceRequest needs to be created ---------------------------- */
 group CreateServiceRequestBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    
     operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1571'
                                     or blockindex = 3 and groupindex = 0 and itemid = 'id_1576'
                                     or blockindex = 10 and groupindex = 0 and itemid = 'id_2296'
                                     or blockindex = 10 and groupindex = 0 and itemid = 'id_2297'" then
     {
-        operations -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then
-        {
-            operations then TransformServiceRequestBasisangaben(operations, servicerequest, composition);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(servicerequest, '\'ServiceRequest/\' + $this.id');
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as servicerequest then
+    {
+        operations then TransformServiceRequestBasisangaben(operations, servicerequest, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(servicerequest, '\'ServiceRequest/\' + $this.id');
     };
 }
 
@@ -146,15 +159,43 @@ group TransformServiceRequestBasisangaben(source operations: BackboneElement, ta
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
     
-           operations then TransformServiceRequestRequesterExtension(operations, tgt);
+    operations then TransformServiceRequestRequesterExtension(operations, tgt);
 
     operations.data as data then
     {
         // ID + Composition insert
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'uuid_nngm_tumorboard'" then
         {
             values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+
+        // References
+        data -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_nngm_ecog'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_observation_nngm_koerpergewicht'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_observation_nngm_koerpergroesse'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_observation_nngm_raucherstatus'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
         // Anforderungsdatum -> authoredOn
@@ -191,9 +232,9 @@ group TransformServiceRequestBasisangaben(source operations: BackboneElement, ta
 }
 
 /* -------------------------------------- Create double extension for ServiceRequest.Requester -------------------------------------------- */
-group TransformServiceRequestRequesterExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformServiceRequestRequesterExtension(source operations: BackboneElement, target tgt: ServiceRequest)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
         // Vorstellung tumorboard -> requester.extension:vorstellungTmb
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2296'" then
@@ -232,41 +273,53 @@ group TransformServiceRequestRequesterExtension(source src: CTS_Transport, targe
 }
 
 /* ------------------------------ Check if Coverage needs to be created ---------------------------- */
-group CreateCoverageBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateCoverageBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'
                                         or blockindex = 5 and groupindex = 0 and itemid = 'id_1269'
                                         or blockindex = 5 and groupindex = 0 and itemid = 'id_1270'
                                         or blockindex = 5 and groupindex = 0 and itemid = 'id_2460'
                                         or blockindex = 5 and groupindex = 0 and itemid = 'id_1268'
                                         or blockindex = 5 and groupindex = 0 and itemid = 'id_1333'" then
-        {
-            src -> tgt.resource = create('Coverage') as coverage then TransformCoverageBasisangaben(src, coverage);
-        };
+    {
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then
+    {
+        operations then TransformCoverageBasisangaben(operations, coverage, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(coverage, '\'Coverage/\' + $this.id');
     };
 }
 
 /* ------------------------------ Coverage ---------------------------- */
-group TransformCoverageBasisangaben(source src: CTS_Transport, target tgt: Coverage)
+group TransformCoverageBasisangaben(source operations: BackboneElement, target tgt: Coverage, target composition: Composition, target section: BackboneElement)
 { 
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
 
     // status = active
-    src -> tgt.status = cast('active', 'FHIR.code'); 
+    operations -> tgt.status = cast('active', 'FHIR.code'); 
     
     // beneficiary, beneficiary.reference
-    src -> tgt.beneficiary as beneficiary,
+    operations -> tgt.beneficiary as beneficiary,
            beneficiary.reference as reference, 
            reference.extension as dataAbsentReason,
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
     
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_coverage_nngm'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as coverage, coverage.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
         // Krankenkasse
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'" then
         {
