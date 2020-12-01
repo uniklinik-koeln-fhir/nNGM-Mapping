@@ -2,11 +2,6 @@
 /// title = "nNGM: Mapping Resistenztestung FHIR"
 /// CDS -> FHIR
 
-/* 
-    TODO
-    - figure out whether the Mutations need to be included in all of the resistence types (or only in EGFR)
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR" = nNGM_Mapping_ResistenztestungFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
@@ -145,9 +140,6 @@ group TransformObservationEGFR(source operations: BackboneElement, target tgt: O
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    // Mutations
-    operations then TransformMutationsResistenztestung(operations, tgt);
-
     // Access data
     operations.data as data then
     {
@@ -188,6 +180,25 @@ group TransformObservationEGFR(source operations: BackboneElement, target tgt: O
         {
              values.value as value -> tgt.component = create('BackboneElement') as therapie, therapie.code = cc('http://ncit.nci.nih.gov', 'C62721'), therapie.valueCodeableConcept as vcc, vcc.text = value, therapie.extension as componentOrder, componentOrder.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/observation-component-order', componentOrder.value = 4;
         };
+
+        // Mutations
+        // Exon
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1436'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as exon, exon.valueString = value, exon.code = cc('http://ncit.nci.nih.gov', 'C13231');
+        };
+    
+        // HGVS c
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1437'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as hgvsc, hgvsc.valueString = value, hgvsc.code = cc('http://loinc.org', '48004-6');
+        };
+
+        // HGVS p
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1438'" then
+        {
+             values.value as value -> tgt.component = create('BackboneElement') as hgvsp, hgvsp.valueString = value, hgvsp.code = cc('http://loinc.org', '48005-3');
+        };
     };
 }
 
@@ -208,9 +219,6 @@ group TransformObservationALK(source operations: BackboneElement, target tgt: Ob
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Mutations
-    operations then TransformMutationsResistenztestung(operations, tgt);
 
     // Access data
     operations.data as data then
@@ -278,9 +286,6 @@ group TransformObservationROS1(source operations: BackboneElement, target tgt: O
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Mutations
-    operations then TransformMutationsResistenztestung(operations, tgt);
 
     // Access data
     operations.data as data then
