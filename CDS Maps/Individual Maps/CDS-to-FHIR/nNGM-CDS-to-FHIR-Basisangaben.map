@@ -26,11 +26,12 @@ group TransformBundleBasisangaben(source operations: BackboneElement, target bun
         //operations then CreateServiceRequestBasisangaben(operations, bundle, composition, section);
         
         // Coverage
-        operations then CreateCoverageBasisangaben(operations, bundle, composition, section);
+        //operations then CreateCoverageBasisangaben(operations, bundle, composition, section);
         
-        /*
+        
         // Observations
-        operations -> bundle.entry as entry then CreateObservationHeightBasisangaben(operations, entry);
+        operations then CreateObservationHeightBasisangaben(operations, bundle, composition, section);
+        /*
         operations -> bundle.entry as entry then CreateObservationWeightBasisangaben(operations, entry);
         operations -> bundle.entry as entry then CreateObservationECOGBasisangaben(operations, entry);
         operations -> bundle.entry as entry then CreateObservationSmokingBasisangaben(operations, entry);
@@ -309,7 +310,7 @@ group TransformCoverageBasisangaben(source operations: BackboneElement, target t
            beneficiary.reference as reference, 
            reference.extension as dataAbsentReason,
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-           dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+           dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
     
     operations.data as data then
     {
@@ -317,7 +318,16 @@ group TransformCoverageBasisangaben(source operations: BackboneElement, target t
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_coverage_nngm'" then
         {
             values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as coverage, coverage.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+            values.value as value -> section.entry = create('Reference') as coverage, coverage.reference = evaluate(value, '\'Coverage/\' + $this');
+        };
+
+        // References
+        operations -> tgt.beneficiary = create('Reference') as beneficiary, beneficiary.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+        // Reference payor -> Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.payor = create('Reference') as payor, payor.reference = evaluate(value, '\'Organization/\' + $this');
         };
 
         // Krankenkasse
@@ -389,45 +399,50 @@ group TransformCoverageBasisangaben(source operations: BackboneElement, target t
 }
 
 /* ------------------------------ Check if Observation height is required ---------------------------- */
-group CreateObservationHeightBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationHeightBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1133'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
     {
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1133'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationHeightBasisangaben(src, observation);
-        };
+        operations then TransformObservationHeightBasisangaben(operations, observation, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
     };
 }
 
 /* ------------------------------ Observation height ---------------------------- */
-group TransformObservationHeightBasisangaben(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationHeightBasisangaben(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergroesse';
+    operations -> tgt.id = uuid();
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergroesse';
 
     // Status 
-    src -> tgt.status = cast('final', 'FHIR.code');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     // Category
-    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'vital-signs');
+    operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'vital-signs');
 
     // Code
-    src -> tgt.code = cc('http://loinc.org', '8302-2');
+    operations -> tgt.code = cc('http://loinc.org', '8302-2');
 
     // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Effective datetime
-    src -> tgt.effectiveDateTime as edt, 
+    operations -> tgt.effectiveDateTime as edt, 
            edt.extension as dataAbsentReason, 
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Kopergroesse -> valueQuantity
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_observation_nngm_koerpergroesse'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as entry, entry.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1133'" then
         {
             values.value as kp -> tgt.valueQuantity = create('BackboneElement') as Quantity,
