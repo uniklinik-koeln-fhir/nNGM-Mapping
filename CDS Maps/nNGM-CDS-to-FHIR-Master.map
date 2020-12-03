@@ -55,6 +55,8 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
 
     src then InitCaseIndex(src, index);
 
+    //src.operations as operations -> tgt.entry as entry, entry.resource = create('Bundle') as bundle, bundle.id = uuid();
+
     // TODO
     // Stammdaten (Only present once)
     //src then TransformBundleStammdaten(src, tgt);
@@ -65,17 +67,18 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
 
     // What to we want here? 
     // We want 3 bundles of bundles with 3 different compositions with the caseid in the identifier in the antrag and befund compositions i.e. let the loop run 3 times both for 
-
+    
     /* ------------------------------ Antrag ---------------------------- */
+    src then InitCaseIndex(src, index); // Reset index
     src.operations as operations,
         // Execute as many times as there are Basisangaben
-        operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'",
+        operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
         // Add a transaction bundle to the collection bundle
         tgt.entry as entry,
         entry.resource = create('Bundle') as bundleAntrag,
         // Add a composition to the transaction bundle
-        bundleAntrag.entry as entry, 
-        entry.resource = create('Composition') as compositionAntrag then
+        bundleAntrag.entry as entryAntrag, 
+        entryAntrag.resource = create('Composition') as compositionAntrag then
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
         let caseIndex = evaluate(index, '$this.caseIndex');
@@ -96,6 +99,9 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionAntrag.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Anmeldung';
         src -> compositionAntrag.status = cast('final', 'FHIR.code');
 
+        // Identifier i.e. Case ID
+        src -> compositionAntrag.identifier as identifier, identifier.value = evaluate(index, '$this.caseIndex.toString()');
+
         // Type check for type of content
         src -> compositionAntrag.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'anmeldung');
 
@@ -106,10 +112,10 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionAntrag.subject = create('Reference') as subject, subject.reference = value;
 
         // Date
-        src.operations as operations, operations.timestamp as timestamp -> compositionAntrag.date = dateOp(timestamp, 'dateTime');
+        operations.timestamp as timestamp -> compositionAntrag.date = dateOp(timestamp, 'dateTime');
 
         // Author
-        src.operations as operations, operations.editor as author where "%bundleAntrag.entry.resource.author.reference.exists().not()" -> compositionAntrag.author = create('Reference') as subject, subject.reference = author;
+        operations.editor as author -> compositionAntrag.author = create('Reference') as subject, subject.reference = author;
             
         /* ------------------------------ Resources ---------------------------- */
 
@@ -155,17 +161,19 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         src then IncrementCaseIndex(src, index);
         //src -> tgt.id = evaluate(index, '$this.formIndex');
     };
+    
 
     /* ------------------------------ Befund ---------------------------- */
+    src then InitCaseIndex(src, index); // Reset index
     src.operations as operations,
     // Execute as many times as there are Basisangaben
-    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'",
+    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" -> 
     // Add a transaction bundle to the collection bundle
     tgt.entry as entry,
     entry.resource = create('Bundle') as bundleBefund,
     // Add a composition to the transaction bundle
-    bundleBefund.entry as entry, 
-    entry.resource = create('Composition') as compositionBefund then
+    bundleBefund.entry as entryBefund, 
+    entryBefund.resource = create('Composition') as compositionBefund then
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
         let caseIndex = evaluate(index, '$this.caseIndex');
@@ -190,6 +198,9 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         // Title
         src -> compositionBefund.title = 'Molpatho-befund pseudonymisiert';
 
+        // Identifier i.e. Case ID
+        src -> compositionBefund.identifier as identifier, identifier.value = evaluate(index, '$this.caseIndex.toString()');
+
         // Status
         src -> compositionBefund.status = cast('final', 'FHIR.code');
 
@@ -197,10 +208,10 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionBefund.subject = create('Reference') as subject, subject.reference = value;
 
         // Date
-        src.operations as operations, operations.timestamp as timestamp -> compositionBefund.date = dateOp(timestamp, 'dateTime');
+        operations.timestamp as timestamp -> compositionBefund.date = dateOp(timestamp, 'dateTime');
 
         // Author
-        src.operations as operations, operations.editor as author where "%tgt.entry.resource.author.reference.exists().not()" -> compositionBefund.author = create('Reference') as subject, subject.reference = author;
+        operations.editor as author -> compositionBefund.author = create('Reference') as subject, subject.reference = author;
             
         /* ------------------------------ Resources ---------------------------- */
 
