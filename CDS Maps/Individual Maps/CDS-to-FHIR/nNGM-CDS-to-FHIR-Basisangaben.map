@@ -28,17 +28,16 @@ group TransformBundleBasisangaben(source operations: BackboneElement, target bun
         // Coverage
         //operations then CreateCoverageBasisangaben(operations, bundle, composition, section);
         
-        
         // Observations
-        operations then CreateObservationHeightBasisangaben(operations, bundle, composition, section);
-        /*
-        operations -> bundle.entry as entry then CreateObservationWeightBasisangaben(operations, entry);
-        operations -> bundle.entry as entry then CreateObservationECOGBasisangaben(operations, entry);
-        operations -> bundle.entry as entry then CreateObservationSmokingBasisangaben(operations, entry);
+        //operations then CreateObservationHeightBasisangaben(operations, bundle, composition, section);
+        //operations then CreateObservationWeightBasisangaben(operations, bundle, composition, section);
+        //operations then CreateObservationECOGBasisangaben(operations, bundle, composition, section);
+        //operations then CreateObservationSmokingBasisangaben(operations, bundle, composition, section);
 
         // Practitioner
-        operations -> bundle.entry as entry then CreatePractitionerBasisangaben(operations, entry);
+        operations then CreatePractitionerBasisangaben(operations, bundle, composition, section);
         
+        /*
         // Consent
         operations -> bundle.entry as entry then CreateConsentTeilnahme(operations, entry);
         operations -> bundle.entry as entry then CreateConsentDatenschutz(operations, entry);
@@ -412,7 +411,6 @@ group CreateObservationHeightBasisangaben(source operations: BackboneElement, ta
 group TransformObservationHeightBasisangaben(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    operations -> tgt.id = uuid();
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergroesse';
 
     // Status 
@@ -443,6 +441,18 @@ group TransformObservationHeightBasisangaben(source operations: BackboneElement,
             values.value as value -> section.entry = create('Reference') as entry, entry.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
+        // Reference performer -> Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        // Reference performer -> Practitioner
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_practitioner_nngm'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Practitioner/\' + $this');
+        };
+
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1133'" then
         {
             values.value as kp -> tgt.valueQuantity = create('BackboneElement') as Quantity,
@@ -455,45 +465,61 @@ group TransformObservationHeightBasisangaben(source operations: BackboneElement,
 }
 
 /* ------------------------------ Check if Observation weight is required ---------------------------- */
-group CreateObservationWeightBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationWeightBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1132'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
     {
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1132'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationWeightBasisangaben(src, observation);
-        };
+        operations then TransformObservationWeightBasisangaben(operations, observation, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
     };
 }
 
 /* ------------------------------ Observation weight ---------------------------- */
-group TransformObservationWeightBasisangaben(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationWeightBasisangaben(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergewicht';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/koerpergewicht';
 
     // Status 
-    src -> tgt.status = cast('final', 'FHIR.code');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     // Category
-    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'vital-signs');
+    operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'vital-signs');
 
     // Code
-    src -> tgt.code = cc('http://loinc.org', '29463-7');
+    operations -> tgt.code = cc('http://loinc.org', '29463-7');
 
     // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+    
     // Effective datetime
-    src -> tgt.effectiveDateTime as edt, 
+    operations -> tgt.effectiveDateTime as edt, 
            edt.extension as dataAbsentReason, 
            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Gewicht -> valueQuantity
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_observation_nngm_koerpergewicht'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as entry, entry.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        // Reference performer -> Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        // Reference performer -> Practitioner
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_practitioner_nngm'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Practitioner/\' + $this');
+        };
+
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1132'" then
         {
             values.value as kg -> tgt.valueQuantity = create('BackboneElement') as Quantity,
@@ -506,39 +532,55 @@ group TransformObservationWeightBasisangaben(source src: CTS_Transport, target t
 }
 
 /* ------------------------------ Check if Observation ECOG is required ---------------------------- */
-group CreateObservationECOGBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationECOGBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2290'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
     {
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2290'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationECOGBasisangaben(src, observation);
-        };
+        operations then TransformObservationECOGBasisangaben(operations, observation, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
     };
 }
 
 /* ------------------------------ Observation ECOG ---------------------------- */
-group TransformObservationECOGBasisangaben(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationECOGBasisangaben(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog';
 
     // Status 
-    src -> tgt.status = cast('final', 'FHIR.code');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     // Category
-    src -> tgt.category = cc('http://hl7.org/fhir/ValueSet/observation-category', 'survey');
+    operations -> tgt.category = cc('http://hl7.org/fhir/ValueSet/observation-category', 'survey');
 
     // Code
-    src -> tgt.code = cc('http://loinc.org', '89247-1');
+    operations -> tgt.code = cc('http://loinc.org', '89247-1');
 
     // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Ecog -> valueQuantity
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_nngm_ecog'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as entry, entry.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        // Reference performer -> Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        // Reference performer -> Practitioner
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_practitioner_nngm'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Practitioner/\' + $this');
+        };
+
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2290'" then
         {
             values.value where "$this.value = '0 - normale, uneingeschränkte Aktivität, wie vor der Erkrankung' or $this.value = '0 - normale, uneingeschr\u00e4nkte Aktivit\u00e4t, wie vor der Erkrankung'" then 
@@ -570,40 +612,65 @@ group TransformObservationECOGBasisangaben(source src: CTS_Transport, target tgt
 }
 
 /* ------------------------------ Check if Observation Smoking is required ---------------------------- */
-group CreateObservationSmokingBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationSmokingBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2292'
+            or blockindex = 7 and groupindex = 0 and itemid = 'id_2293'
+            or blockindex = 7 and groupindex = 0 and itemid = 'id_2294'" then
     {
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2292'
-                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2293'
-                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2294'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationSmokingBasisangaben(src, observation);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+    {
+        operations then TransformObservationSmokingBasisangaben(operations, observation, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
     };
 }
 
 /* ------------------------------ Observation Smoking ---------------------------- */
-group TransformObservationSmokingBasisangaben(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationSmokingBasisangaben(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/raucherstatus';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/raucherstatus';
 
     // Status 
-    src -> tgt.status = cast('final', 'FHIR.code');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     // Category
-    src -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'social-history');
+    operations -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'social-history');
 
     // Code
-    src -> tgt.code = cc('http://loinc.org', '72166-2');
+    operations -> tgt.code = cc('http://loinc.org', '72166-2');
 
     // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_observation_nngm_raucherstatus'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as entry, entry.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        // Reference performer -> Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        // Reference performer -> Practitioner
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_practitioner_nngm'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Practitioner/\' + $this');
+        };
+
         // Typ -> valueCodeableConcept
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2292'" then
         {
@@ -655,34 +722,47 @@ group TransformObservationSmokingBasisangaben(source src: CTS_Transport, target 
 }
 
 /* ------------------------------ Check if Practitioner is required ---------------------------- */
-group CreatePractitionerBasisangaben(source src: CTS_Transport, target tgt: BackboneElement)
+group CreatePractitionerBasisangaben(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    
+    operations.data as data, data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_2326'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
     {
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2298'
-                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2326'
-                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2485'" then
-        {
-            src -> tgt.resource = create('Practitioner') as practitioner then TransformPractitionerBasisangaben(src, practitioner);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Practitioner') as practitioner then
+    {
+        operations then TransformPractitionerBasisangaben(operations, practitioner, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(practitioner, '\'Practitioner/\' + $this.id');
     };
 }
 
 /* ------------------------------ Practitioner ---------------------------- */
-group TransformPractitionerBasisangaben(source src: CTS_Transport, target tgt: Practitioner)
+group TransformPractitionerBasisangaben(source operations: BackboneElement, target tgt: Practitioner, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Practitioner/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Practitioner/nNGM';
 
     // Name
-    src -> tgt.name as name, 
+    operations -> tgt.name as name, 
             name.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_practitioner_nngm'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as entry, entry.reference = evaluate(value, '\'Practitioner/\' + $this');
+        };
+
         // Netzwerkpartnernummer -> tgt.identifier:nngmPractitionerId
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2326'" then
         {
