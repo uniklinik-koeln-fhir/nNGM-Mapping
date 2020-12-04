@@ -394,12 +394,6 @@ group TransformServiceRequestHistologie(source operations: BackboneElement, targ
             code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-    
-    // Reference Specimen
-    // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-    // {
-    //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
-    // };
 
     // Access Data
     operations.data as data then 
@@ -416,7 +410,28 @@ group TransformServiceRequestHistologie(source operations: BackboneElement, targ
         {
             values.value as value -> tgt.status = cast(value, 'FHIR.code');
         };
+
+        // Referenzen
+        // Observation
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        // Diagnostic Report
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_befund'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
+        // Reference Specimen
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
+
+    
 
     operations then TransformHistologieStatusExtension(operations, tgt);
 }
