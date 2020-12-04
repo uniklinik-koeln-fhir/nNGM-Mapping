@@ -4,53 +4,77 @@
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR" = nNGM_Mapping_HistologieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
-uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
 uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
+/*
+    TODO
+    - creation of specimen is currently commented out (with uuid_specimen_nngm3)
+    - reference to created specimen is currently commented out (in the other 3 transform-groups)
+    - same for biopsy-Id
+*/
+
 
 /* ------------------------------ Bundle ---------------------------- */
-group TransformBundleHistologie(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
 {
-    src -> bundle.entry as entry then CreateSpecimenHistologie(src, entry);
-    src -> bundle.entry as entry then CreateDiagnosticReportHistologie(src, entry);
-    src -> bundle.entry as entry then CreateObservationHistologie(src, entry);
-    src -> bundle.entry as entry then CreateServiceRequestHistologie(src, entry);
+    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'histologie') then
+    {
+        // operations then CreateSpecimenHistologie(operations, bundle, composition, section);
+        operations then CreateDiagnosticReportHistologie(operations, bundle, composition, section);
+        operations then CreateObservationHistologie(operations, bundle, composition, section);
+        operations then CreateServiceRequestHistologie(operations, bundle, composition, section);
+    };
 }
 
 /* ------------------------------ Check if Specimen is required ---------------------------- */
-group CreateSpecimenHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateSpecimenHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'
+                                or blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
+                                or blockindex = 0 and groupindex = 0 and itemid = 'id_2516'
+                                or blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
     {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2516'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
-        {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenHistologie(src, specimen);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
+    {
+        operations then TransformSpecimenHistologie(operations, specimen, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
     };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimenHistologie(source src: CTS_Transport, target tgt: Specimen) 
+group TransformSpecimenHistologie(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
     // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then 
+    operations.data as data then 
     {
-        // Biopsy-ID -> biopsyId.value
-         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
+        // ID + Composition insert
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
         {
-            values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         };
+ 
+        // Biopsy-ID -> biopsyId.value
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
+        // {
+        //     values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
+        // };
 
         // Eingang des Tumormaterials in der Pathologie -> receivedTime
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
@@ -77,96 +101,142 @@ group TransformSpecimenHistologie(source src: CTS_Transport, target tgt: Specime
 }
 
 /* ------------------------------ Check if DiagnosticReport is required ---------------------------- */
-group CreateDiagnosticReportHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateDiagnosticReportHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id' or 
+                                                        blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
     {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id' or 
-                                    blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
-        {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportHistologie(src, diagnosticReport);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticReport then 
+    {
+        operations then TransformDiagnosticReportHistologie(operations, diagnosticReport, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticReport, '\'DiagnosticReport/\' + $this.id');
     };
 }
 
 /* ------------------------------ DiagnosticReport ---------------------------- */
-group TransformDiagnosticReportHistologie(source src: CTS_Transport, target tgt: DiagnosticReport)
+group TransformDiagnosticReportHistologie(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     // Status
-    src -> tgt.status as status, status.extension as dataAbsentReason, 
+    operations -> tgt.status as status, status.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    // Status
-    src -> tgt.code as code, code.extension as dataAbsentReason, 
+    // Code
+    operations -> tgt.code as code, code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
-        // Untersuchungs-ID -> identifier:befundNummer.value
+        // ID + Composition insert
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_befund'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
+        // Reference Patient
+        operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+        // Reference Specimen
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+
+        // Reference Observations
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
+        {
+            values.value as value -> tgt.result = create('Reference') as result, result.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        //Referenzen
+        //Untersuchungs-ID
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
         {
-            values.value as id -> tgt.identifier = create('identifier') as befundNummer,
-                                                            befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
-                                                            befundNummer.value = id;
+            values.value as id -> tgt.identifier = create('Identifier') as befundNummer,
+                                                          befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                          befundNummer.value = id;
         };
 
-        // Pathologie-Fall-ID -> identifier:externePathoBefundNummer.value
+        // Pathologie-Fall-ID 
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
         {
-            values.value as id -> tgt.identifier = create('identifier') as externePathoBefundNummer,
-                                                            externePathoBefundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/externePathoBefundnummer',
-                                                            externePathoBefundNummer.value = id;
+            values.value as id -> tgt.identifier = create('Identifier') as externePathoBefundNummer,
+                                                          externePathoBefundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/externePathoBefundnummer',
+                                                          externePathoBefundNummer.value = id;
         };
+
     };
 }
 
 /* ------------------------------ Observation ---------------------------- */
-group CreateObservationHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether observation should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1658'
+                                or blockindex = 2 and groupindex = 0 and itemid = 'id_2469'
+                                or blockindex = 2 and groupindex = 0 and itemid = 'id_2403'
+                                or blockindex = 3 and groupindex = 0 and itemid = 'id_1286'
+                                or blockindex = 3 and groupindex = 0 and itemid = 'id_1296'
+                                or blockindex = 3 and groupindex = 0 and itemid = 'id_1294'
+                                or blockindex = 3 and groupindex = 0 and itemid = 'id_1288'
+                                or blockindex = 3 and groupindex = 0 and itemid = 'id_1292'
+                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2519'" then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1658'
-                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_2469'
-                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_2403'
-                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1286'
-                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1296'
-                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1294'
-                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1288'
-                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_1292'
-                                    or blockindex = 3 and groupindex = 0 and itemid = 'id_2519'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservation(src, observation);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+    {
+        operations then TransformObservation(operations, observation, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
     };
 }
 
-group TransformObservation(source src: CTS_Transport, target tgt: Observation)
+group TransformObservation(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Resource information
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histologie';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histologie';
 
     // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Code
-    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C18000');
+    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C18000');
 
     //status
-    src -> tgt.status as code, 
+    operations -> tgt.status as code, 
             code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    // Observation data 
-    src.operations as operations, operations.data as data then 
+    // Access data 
+    operations.data as data then 
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Klassifikation -> component:klassifikation.valueCodeableConcept
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1658'" then
         {
@@ -197,7 +267,12 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
             coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
 
-        
+        // Reference Specimen
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+
         //Wachstumsmuster bei Adenokarzinom lepidisch -> component:wachtumsmusterBeiAdenokarzinomLepidisch.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1286'" then
         {
@@ -228,7 +303,7 @@ group TransformObservation(source src: CTS_Transport, target tgt: Observation)
             }; 
         };
         
-        //Wachstumsmuster bei Adenokarzinom mikropapillär -> component:wachtumsmusterBeiAdenokarzinomMikropapilaer.valueQuantity
+        //Wachstumsmuster bei Adenokarzinom mikropapillï¿½r -> component:wachtumsmusterBeiAdenokarzinomMikropapilaer.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1288'" then
         {
             values.value as wachstumsmuster -> tgt.component = create('BackboneElement') as component then
@@ -270,34 +345,41 @@ group MapPercentageValue(source src: string, target tgt: Quantity)
 }
 
 /* ------------------------------ Check if ServiceRequest is required ---------------------------- */
-group CreateServiceRequestHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateServiceRequestHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether observation should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'
+                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
+                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
     {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'
-                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
-                                    or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestHistologie(src, servicerequest);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then
+    {
+        operations then TransformServiceRequestHistologie(operations, serviceRequest, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
     };
 }
 
 /* ------------------------------ ServiceRequest ---------------------------- */
-group TransformServiceRequestHistologie(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformServiceRequestHistologie(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
 {
     // Resource information
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
     // intent
-    src -> tgt.intent = 'proposal';
+    operations -> tgt.intent = 'proposal';
 
-     // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Category
-    src -> tgt.category as category, 
+    operations -> tgt.category as category, 
             category.coding as coding,
             coding.code as code,
             code.extension as dataAbsentReason, 
@@ -305,30 +387,59 @@ group TransformServiceRequestHistologie(source src: CTS_Transport, target tgt: S
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
                 
     // code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'histologie');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'histologie');
 
     // authoredOn
-    src -> tgt.authoredOn as code, 
+    operations -> tgt.authoredOn as code, 
             code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-    
-    src.operations as operations, operations.data as data then 
+
+    // Access Data
+    operations.data as data then 
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+
         // Status
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
         {
             values.value as value -> tgt.status = cast(value, 'FHIR.code');
         };
+
+        // Referenzen
+        // Observation
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        // Diagnostic Report
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_befund'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
+        // Reference Specimen
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
 
-    src then TransformHistologieStatusExtension(src, tgt);
+    
+
+    operations then TransformHistologieStatusExtension(operations, tgt);
 }
 
 /* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
-group TransformHistologieStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformHistologieStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
         // Status des Abschlusses
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
