@@ -8,14 +8,82 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 
+/*
+    TODO
+    - creation of specimen is currently commented out (with uuid_specimen_nngm2)
+    - not sure whether receivedTime and accessionIdentifier is needed for Specimen here
+    - reference to created specimen is currently commented out (in the other 2 transform-groups)
+*/
+
 group TransformBundleResistenztestung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
 {
     operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'resistenztestung') then
     {
+        // operations then CreateSpecimenResistenztestung(operations, bundle, composition, section);
         operations then CreateObservationKrebserkrankung(operations, bundle, composition, section);
         operations then CreateObservationsResistenztestung(operations, bundle, composition, section);
     };
 }
+
+/* ------------------------------ Check if Specimen is required ---------------------------- */
+group CreateSpecimenResistenztestung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+{
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1601' then
+    {
+        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
+        {
+            operations then TransformSpecimenResistenztestung(operations, specimen, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
+        };
+    };
+}
+
+/* ------------------------------ Specimen ---------------------------- */
+group TransformSpecimenResistenztestung(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
+{
+    // Metadata
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    operations.data as data then 
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
+
+        // Biopsy-ID -> biopsyId.value
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
+        // {
+        //     values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
+        // };
+
+        // // Eingang des Tumormaterials in der Pathologie -> receivedTime
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
+        // {
+        //     values.value as value -> tgt.receivedTime = dateOp(value, 'dateTime');
+        // };
+
+        // // Eingangsnummer des Tumormaterials in der Pathologie -> accessionIdentifier:eingangsnummerPatho
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2516'" then
+        // {
+        //     values.value as value -> tgt.accessionIdentifier as identifier, identifier.system = cast('http://uk-koeln.de/NamingSystem/nNGM/eingangPathoNummer', 'FHIR.uri'), identifier.value = value;
+        // };
+
+        // Tumormaterial -> type.text
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
+        {
+           values.value as value -> tgt.type as type, type.text = value, type.coding = create('Coding') as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                                        snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                                        snomedGlobalPatientSet.code = 'UNKNOWN';
+        };
+    };
+}
+
 
 /* ------------------------------ Check whether ObservationKrebserkrankung needs to be created ---------------------------- */ 
 group CreateObservationKrebserkrankung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement) 
