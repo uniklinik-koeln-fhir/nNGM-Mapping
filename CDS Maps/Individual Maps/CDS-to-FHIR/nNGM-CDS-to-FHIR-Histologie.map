@@ -9,6 +9,13 @@ uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
+/*
+    TODO
+    - creation of specimen is currently commented out (with uuid_specimen_nngm3)
+    - reference to created specimen is currently commented out (in the other 3 transform-groups)
+    - same for biopsy-Id
+*/
+
 
 /* ------------------------------ Bundle ---------------------------- */
 group TransformBundleHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
@@ -23,37 +30,51 @@ group TransformBundleHistologie(source operations: BackboneElement, target bundl
 }
 
 /* ------------------------------ Check if Specimen is required ---------------------------- */
-group CreateSpecimenHistologie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateSpecimenHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'
+                                or blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
+                                or blockindex = 0 and groupindex = 0 and itemid = 'id_2516'
+                                or blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
     {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2516'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
-        {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenHistologie(src, specimen);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
+    {
+        operations then TransformSpecimenHistologie(operations, specimen, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
     };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimenHistologie(source src: CTS_Transport, target tgt: Specimen) 
+group TransformSpecimenHistologie(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
     // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then 
+    operations.data as data then 
     {
-        // Biopsy-ID -> biopsyId.value
-         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
+        // ID + Composition insert
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
         {
-            values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         };
+ 
+        // Biopsy-ID -> biopsyId.value
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
+        // {
+        //     values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
+        // };
 
         // Eingang des Tumormaterials in der Pathologie -> receivedTime
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
@@ -128,6 +149,12 @@ group TransformDiagnosticReportHistologie(source operations: BackboneElement, ta
 
         // Reference Patient
         operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+        // Reference Specimen
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
 
         // Reference Observations
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
@@ -240,7 +267,12 @@ group TransformObservation(source operations: BackboneElement, target tgt: Obser
             coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
 
-        
+        // Reference Specimen
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+
         //Wachstumsmuster bei Adenokarzinom lepidisch -> component:wachtumsmusterBeiAdenokarzinomLepidisch.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1286'" then
         {
@@ -363,7 +395,11 @@ group TransformServiceRequestHistologie(source operations: BackboneElement, targ
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
     
-// TODO: orderDetail, requester (reference), performer (reference), specimen (reference) missing?
+    // Reference Specimen
+    // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+    // {
+    //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+    // };
 
     // Access Data
     operations.data as data then 
