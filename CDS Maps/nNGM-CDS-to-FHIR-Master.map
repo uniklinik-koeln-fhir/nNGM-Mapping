@@ -8,6 +8,9 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
 
+// Stammdaten
+
+// Vorbefund
 
 // Antrag
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
@@ -26,7 +29,7 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR"
 */
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR"
+//imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR"
 
 /*
@@ -48,27 +51,128 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     // 3. Patid in Composition subject
     // TODO Case ID in Composition speichern
 
-    let index = create('RepeatIndex');
-
     // Bundle metadata
     src -> tgt.id = uuid();
     src -> tgt.type = 'collection';
 
-    src then InitCaseIndex(src, index);
-
     //src.operations as operations -> tgt.entry as entry, entry.resource = create('Bundle') as bundle, bundle.id = uuid();
 
     // TODO
-    // Stammdaten (Only present once)
     //src then TransformBundleStammdaten(src, tgt);
     
     // TODO
-    // Every top level TNM TODO
     //src then TransformBundleTNM(src, tgt);
-
-    // What to we want here? 
-    // We want 3 bundles of bundles with 3 different compositions with the caseid in the identifier in the antrag and befund compositions i.e. let the loop run 3 times both for 
     
+    src then MapAntrag(src, tgt);
+
+    src then MapBefund(src, tgt);
+
+    // Therapies
+
+    //
+
+
+}
+
+// TODO
+group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
+{
+    /* ------------------------------ Stammdaten ---------------------------- */
+    src.operations as operations where "crfid = SD" -> 
+        tgt.entry as entry,
+        entry.resource = create('Bundle') as bundleStammdaten,
+        bundleStammdaten.entry as entryStammdaten, 
+        entryStammdaten.resource = create('Composition') as compositionStammdaten then
+    {
+        /* ------------------------------ Bundle ---------------------------- */
+
+        // Meta
+        src -> bundleStammdaten.id = uuid();
+        src -> bundleStammdaten.type = 'transaction';
+
+
+        /* ------------------------------ Composition ---------------------------- */
+
+        // Meta
+        src -> compositionStammdaten.title = 'Anmeldung';
+        src -> compositionStammdaten.id = uuid();
+        src -> compositionStammdaten.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Anmeldung';
+        src -> compositionStammdaten.status = cast('final', 'FHIR.code');
+
+        // Type check for type of content
+        src -> compositionStammdaten.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'anmeldung');
+
+        // Category idat or not idat
+        src -> compositionStammdaten.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
+
+        // Subject
+        src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionStammdaten.subject = create('Reference') as subject, subject.reference = value;
+
+        // Date
+        operations.timestamp as timestamp -> compositionStammdaten.date = dateOp(timestamp, 'dateTime');
+
+        // Author
+        operations.editor as author -> compositionStammdaten.author = create('Reference') as subject, subject.reference = author;
+            
+        /* ------------------------------ Resources ---------------------------- */
+
+
+        /* ------------------------------ Increment index ---------------------------- */
+    };
+}
+
+// TODO
+group MapVorbefund(source src: CTS_Transport, target tgt: Bundle)
+{
+    /* ------------------------------ Stammdaten ---------------------------- */
+    src.operations as operations where "crfid = SD" -> 
+        tgt.entry as entry,
+        entry.resource = create('Bundle') as bundleStammdaten,
+        bundleStammdaten.entry as entryStammdaten, 
+        entryStammdaten.resource = create('Composition') as compositionStammdaten then
+    {
+        /* ------------------------------ Bundle ---------------------------- */
+
+        // Meta
+        src -> bundleStammdaten.id = uuid();
+        src -> bundleStammdaten.type = 'transaction';
+
+
+        /* ------------------------------ Composition ---------------------------- */
+
+        // Meta
+        src -> compositionStammdaten.title = 'Anmeldung';
+        src -> compositionStammdaten.id = uuid();
+        src -> compositionStammdaten.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Anmeldung';
+        src -> compositionStammdaten.status = cast('final', 'FHIR.code');
+
+        // Type check for type of content
+        src -> compositionStammdaten.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'anmeldung');
+
+        // Category idat or not idat
+        src -> compositionStammdaten.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
+
+        // Subject
+        src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionStammdaten.subject = create('Reference') as subject, subject.reference = value;
+
+        // Date
+        operations.timestamp as timestamp -> compositionStammdaten.date = dateOp(timestamp, 'dateTime');
+
+        // Author
+        operations.editor as author -> compositionStammdaten.author = create('Reference') as subject, subject.reference = author;
+            
+        /* ------------------------------ Resources ---------------------------- */
+
+
+        /* ------------------------------ Increment index ---------------------------- */
+    };
+}
+
+// TODO
+group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
+{
+    let index = create('RepeatIndex');
+
     /* ------------------------------ Antrag ---------------------------- */
     src then InitCaseIndex(src, index); // Reset index
     src.operations as operations,
@@ -161,7 +265,12 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         src then IncrementCaseIndex(src, index);
         //src -> tgt.id = evaluate(index, '$this.formIndex');
     };
-    
+}
+
+// TODO
+group MapBefund(source src: CTS_Transport, target tgt: Bundle)
+{
+    let index = create('RepeatIndex');
 
     /* ------------------------------ Befund ---------------------------- */
     src then InitCaseIndex(src, index); // Reset index
@@ -291,6 +400,13 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
         src then IncrementCaseIndex(src, index);
         //src -> tgt.id = evaluate(index, '$this.formIndex');
     };
+}
+
+// TODO
+group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
+{
+    let index = create('RepeatIndex');
+    src then InitCaseIndex(src, index); // Reset index
 
     /* ------------------------------ Therapie ---------------------------- */
     /*
@@ -301,6 +417,8 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     */
 }
 
+
+// Helper functions
 group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
     src -> index.caseIndex = 1;
