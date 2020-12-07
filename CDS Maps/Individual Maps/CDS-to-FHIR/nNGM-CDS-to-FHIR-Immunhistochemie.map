@@ -3,9 +3,11 @@
 
 /*
 TODO
+    - Observations are missing a coding each?
+    - DiagnosticReport is missing a code
+    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
 
-id_2180 PD-L1 missing post/neg -> auswertbar cc not working
-
+    id_2180 PD-L1 missing post/neg -> auswertbar cc not working
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieFHIR" = ImmunhistochemieFHIR
@@ -14,154 +16,80 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
-group TransformBundleImmunhistochemie(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleImmunhistochemie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
 {
-    // ServiceRequest
-    src -> bundle.entry as entry then CreateServiceRequestIHC(src, entry);
-
-    // Specimen
-    src -> bundle.entry as entry then CreateSpecimenIHC(src, entry);
-
-    // DiagnosticReport
-    src -> bundle.entry as entry then CreateDiagnosticReportIHC(src, entry);
-
-    // Observation
-    src -> bundle.entry as entry then CreateTransformObservationBRAF(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationCK7(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationMIB1(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationNapsinA(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationP40(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationSynaptophysin(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationTTF1(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationALK(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationMET(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationPDL1(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationROS1(src, entry);
-}
-
-/*-----------------Specimen-----------------------*/
-group CreateSpecimenIHC(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
+    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'immunhistochemie') then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
-        {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimen(src, specimen);
-        };
-    };
-}
-
-group TransformSpecimen(source src: CTS_Transport, target tgt: Specimen) 
-{
-    // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // fixed status
-    src -> tgt.type = create('BackboneElement') as cc, cc.coding as type,
-                      type.system = 'http://snomed.info/sct', 
-                      type.version = 'http://snomed.info/sct/900000000000207008',
-                      type.code as code, 
-                      code.extension as dataAbsentReason, 
-                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // Biopsy-ID -> identifier.value
-    src.operations as operations, operations.data as data then 
-    {
-         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
-        {
-            values.value as value -> tgt.identifier as identifier, 
-                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
-                                     identifier.value = value;
-        };
-    };
-}
-
-/*-----------------DiagnosticReport-----------------------*/
-group CreateDiagnosticReportIHC(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReport(src, diagnosticreport);
-        };
-    };
-}
-
-group TransformDiagnosticReport(source src: CTS_Transport, target tgt: DiagnosticReport) 
-{
-    // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
-
-    // fixed status
-    src -> tgt.status = 'active';
-
-    // Patient reference
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // Untersuchung-ID -> identifier.value
-    src.operations as operations, operations.data as data then 
-    {
-         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            values.value as value -> tgt.identifier as identifier, 
-                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer', 
-                                     identifier.value = value;
-        };
+        operations then CreateServiceRequestIHC(operations, bundle, composition, section);
+        // operations then CreateSpecimenIHC(operations, bundle, composition, section);
+        operations then CreateDiagnosticReportIHC(operations, bundle, composition, section);
+        operations then CreateObservationIHC(operations, bundle, composition, section);
     };
 }
 
 /* -------------------------------------- Check if Service Request is required -------------------------------------------- */
-group CreateServiceRequestIHC(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateServiceRequestIHC(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'
+                                                        or blockindex = 15 and groupindex = 0 and itemid = 'id_2462'
+                                                        or blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
     {
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'
-        or blockindex = 15 and groupindex = 0 and itemid = 'id_2462'
-        or blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestIHC(src, serviceRequest);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+    
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+    {
+        operations then TransformServiceRequestIHC(operations, serviceRequest, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
     };
 }
 
 /* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestIHC(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformServiceRequestIHC(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
-     // Intent
-    src -> tgt.intent = cast('proposal', 'FHIR.code');
+    // Status Extension
+    operations then TransformIHCStatusExtension(operations, tgt);
+
+    // Intent
+    operations -> tgt.intent = cast('proposal', 'FHIR.code');
  
+    // Category
+    operations -> tgt.category as cat, 
+                cat.coding as coding, 
+                coding.code as code, 
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
     // Code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'immunhistochemie');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'immunhistochemie');
 
     // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // AuthoredOn
-    src -> tgt.authoredOn as ao, 
-            ao.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.authoredOn as ao, 
+                ao.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    // Category
-    src -> tgt.category as cat, 
-            cat.coding as coding, 
-            coding.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+
         //Status der Untersuchungen
         //Durchfuehrung
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'" then
@@ -175,16 +103,32 @@ group TransformServiceRequestIHC(source src: CTS_Transport, target tgt: ServiceR
                 value -> tgt.status = 'completed';
             };
         };
-    };
 
-    // Extensions
-    src then TransformIHCStatusExtension(src, tgt);
+        // Referenzen
+        // DiagnosticReport
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
+        // Observations
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2508'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, value, reference);
+        };
+
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+    };
 }
 
 /* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
-group TransformIHCStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformIHCStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
         // Status des Abschlusses
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2462'" then
@@ -214,43 +158,221 @@ group TransformIHCStatusExtension(source src: CTS_Transport, target tgt: Service
     };
 }
 
-
-
-/* ------------------------------ Observation BRAF---------------------------- */
-group CreateTransformObservationBRAF(source src: CTS_Transport, target tgt: BackboneElement)
+/*-----------------Specimen-----------------------*/
+group CreateSpecimenIHC(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
     {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_group'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_phaenotype'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_ab'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_kit_ab_producer'
-        or blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
+        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAF(src, observation);
+            operations then TransformSpecimenIHC(operations, specimen, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
         };
     };
 }
-/* ------------------------------ Observation BRAF ---------------------------- */
-group TransformObservationBRAF(source src: CTS_Transport, target tgt: Observation)
+
+group TransformSpecimenIHC(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    // Metadata
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // fixed status
+    operations -> tgt.type = create('BackboneElement') as cc, cc.coding as type,
+                      type.system = 'http://snomed.info/sct', 
+                      type.version = 'http://snomed.info/sct/900000000000207008',
+                      type.code as code, 
+                      code.extension as dataAbsentReason, 
+                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then 
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
+    };
+}
+
+/*-----------------DiagnosticReport-----------------------*/
+group CreateDiagnosticReportIHC(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+{
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+    {
+        operations -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticreport then 
+        {
+            operations then TransformDiagnosticReportIHC(operations, diagnosticreport, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticreport, '\'DiagnosticReport/\' + $this.id');
+        };
+    };
+
+}
+
+group TransformDiagnosticReportIHC(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement) 
+{
+    // Metadata
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+
+    // fixed status
+    operations -> tgt.status = 'active';
+
+    // TODO: code is missing
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then 
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
+        
+        // Untersuchung-ID -> identifier.value
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as value -> tgt.identifier as identifier, 
+                                     identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer', 
+                                     identifier.value = value;
+        };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+        
+        // Observations
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2508'" then
+        {
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, value, reference);
+        };
+    };
+}
+
+/* ------------------------------ Check which Observation is required ---------------------------- */
+group CreateObservationIHC(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+{
+    // Check whether observation should be created
+    operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2508'" then
+    {
+        // BRAF
+        values.value as value where "value = 'BRAF'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationBRAF(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // CK7
+        values.value as value where "value = 'CK7'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationCK7(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // MIB1
+        values.value as value where "value = 'MIB1'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationMIB1(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // Napsin A
+        values.value as value where "value = 'Napsin A'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationNAPSINA(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // P40
+        values.value as value where "value = 'P40'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationP40(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // Synaptophysin
+        values.value as value where "value = 'Synaptophysin'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationSynaptophysin(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // TTF1
+        values.value as value where "value = 'TTF1'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationTTF1(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // ALK
+        values.value as value where "value = 'ALK'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationALK(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // MET
+        values.value as value where "value = 'MET'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationMET(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // PD-L1
+        values.value as value where "value = 'PD-L1'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationPDL1(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+
+        // ROS1
+        values.value as value where "value = 'ROS1'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationROS1(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+    };
+}
+
+group TransformObservationBRAF(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
+{
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //BRAF code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'BRAF');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //BRAF code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'BRAF');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_ihc_braf'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -324,69 +446,66 @@ group TransformObservationBRAF(source src: CTS_Transport, target tgt: Observatio
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-
-/* ------------------------------ Observation CK7---------------------------- */
-group CreateTransformObservationCK7(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2037'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2038'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2041'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2042'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationCK7(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
-group TransformObservationCK7(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationCK7(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //CK7 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'CK7');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //CK7 code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'CK7');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_ihc_ck7'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -460,68 +579,66 @@ group TransformObservationCK7(source src: CTS_Transport, target tgt: Observation
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-/* ------------------------------ Observation MIB1---------------------------- */
-group CreateTransformObservationMIB1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2055'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2056'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2059'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2060'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2063'" then
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationMIB1(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };   
     };
 }
 
-group TransformObservationMIB1(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationMIB1(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //MIB1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'MIB1');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //MIB1 code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'MIB1');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ihc_mib1'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -596,68 +713,66 @@ group TransformObservationMIB1(source src: CTS_Transport, target tgt: Observatio
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2063'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-/* ------------------------------ Observation Napsin A---------------------------- */
-group CreateTransformObservationNapsinA(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2064'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2065'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2068'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2069'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2072'" then
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2063'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationNAPSINA(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
-group TransformObservationNAPSINA(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationNAPSINA(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //MIB1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Napsin A');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //MIB1 code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Napsin A');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_ihc_napsina'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -731,68 +846,66 @@ group TransformObservationNAPSINA(source src: CTS_Transport, target tgt: Observa
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2072'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-/* ------------------------------ Observation P40---------------------------- */
-group CreateTransformObservationP40(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2073'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2074'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2077'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2078'
-        or blockindex = 8 and groupindex = 0 and itemid = 'id_2079'" then
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2072'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationP40(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
-group TransformObservationP40(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationP40(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //P40 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'P40');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //P40 code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'P40');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_ihc_p40'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -866,68 +979,66 @@ group TransformObservationP40(source src: CTS_Transport, target tgt: Observation
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2079'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-/* ------------------------------ Observation Synaptophysin---------------------------- */
-group CreateTransformObservationSynaptophysin(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2080'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2081'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2084'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2085'
-        or blockindex = 9 and groupindex = 0 and itemid = 'id_2088'" then
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2079'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationSynaptophysin(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
-group TransformObservationSynaptophysin(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationSynaptophysin(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //Synaptophysin code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Synaptophysin');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //Synaptophysin code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Synaptophysin');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'uuid_ihc_synaptophysin'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -1001,68 +1112,66 @@ group TransformObservationSynaptophysin(source src: CTS_Transport, target tgt: O
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2088'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-/* ------------------------------ Observation TTF1---------------------------- */
-group CreateTransformObservationTTF1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2089'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2090'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2093'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2094'
-        or blockindex = 10 and groupindex = 0 and itemid = 'id_2097'" then
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2088'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationTTF1(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+        
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };   
     };
 }
 
-group TransformObservationTTF1(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationTTF1(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //TTF1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'TTF1');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //TTF1 code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'TTF1');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
+    operations then MapIHCMethode(operations, tgt);
+    
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'uuid_ihc_ttf1'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -1136,68 +1245,66 @@ group TransformObservationTTF1(source src: CTS_Transport, target tgt: Observatio
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2097'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-/* ------------------------------ Observation ALK---------------------------- */
-group CreateTransformObservationALK(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2098'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2534'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2102'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2103'
-        or blockindex = 11 and groupindex = 0 and itemid = 'id_2106'" then
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2097'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationALK(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
-group TransformObservationALK(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationALK(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //ALK code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ALK');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //ALK code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ALK');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
-
-    src.operations as operations, operations.data as data then
+    operations then MapIHCMethode(operations, tgt);
+    
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'uuid_ihc_alk'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -1272,70 +1379,66 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2106'" then
-            {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
-            };
-        
-    };
-}
-
-/* ------------------------------ Observation MET---------------------------- */
-group CreateTransformObservationMET(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2132'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2535'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2136'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2451'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2139'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2140'
-        or blockindex = 12 and groupindex = 0 and itemid = 'id_2141'" then
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2106'" then
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationMET(src, observation);
+            values.value where "$this.value = 'positiv'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
+            };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
         };
+        
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };   
     };
 }
 
-group TransformObservationMET(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationMET(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
     
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //MET code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'MET');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //MET code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'MET');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'uuid_ihc_met'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -1409,29 +1512,28 @@ group TransformObservationMET(source src: CTS_Transport, target tgt: Observation
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2139'" then
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2139'" then
+        {
+            values.value where "$this.value = 'positiv'" then 
             {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
             };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
+        };
         
 
         // Klassifikation
@@ -1464,46 +1566,44 @@ group TransformObservationMET(source src: CTS_Transport, target tgt: Observation
                 };
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };   
     };
 }
 
-/* ------------------------------ Observation PD-L1---------------------------- */
-group CreateTransformObservationPDL1(source src: CTS_Transport, target tgt: BackboneElement)
+group TransformObservationPDL1(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2172'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2173'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2176'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2177'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2180'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2181'
-        or blockindex = 13 and groupindex = 0 and itemid = 'id_2182'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationPDL1(src, observation);
-        };
-    };
-}
-
-group TransformObservationPDL1(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //PD-L1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'PD-L1');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //PD-L1 code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'PD-L1');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'uuid_ihc_pdl1'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -1577,19 +1677,18 @@ group TransformObservationPDL1(source src: CTS_Transport, target tgt: Observatio
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2180'" then
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2180'" then
+        {
+            values.value where "$this.value = 'auswertbar'" then 
             {
-                values.value where "$this.value = 'auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value as ergebnis where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
             };
+
+            values.value as ergebnis where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+        };
         
 
         // Menge an Tumorzellen
@@ -1611,44 +1710,44 @@ group TransformObservationPDL1(source src: CTS_Transport, target tgt: Observatio
                 ergebnis -> postumorzellencomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'tcell-surface-ratio');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
 }
 
-/* ------------------------------ Observation ROS1---------------------------- */
-group CreateTransformObservationROS1(source src: CTS_Transport, target tgt: BackboneElement)
+group TransformObservationROS1(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2211'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2536'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2215'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2216'
-        or blockindex = 14 and groupindex = 0 and itemid = 'id_2219'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationROS1(src, observation);
-        };
-    };
-}
-
-group TransformObservationROS1(source src: CTS_Transport, target tgt: Observation)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
     // Status
-    src -> tgt.status = cast('final', 'FHIR.code');
-
-    //ROS1 code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ROS1');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     //IHC category
-    src then MapIHCCategory(src, tgt);
+    operations then MapIHCCategory(operations, tgt);
+
+    //ROS1 code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ROS1');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Methode
-    src then MapIHCMethode(src, tgt);
+    operations then MapIHCMethode(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'uuid_ihc_ros1'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Netzwerkzentrum
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
@@ -1722,36 +1821,39 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
         };
 
         // Ergebnis
-        
-            data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2219'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2219'" then
+        {
+            values.value where "$this.value = 'positiv'" then 
             {
-                values.value where "$this.value = 'positiv'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
-                };
-
-                values.value where "$this.value = 'negativ'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
-                };
-
-                values.value where "$this.value = 'nicht auswertbar'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
-                };
-
-                values.value where "$this.value = 'fraglich'" then 
-                {
-                    values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
-                };
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6576-8', 'Positive');
             };
+
+            values.value where "$this.value = 'negativ'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA6577-6', 'Negative');
+            };
+
+            values.value where "$this.value = 'nicht auswertbar'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
+            };
+
+            values.value where "$this.value = 'fraglich'" then 
+            {
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA11884-6', 'Indeterminate');
+            };
+        };
     
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
 }
 
-
 /*-----------------HELPERS----------------------------*/
-
 group MapPercentageValue(source src: string, target tgt: Quantity)
 {
     src -> tgt.value = src,
@@ -1761,18 +1863,110 @@ group MapPercentageValue(source src: string, target tgt: Quantity)
 }
 
 
-group MapIHCCategory(source src: CTS_Transport, target tgt: Observation)
+group MapIHCCategory(source operation: BackboneElement, target tgt: Observation)
 {
     //IHC category
-    src -> tgt.category as category then
+    operation -> tgt.category as category then
     {
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://hl7.org/fhir/ValueSet/observation-category',
-                                                                coding.code = 'laboratory';                                                    
+        operation -> category.coding = create ('Coding') as coding, coding.system = 'http://hl7.org/fhir/ValueSet/observation-category',
+                                                                        coding.code = 'laboratory';                                                    
     };
 }
 
-group MapIHCMethode(source src: CTS_Transport, target tgt: Observation)
+group MapIHCMethode(source operation: BackboneElement, target tgt: Observation)
 {
     // IHC Methode
-    src -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23020');
+    operation -> tgt.method = cc('http://ncit.nci.nih.gov', 'C23020');
+}
+
+group SetReferenceToObservation(source operations: BackboneElement, source name: string, target tgt: Reference)
+{
+    // Check which observation should be referenced
+    name where "%name = 'BRAF'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_ihc_braf'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    
+    name where "%name = 'CK7'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_ihc_ck7'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };    
+    };
+    
+    name where "%name = 'MIB1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ihc_mib1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };   
+    };
+
+    name where "%name = 'Napsin A'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_ihc_napsina'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };    
+    };
+
+    name where "%name = 'P40'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_ihc_p40'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };     
+    };
+
+    name where "%name = 'Synaptophysin'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'uuid_ihc_synaptophysin'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };   
+    };
+
+    name where "%name = 'TTF1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'uuid_ihc_ttf1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };   
+    };
+
+    name where "%name = 'ALK'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'uuid_ihc_alk'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };   
+    };
+
+    name where "%name = 'MET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'uuid_ihc_met'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };    
+    };
+
+    name where "%name = 'PD-L1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'uuid_ihc_pdl1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };   
+    };
+
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'uuid_ihc_ros1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };     
+    };
 }
