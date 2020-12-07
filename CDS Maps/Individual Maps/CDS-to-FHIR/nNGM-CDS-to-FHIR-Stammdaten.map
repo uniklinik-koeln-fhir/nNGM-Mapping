@@ -1,11 +1,6 @@
 /// version = 0.1
 /// title = "nNGM: Mapping Stammdaten FHIR"
-/// CTS -> FHIR
-
-/* 
-TODO 
-- Erstdiagnose -> diagnosis.condition.dateOnset : We need to create a reference to a condition for this. This should be done as soon as the ids for the individual resources are integrated.
-*/
+/// CDS -> FHIR
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR" = nNGM_Mapping_StammdatenFHIR
 
@@ -15,45 +10,61 @@ uses "http://hl7.org/fhir/StructureDefinition/Coverage" as target
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 
-group TransformBundleStammdaten(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleStammdaten(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
 {   
-    // Resources
-    src -> bundle.entry as entry then CreateTransformPatientStammdaten(src, entry);
-    src -> bundle.entry as entry then CreateTransformCoverageStammdaten(src, entry);
-    src -> bundle.entry as entry then CreateEpisodeOfCareStammdaten(src, entry);
-    src -> bundle.entry as entry then CreateConsentEinwilligung1aStammdaten(src, entry);
-    src -> bundle.entry as entry then CreateConsentEinwilligung1bStammdaten(src, entry);
+    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'stammdaten') then
+    {
+        // Resources
+        operations then CreatePatientStammdaten(operations, bundle, composition, section);
+        operations then CreateCoverageStammdaten(operations, bundle, composition, section);
+        operations then CreateEpisodeOfCareStammdaten(operations, bundle, composition, section);
+        operations then CreateConsentEinwilligung1aStammdaten(operations, bundle, composition, section);
+        operations then CreateConsentEinwilligung1bStammdaten(operations, bundle, composition, section);
+    };
 }
 
 /* ------------------------------ Check whether the Patient needs to be created ---------------------------- */ 
-group CreateTransformPatientStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+group CreatePatientStammdaten(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_1125'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_1124'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_1126'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_1127'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_1128'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_1129'
+        or blockindex = 0 and groupindex = 0 and itemid = 'id_1280'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_1298'
+        or blockindex = 1 and groupindex = 0 and itemid = 'id_2436'" then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1125'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1124'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1126'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1127'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1128'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1129'
-                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_1280'
-                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_1298'
-                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2436'" then
-        {
-            src -> tgt.resource = create('Patient') as patient then TransformPatientStammdaten(src, patient);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Patient') as patient then
+    {
+        operations then TransformPatientStammdaten(operations, patient, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
     };
 }
 
 /* ------------------------------ Patient ---------------------------- */
-group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
+group TransformPatientStammdaten(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'Patient/\' + $this');
+        };
+
         // Geschlecht -> Gender
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1131'" then
         {
@@ -135,35 +146,51 @@ group TransformPatientStammdaten(source src: CTS_Transport, target tgt: Patient)
 }
 
 /* ------------------------------ Check if Coverage needs to be created ---------------------------- */ 
-group CreateTransformCoverageStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateCoverageStammdaten(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2459'
+            or blockindex = 2 and groupindex = 0 and itemid = 'id_1269'
+            or blockindex = 1 and groupindex = 0 and itemid = 'id_1270'
+            or blockindex = 2 and groupindex = 0 and itemid = 'id_2460'
+            or blockindex = 2 and groupindex = 0 and itemid = 'id_1268'" then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2459'
-                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1269'
-                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_1270'
-                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2460'
-                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1268'" then
-        {
-            src -> tgt.resource = create('Coverage') as coverage then TransformCoverageStammdaten(src, coverage);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Coverage') as coverage then
+    {
+        operations then TransformCoverageStammdaten(operations, coverage, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(coverage, '\'Coverage/\' + $this.id');
     };
 }
 
 /* ------------------------------ Coverage ---------------------------- */
-group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverage)
+group TransformCoverageStammdaten(source operations: BackboneElement, target tgt: Coverage, target composition: Composition, target section: BackboneElement)
 { 
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
 
-    //status = active
-    src -> tgt.status = cast('active', 'FHIR.code'); 
+    // status = active
+    operations -> tgt.status = cast('active', 'FHIR.code'); 
     
-    //beneficiary, beneficiary.reference
-    src.patid as patid -> tgt.beneficiary = create('Reference') as beneficiary, beneficiary.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Subject
+    operations -> tgt.beneficiary = create('Reference') as beneficiary, beneficiary.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
     
-    src.operations as operations, operations.data as data then
+    // Subscriber
+    operations -> tgt.subscriber = create('Reference') as subscriber, subscriber.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_coverage_nngm'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as referenceSection, referenceSection.reference = evaluate(value, '\'Coverage/\' + $this');
+        };
+
         // Krankenkasse -> coverage.payor.display
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2459'" then
         {
@@ -219,39 +246,52 @@ group TransformCoverageStammdaten(source src: CTS_Transport, target tgt: Coverag
 }
 
 /* ------------------------------ Check if EpisodeOfCare needs to be created ---------------------------- */
-group CreateEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateEpisodeOfCareStammdaten(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1297'
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1297'
         or blockindex = 1 and groupindex = 0 and itemid = 'id_803'
         or blockindex = 1 and groupindex = 0 and itemid = 'id_1139'" then
-        {
-            src -> tgt.resource = create('EpisodeOfCare') as episodeofcare then TransformEpisodeOfCareStammdaten(src, episodeofcare);
-        };
+    {
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('EpisodeOfCare') as episodeofcare then
+    {
+        operations then TransformEpisodeOfCareStammdaten(operations, episodeofcare, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(episodeofcare, '\'EpisodeOfCare/\' + $this.id');
     };
 }
 
 /* ------------------------------ EpisodeOfCare ---------------------------- */
-group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: EpisodeOfCare)
+group TransformEpisodeOfCareStammdaten(source operations: BackboneElement, target tgt: EpisodeOfCare, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
 
     // Subject
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    // Status 
-    src -> tgt.status = cast('active', 'FHIR.code');
+    // Status
+    operations -> tgt.status = cast('active', 'FHIR.code');
 
     // Identifier 
-    src -> tgt.identifier as identifier, 
+    operations -> tgt.identifier as identifier, 
             identifier.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_episodeOfCare_nngm'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as referenceSection, referenceSection.reference = evaluate(value, '\'Patient/\' + $this');
+        };
+
         // TODO
         // Erstdiagnose -> diagnosis.condition.dateOnset
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1297'" then
@@ -281,40 +321,53 @@ group TransformEpisodeOfCareStammdaten(source src: CTS_Transport, target tgt: Ep
 }
 
 /* ------------------------------ Check if Consent Einwilligung 1a is required ---------------------------- */
-group CreateConsentEinwilligung1aStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateConsentEinwilligung1aStammdaten(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    
+    operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2440'
+        or blockindex = 3 and groupindex = 0 and itemid = 'id_2441'" then
     {
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2440'
-                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2441'" then
-        {
-            src -> tgt.resource = create('Consent') as consent then TransformConsentEinwilligung1aStammdaten(src, consent);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Consent') as consent then
+    {
+        operations then TransformConsentEinwilligung1aStammdaten(operations, consent, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(consent, '\'Consent/\' + $this.id');
     };
 }
 
 /* ------------------------------ Consent Einwilligung 1a ---------------------------- */
-group TransformConsentEinwilligung1aStammdaten(source src: CTS_Transport, target tgt: Consent)
+group TransformConsentEinwilligung1aStammdaten(source operations: BackboneElement, target tgt: Consent, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
 
     // Status
-    src -> tgt.status = cast('active', 'FHIR.code');
+    operations -> tgt.status = cast('active', 'FHIR.code');
 
     // Scope
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+    operations -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
 
     // Category
-    src -> tgt.category = cc('http://loinc.org', '59284-0');
+    operations -> tgt.category = cc('http://loinc.org', '59284-0');
 
     // Patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Policy
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_consent_nngm_1a'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'Consent/\' + $this');
+        };
+
         // 1a unterschrieben -> provision.type
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2440'" then
         {
@@ -323,7 +376,7 @@ group TransformConsentEinwilligung1aStammdaten(source src: CTS_Transport, target
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision collate, 
                                              provision.type = cast('permit', 'FHIR.code');
                                              
-                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -331,7 +384,7 @@ group TransformConsentEinwilligung1aStammdaten(source src: CTS_Transport, target
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision collate, 
                                              provision.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
             };
         };
 
@@ -344,40 +397,53 @@ group TransformConsentEinwilligung1aStammdaten(source src: CTS_Transport, target
 }
 
 /* ------------------------------ Check if Consent Einwilligung 1b is required ---------------------------- */
-group CreateConsentEinwilligung1bStammdaten(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateConsentEinwilligung1bStammdaten(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether resource should be created
+    let resourceShouldBeCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    
+    operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2446'
+    or blockindex = 8 and groupindex = 0 and itemid = 'id_2447'" then
     {
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2446'
-                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_2447'" then
-        {
-            src -> tgt.resource = create('Consent') as consent then TransformConsentEinwilligung1bStammdaten(src, consent);
-        };
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
+
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Consent') as consent then
+    {
+        operations then TransformConsentEinwilligung1bStammdaten(operations, consent, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(consent, '\'Consent/\' + $this.id');
     };
 }
 
 /* ------------------------------ Consent Einwilligung 1b ---------------------------- */
-group TransformConsentEinwilligung1bStammdaten(source src: CTS_Transport, target tgt: Consent)
+group TransformConsentEinwilligung1bStammdaten(source operations: BackboneElement, target tgt: Consent, target composition: Composition, target section: BackboneElement)
 {
     // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Consent/nNGM';
 
     // Status
-    src -> tgt.status = cast('active', 'FHIR.code');
+    operations -> tgt.status = cast('active', 'FHIR.code');
 
     // Scope
-    src -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
+    operations -> tgt.scope = cc('http://terminology.hl7.org/CodeSystem/consentscope', 'patient-privacy');
 
     // Category
-    src -> tgt.category = cc('http://loinc.org', '59284-0');
+    operations -> tgt.category = cc('http://loinc.org', '59284-0');
 
     // Patient
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Policy
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
+        // ID + insert
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_consent_nngm_1b'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'Consent/\' + $this');
+        };
+
         // 1b unterschrieben -> provision.type
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2446'" then
         {
@@ -386,7 +452,7 @@ group TransformConsentEinwilligung1bStammdaten(source src: CTS_Transport, target
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -394,7 +460,7 @@ group TransformConsentEinwilligung1bStammdaten(source src: CTS_Transport, target
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
 
-                src -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
             };
         };
 
