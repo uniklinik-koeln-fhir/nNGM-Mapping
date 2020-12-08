@@ -7,7 +7,6 @@ TODO
 
     Observation
     - SOP: component doesn't exist in simplifier profile
-    - valueCodeableConcept is required
     - "Position Start" and "Position Stop" component doesn't exist in simplifier profile
     - ValueRange not working using collate, slowing down map execution using function call, displaying separate arrays without using collate
     - where does the uuid_ngsPanel_research go?
@@ -292,10 +291,7 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel';
 
     // Status : Item required on simplifier
-    operations ->  tgt.status as status, 
-                    status.extension as dataAbsentReason, 
-                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.status = cast('final', 'FHIR.code');
 
     //FISH category
     operations -> tgt.category as category then
@@ -309,6 +305,11 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    operations -> tgt.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.extension as dataAbsentReason,
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Method : Item required on simplifier
     operations -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
