@@ -94,7 +94,7 @@ group CreateDiagnosticReportSonstigeUntersuchungen(source operations: BackboneEl
 /* ------------------------------ DiagnosticReport ---------------------------- */
 group TransformDiagnosticReportSonstigeUntersuchungen(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // since there can be more than 1 instance of the NGS Lung Panel we need an indext to assign the corresponding data to each observation
+    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index); // (re)set index to 0
 
     // Metadata
@@ -157,15 +157,12 @@ group TransformDiagnosticReportSonstigeUntersuchungen(source operations: Backbon
 /* ------------------------------ Organization ---------------------------- */
 group CreateOrganizationSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then
         {
-            operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then
-            {
-                operations then TransformOrganizationSonstigeUntersuchungen(operations, organization, composition, section);
-                operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
-            };
+            operations then TransformOrganizationSonstigeUntersuchungen(operations, organization, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
         };
     };
 }
@@ -197,17 +194,22 @@ group TransformOrganizationSonstigeUntersuchungen(source operations: BackboneEle
 /* ------------------------------ Check if Observation needs to be created ---------------------------- */
 group CreateObservationSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
+    // since there can be more than 1 instance of the Untersuchung section we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index);
-    // only check for id_2026 (Bezeichnung) as it is mandatory (1..1 on simplifier) and to use the repeatindex directly in this where expression 
-    operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'id_2026'" then
-                                                    // or blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'id_2031'" then // id_2031 is mandatory as well
+
+    operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 3 and groupindex = 0 and itemid = 'id_2026'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2527'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2027'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2028'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2282'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2283'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2031')" then
     {
         operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
         {
             operations then TransformObservationSonstigeUntersuchungen(operations, observation, composition, section, index);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
         }; 
-        
         operations then IncrementSectionIndex(operations, index);
     };
 }
@@ -366,29 +368,27 @@ group TransformObservationSonstigeUntersuchungen(source operations: BackboneElem
 /* -------------------------------------- Check if ServiceRequest needs to be created -------------------------------------------- */
 group CreateServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // Check whether resource should be created
-    let resourceShouldBeCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
 
     operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'
-                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
-                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
+                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
     {
-        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-    };
-    
-    // Create resource if bool set to true
-    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
-    {
-        operations then TransformServiceRequestSonstigeUntersuchungen(operations, serviceRequest, composition, section, index);
-        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-    };
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+        {
+            operations then TransformServiceRequestSonstigeUntersuchungen(operations, serviceRequest, composition, section, index);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
+        };
+    }; 
 }
 
 /* -------------------------------------- ServiceRequest -------------------------------------------- */
 group TransformServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // since there can be more than 1 instance of the NGS Lung Panel we need an indext to assign the corresponding data to each observation
+    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index); // (re)set index to 0
 
     // Metadata
