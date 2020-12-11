@@ -33,23 +33,21 @@ group TransformBundleImmunhistochemie(source operations: BackboneElement, target
 /* -------------------------------------- Check if Service Request is required -------------------------------------------- */
 group CreateServiceRequestIHC(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    // Check whether resource should be created
-    let resourceShouldBeCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
 
     operations.data as data, data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'
                                                         or blockindex = 15 and groupindex = 0 and itemid = 'id_2462'
                                                         or blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
     {
-        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-    };
-    
-    // Create resource if bool set to true
-    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
-    {
-        operations then TransformServiceRequestIHC(operations, serviceRequest, composition, section);
-        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-    };
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+        {
+            operations then TransformServiceRequestIHC(operations, serviceRequest, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
+        };
+    }; 
 }
 
 /* -------------------------------------- Service Request -------------------------------------------- */
