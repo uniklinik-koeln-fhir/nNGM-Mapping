@@ -101,7 +101,7 @@ group CreateDiagnosticReportNGSLungPanel(source operations: BackboneElement, tar
 /* -------------------------- DiagnosticReport ------------------------ */
 group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // since there can be more than 1 instance of the NGS Lung Panel we need an indext to assign the corresponding data to each observation
+    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index); // (re)set index to 0
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
@@ -197,24 +197,22 @@ group TransformOrganizationNGSLungPanel(source operations: BackboneElement, targ
 /* ------------------------------ Device ------------------------------ */
 group CreateDeviceNGSLungPanel(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    // Check whether resource should be created
-    let resourceShouldBeCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
 
     operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1260'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'id_2603'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'id_2604'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'ngs_panel_panel_detail'" then
     {
-        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-    };
-
-    // Create resource if bool set to true
-    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Device') as device then 
-    {
-        operations then TransformDeviceNGSLungPanel(operations, device, composition, section);
-        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(device, '\'Device/\' + $this.id');
-    };        
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('Device') as device then 
+        {
+            operations then TransformDeviceNGSLungPanel(operations, device, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(device, '\'Device/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
+        };
+    };       
 }
 
 /* ------------------------------ Device ------------------------------ */
@@ -268,16 +266,30 @@ group TransformDeviceNGSLungPanel(source operations: BackboneElement, target tgt
 /* ----------------------- Observation NGS Panel ---------------------- */
 group CreateObservationNGSPanel(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // Check whether resource should be created
-    let resourceShouldBeCreated = create('Boolean');
-    // since there can be more than 1 instance of the NGS Lung Panel we need an indext to assign the corresponding data to each observation
+    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index); // (re)set index to 0
 
-    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_1159'" then
+    operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 4 and groupindex = 0 and itemid ='id_1159'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_1160'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_35'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_36'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_37'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_38'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='ngs_panel_reftranscript'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='ngs_panel_coverage'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_47'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_48'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_41'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_42'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_43'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_44'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_45'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_46'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_39'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_40')" then
     {
         operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
         {
-            // operations -> observation.id = evaluate(index, '$this.sectionIndex');
             operations then TransformObservationNGSLungPanel(operations, observation, composition, section, index);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
         };
@@ -522,28 +534,26 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
 /* -------------------------- ServiceRequest -------------------------- */ 
 group CreateServiceRequestNGSLungPanel(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // Check whether resource should be created
-    let resourceShouldBeCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
 
-    operations.data as data, data.values as values where   "blockindex = 5 and groupindex = 0 and itemid ='id_2520'
-                                                            or blockindex = 5 and groupindex = 0 and itemid ='id_2462'
-                                                            or blockindex = 5 and groupindex = 0 and itemid ='id_2521'" then
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid ='id_2520'
+                                                        or blockindex = 5 and groupindex = 0 and itemid ='id_2462'
+                                                        or blockindex = 5 and groupindex = 0 and itemid ='id_2521'" then
     {
-        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-    };
-    
-    // Create resource if bool set to true
-    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
-    {
-        operations then TransformServiceRequestNGSLungPanel(operations, serviceRequest, composition, section, index);
-        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-    };
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+        {
+            operations then TransformServiceRequestNGSLungPanel(operations, serviceRequest, composition, section, index);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
+        };
+    }; 
 }
 
 group TransformServiceRequestNGSLungPanel(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {   
-    // since there can be more than 1 instance of the NGS Lung Panel we need an indext to assign the corresponding data to each observation
+    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index); // (re)set index to 0
     
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
