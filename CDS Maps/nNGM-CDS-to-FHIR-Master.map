@@ -31,7 +31,7 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
 // imports "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR"
 
 // Therapien
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR"
@@ -429,11 +429,12 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
         // Subject
         src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionTherapie.subject = create('Reference') as subject, subject.reference = value;
 
+        // TODO: which timestamp and author to use? the one of Stammdaten or the first Basisangaben?
         // Date
-        operations.timestamp as timestamp -> compositionTherapie.date = dateOp(timestamp, 'dateTime');
+        // operations.timestamp as timestamp -> compositionTherapie.date = dateOp(timestamp, 'dateTime');
 
         // Author
-        operations.editor as author -> compositionTherapie.author = create('Reference') as subject, subject.reference = author;
+        // operations.editor as author -> compositionTherapie.author = create('Reference') as subject, subject.reference = author;
         
         /* ------------------------------ Section ---------------------------- */
 
@@ -449,7 +450,14 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
                 src then IncrementFormIndex(src, index);
             };
 
-            // src then TransformBundleStrahlentherapie(src, tgt);
+            // Strahlentherapie
+            src then InitFormIndex(src, index);
+            src.operations as operations, operations where "crfid = 'ST' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleStrahlentherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
+                src then IncrementFormIndex(src, index);
+            };
+
             // src then TransformBundleSonstigeTherapie(src, tgt);
             // src then TransformBundleSystemischeTherapie(src, tgt);
         };  
