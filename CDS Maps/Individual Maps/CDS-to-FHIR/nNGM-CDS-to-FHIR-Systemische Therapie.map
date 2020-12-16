@@ -3,11 +3,17 @@
 
 /*
     TODO
+    MedicationAdministration
+    - what to do with uuid_nngm_MedicationAdministration_changed?
     - Missing extension.url for Anzahl der Zyklen (id_1250)
+        profile requires dosage.rate.value, .system and .code
     - Missing valueSet for id_2342
-    - When 'Abbruch wegen Process' option is checked in Art des Therapieendes (id_1356), it displays a field named 'Datum Progess' (blockindex = 6, groupindex = 0, itemid = 'sy_date_progress'),
+    - When 'Abbruch wegen Progress' option is checked in Art des Therapieendes (id_1356), it displays a field named 'Datum Progess' (blockindex = 6, groupindex = 0, itemid = 'sy_date_progress'),
         but its information is not on Seatable nor Master excel file, so it's not being mapped
     - id_1465 isn't mapping properly because it cannot override value already set by id_1246, even though it's effectivePeriod.start and id_1246 it's effective.start
+
+    EpisodeOfCare
+    - what to do with uuid_nngm_dateOfProgress (and/or uuid_nngm_dateOfProgress2)?
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
@@ -18,91 +24,95 @@ uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 
-group TransformBundleSystemischeTherapie(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    // Check if any fields are filled in before creating the MedicationAdministration
-    src -> bundle.entry as entry then CreateMedicationAdministrationSystemischeTherapie(src, entry);
-
-    // Check if any fields are filled in before creating the Patient
-    src -> bundle.entry as entry then CreatePatientSystemischeTherapie(src, entry);
-    
-    // Check if any fields are filled in before creating the EpisodeOfCare
-    src -> bundle.entry as entry then CreateEpisodeOfCareSystemischeTherapie(src, entry);
-    
-    // Check if any fields are filled in before creating the Observation ECOG
-    src -> bundle.entry as entry then CreateObservationEcogSystemischeTherapie(src, entry);
-
-    // Check if any fields are filled in before creating the Observation Best Response
-    src -> bundle.entry as entry then CreateObservationBestResponseSystemischeTherapie(src, entry);
+    operations then CreateMedicationAdministrationSystemischeTherapie(operations, bundle, composition, section);
+    operations then CreatePatientSystemischeTherapie(operations, bundle, composition, section);
+    operations then CreateEpisodeOfCareSystemischeTherapie(operations, bundle, composition, section);
+    operations then CreateObservationEcogSystemischeTherapie(operations, bundle, composition, section);
+    operations then CreateObservationBestResponseSystemischeTherapie(operations, bundle, composition, section);
 }
 
 /* ------------------------------ Check if MedicationAdministration needs to be created ---------------------------- */
-group CreateMedicationAdministrationSystemischeTherapie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateMedicationAdministrationSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
+
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1600'
+                                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2336'
+                                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2337'
+                                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2338'
+                                                        or blockindex = 1 and groupindex = 0 and itemid = 'id_2339'
+                                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1246'
+                                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1247'
+                                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1242'
+                                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1243'
+                                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2341'
+                                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_2345'
+                                                        or blockindex = 2 and groupindex = 0 and itemid = 'id_1244'
+                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1241'
+                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1250'
+                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1464'
+                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1359'
+                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1465'
+                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_1357'
+                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_2342'
+                                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_1356'
+                                                        or blockindex = 6 and groupindex = 0 and itemid = 'id_2343'
+                                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_1205'" then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1600'
-            or blockindex = 1 and groupindex = 0 and itemid = 'id_2336'
-            or blockindex = 1 and groupindex = 0 and itemid = 'id_2337'
-            or blockindex = 1 and groupindex = 0 and itemid = 'id_2338'
-            or blockindex = 1 and groupindex = 0 and itemid = 'id_2339'
-            or blockindex = 2 and groupindex = 0 and itemid = 'id_1246'
-            or blockindex = 2 and groupindex = 0 and itemid = 'id_1247'
-            or blockindex = 2 and groupindex = 0 and itemid = 'id_1242'
-            or blockindex = 2 and groupindex = 0 and itemid = 'id_1243'
-            or blockindex = 2 and groupindex = 0 and itemid = 'id_2341'
-            or blockindex = 2 and groupindex = 0 and itemid = 'id_2345'
-            or blockindex = 2 and groupindex = 0 and itemid = 'id_1244'
-            or blockindex = 3 and groupindex = 0 and itemid = 'id_1241'
-            or blockindex = 3 and groupindex = 0 and itemid = 'id_1250'
-            or blockindex = 3 and groupindex = 0 and itemid = 'id_1488'
-            or blockindex = 3 and groupindex = 0 and itemid = 'id_1464'
-            or blockindex = 3 and groupindex = 0 and itemid = 'id_1359'
-            or blockindex = 3 and groupindex = 0 and itemid = 'id_1465'
-            or blockindex = 4 and groupindex = 0 and itemid = 'id_1357'
-            or blockindex = 4 and groupindex = 0 and itemid = 'id_2342'
-            or blockindex = 6 and groupindex = 0 and itemid = 'id_1356'
-            or blockindex = 6 and groupindex = 0 and itemid = 'id_2343'
-            or blockindex = 7 and groupindex = 0 and itemid = 'id_1205'" then
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('MedicationAdministration') as medicationAdministration then 
         {
-            src -> tgt.resource = create('MedicationAdministration') as medicationAdministration then TransformMedicationAdministrationSystemischeTherapie(src, medicationAdministration);
+            operations then TransformMedicationAdministrationSystemischeTherapie(operations, medicationAdministration, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(medicationAdministration, '\'MedicationAdministration/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
         };
     };
 }
 
 /* ------------------------------ MedicationAdministration ---------------------------- */
-group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Transport, target tgt: MedicationAdministration)
+group TransformMedicationAdministrationSystemischeTherapie(source operations: BackboneElement, target tgt: MedicationAdministration, target composition: Composition, target section: BackboneElement)
 {
-    // Unique identifier
-    src -> tgt.id = uuid();
-
     // Profile url
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/MedicationAdministration';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/MedicationAdministration';
 
-    // Patient: item required on simplifier
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Category: item required on simplifier
-    src ->  tgt.category as category,
-            category.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.category as category,
+                    category.extension as dataAbsentReason,
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_nngm_MedicationAdministration'" then
+        {
+            values.value as value where "unit.exists().not()" then // to not use the unit = _changed uuid value element
+            {
+                values.value as value -> tgt.id = value;
+                values.value as value -> section.entry = create('Reference') as medAdmin, medAdmin.reference = evaluate(value, '\'MedicationAdministration/\' + $this');
+            };
+        };
+
         // Diagnostikfall-ID: context.identifier
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1600'" then
         {
-            values.value as value ->    tgt.context = create('Reference') as context,
-                                        context.identifier = create('Identifier') as identifier,
-                                        identifier.value = value;
+            values.value as value -> tgt.context = create('Reference') as context,
+                                    context.identifier = create('Identifier') as identifier,
+                                    identifier.value = value;
         };
 
         // Therapieinformationen: supportingInformation.display
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2336'" then
         {
-            values.value as value ->    tgt.supportingInformation as supportingInformation,
-                                        supportingInformation.display = value;
+            values.value as value -> tgt.supportingInformation as supportingInformation,
+                                    supportingInformation.display = value;
         };
 
         // Therapieinformationen war hilfreich: supportingInformation.extension:therapieInformationen.extension:hilfreich
@@ -165,7 +175,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
                             umgesetzt.valueBoolean = false;
 
                 // Map Grund für die Nichtumsetzung element because it only shows up when 'Nein' is selected
-                src then MapGrundFurDieNichtumsetzungMedicationAdministration(src, tgt);
+                operations then MapGrundFurDieNichtumsetzungMedicationAdministration(operations, tgt);
             };
 
             values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
@@ -185,13 +195,13 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
         // Therapiebeginn: effective.start
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1246'" then
         {
-            values.value as value -> tgt.effective = create('Period') as effective collate, effective.start = dateOp(value, 'dateTime');
+            values.value as value -> tgt.effective = create('Period') as effective, effective.start = dateOp(value, 'dateTime');
         }; 
 
         // Therapieende: effective.end
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247'" then
         {
-            values.value as value -> tgt.effective = create('Period') as effective collate, effective.end = dateOp(value, 'dateTime');
+            values.value as value -> tgt.effective = create('Period') as effective, effective.end = dateOp(value, 'dateTime');
         };
 
         // Durchführende Einrichtung: performer.actor.display
@@ -249,7 +259,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
                             teilnahme.valueBoolean = true;
                 
                 // Map Studienname element because it only shows up when 'Ja' is selected
-                src then MapStudiennameMedicationAdministration(src, tgt);
+                operations then MapStudiennameMedicationAdministration(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Nein'" then
@@ -265,11 +275,11 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
         // Therapieschema: medicationValueCodeableConcept
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1241'" then
         {
-            values.value as value -> tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept collate,
-                                        medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value, 'Therapieschema');
+            values.value as value -> tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value, 'Therapieschema');
         };
 
         // Anzahl der Zyklen (ohne Erhaltung): dosage.extension:anzahlZyklen.valueIntegerid_1250
+        // TODO: profil asks for dosage.rate.value, .system and .code
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1250'" then
         {
             values.value as value ->    tgt.dosage as dosage,
@@ -282,7 +292,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
         {
             values.value as value where "$this.value = 'yes'" then
             {
-                src then MapAnderungDesSchemasElementsMedicationAdministration(src, tgt);
+                operations then MapAnderungDesSchemasElementsMedicationAdministration(operations, tgt);
             };
         };
 
@@ -297,7 +307,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
                             option.url = 'option',
                             option.valueBoolean = true;
 
-                src then MapErhaltungstherapieElementMedicationAdministration(src, tgt);
+                operations then MapErhaltungstherapieElementMedicationAdministration(operations, tgt);
             };
             
             values.value as value where "$this.value = 'Nein'" then
@@ -329,14 +339,14 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
             {
                 value -> tgt.status = 'on-hold';
                 value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/systemischeStatusReason', 'nebenwirkungen', 'Pause wegen Nebenwirkungen');
-                src then MapNebenwirkungenGradMedicationAdministration(src, tgt);
+                operations then MapNebenwirkungenGradMedicationAdministration(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Abbruch wegen Progress'" then
             {
                 value -> tgt.status = 'stopped';
                 value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/ngnm/systemischeStatusReason', 'progress', 'Progress');
-                src then MapNebenwirkungenGradMedicationAdministration(src, tgt);
+                operations then MapNebenwirkungenGradMedicationAdministration(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Ablehnung durch den Patienten'" then
@@ -376,56 +386,54 @@ group TransformMedicationAdministrationSystemischeTherapie(source src: CTS_Trans
             values.value as value ->    tgt.note as note,
                                         note.text = value;
         };
+
+        // Referenzen
+        // Observation
+
     };
 }
 
 /* ------------------------------ MedicationAdministration - Grund für die Nichtumsetzung ---------------------------- */
-group MapGrundFurDieNichtumsetzungMedicationAdministration(source src: CTS_Transport, target tgt: MedicationAdministration)
+group MapGrundFurDieNichtumsetzungMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
-    src.operations as operations, operations.data as data then
-    {   
-        // Grund für die Nichtumsetzung: supportingInformation.extension:therapieInformationen.extension:nichtumsetzungGrund
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2339'" then
+    // Grund für die Nichtumsetzung: supportingInformation.extension:therapieInformationen.extension:nichtumsetzungGrund
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2339'" then
+    {
+        values.value as value where "$this.value.exists()" then
         {
-            values.value as value where "$this.value.exists()" then
-            {
-                value ->    tgt.supportingInformation as supportingInformation,
-                            supportingInformation.extension as therapieInformationen,
-                            therapieInformationen.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/therapieinformationen',
-                            therapieInformationen.extension as nichtumsetzungGrund,
-                            nichtumsetzungGrund.url = 'nichtumsetzungGrund',
-                            nichtumsetzungGrund.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieGrundNichtumsetzung', value);
-            };
+            value ->    tgt.supportingInformation as supportingInformation,
+                        supportingInformation.extension as therapieInformationen,
+                        therapieInformationen.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/therapieinformationen',
+                        therapieInformationen.extension as nichtumsetzungGrund,
+                        nichtumsetzungGrund.url = 'nichtumsetzungGrund',
+                        nichtumsetzungGrund.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieGrundNichtumsetzung', value);
         };
     };
 }
 
 /* ------------------------------ MedicationAdministration - Studienname ---------------------------- */
-group MapStudiennameMedicationAdministration(source src: CTS_Transport, target tgt: MedicationAdministration)
+group MapStudiennameMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
-    src.operations as operations, operations.data as data then
+    // Studienname: extension:studientherapie.extension:studie
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1244'" then
     {
-        // Studienname: extension:studientherapie.extension:studie
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1244'" then
+        values.value as value where "$this.value.exists()" then
         {
-            values.value as value where "$this.value.exists()" then
-            {
-                value ->    tgt.extension as studientherapie,
-                            studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
-                            studientherapie.extension as studie,
-                            studie.url = 'studie',
-                            studie.valueReference = create('Reference') as reference,
-                            reference.reference = evaluate(value, '$this.split(\'\\t\').first()'),
-                            reference.display = evaluate(value, '$this.split(\'\\t\').last()');
-            };
+            value ->    tgt.extension as studientherapie,
+                        studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
+                        studientherapie.extension as studie,
+                        studie.url = 'studie',
+                        studie.valueReference = create('Reference') as reference,
+                        reference.reference = evaluate(value, '$this.split(\'\\t\').first()'),
+                        reference.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
     };
 }
 
 /* ------------------------------ MedicationAdministration - Elements displayed when Änderung des Schemas is 'Ja' ---------------------------- */
-group MapAnderungDesSchemasElementsMedicationAdministration(source src: CTS_Transport, target tgt: MedicationAdministration)
+group MapAnderungDesSchemasElementsMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
         // Grund für die Änderung des Therapieschemas: statusReason.text
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1464'" then
@@ -442,8 +450,7 @@ group MapAnderungDesSchemasElementsMedicationAdministration(source src: CTS_Tran
         {
             values.value as value where "$this.value.exists()" then
             {
-                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept collate,
-                            medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value, 'NeuesTherapieschema');
+                value ->    tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value, 'NeuesTherapieschema');
             };
         };
 
@@ -460,103 +467,92 @@ group MapAnderungDesSchemasElementsMedicationAdministration(source src: CTS_Tran
 }
 
 /* ------------------------------ MedicationAdministration - Elements displayed when Erhaltungstherapie als Option is 'Ja' ---------------------------- */
-group MapErhaltungstherapieElementMedicationAdministration(source src: CTS_Transport, target tgt: MedicationAdministration)
+group MapErhaltungstherapieElementMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
-    src.operations as operations, operations.data as data then
+    // Für die Erhaltungstherapie verabreichtes Medikament: extension:Erhaltungstherapie.extension:medikament
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2342'" then
     {
-        // Für die Erhaltungstherapie verabreichtes Medikament: extension:Erhaltungstherapie.extension:medikament
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2342'" then
+        values.value as value where "$this.value.exists()" then
         {
-            values.value as value where "$this.value.exists()" then
-            {
-                value ->    tgt.extension as erhaltungstherapie,
-                            erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie',
-                            erhaltungstherapie.extension as medikament,
-                            medikament.url = 'medikament',
-                            medikament.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/dummy', value);
-            };
+            value ->    tgt.extension as erhaltungstherapie,
+                        erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie',
+                        erhaltungstherapie.extension as medikament,
+                        medikament.url = 'medikament',
+                        medikament.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/dummy', value);
         };
     };
 }
 
 /* ------------------------------ MedicationAdministration - Element displayed when Art des therapieendes is 'Abbruch wegen Nebenwirkungen' or 'Pause wegen Nebenwirkungen' ---------------------------- */
-group MapNebenwirkungenGradMedicationAdministration(source src: CTS_Transport, target tgt: MedicationAdministration)
+group MapNebenwirkungenGradMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
-    src.operations as operations, operations.data as data then
+    // Nebenwirkungen Grad III / Grad IV: extension:nebenwirkung
+    operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2343'"then
     {
-        // Nebenwirkungen Grad III / Grad IV: extension:nebenwirkung
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2343'"then
+        values.value as value where "$this.value.exists() and $this.value = 'Ja'" then
         {
-            values.value as value where "$this.value.exists() and $this.value = 'Ja'" then
-            {
-                value ->    tgt.extension as nebenwirkung,
-                            nebenwirkung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung',
-                            nebenwirkung.valueBoolean = true;
-            };
+            value ->    tgt.extension as nebenwirkung,
+                        nebenwirkung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung',
+                        nebenwirkung.valueBoolean = true;
+        };
 
-            values.value as value where "$this.value.exists() and $this.value = 'Nein'" then
-            {
-                value ->    tgt.extension as nebenwirkung,
-                            nebenwirkung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung',
-                            nebenwirkung.valueBoolean = false;
-            };
+        values.value as value where "$this.value.exists() and $this.value = 'Nein'" then
+        {
+            value ->    tgt.extension as nebenwirkung,
+                        nebenwirkung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung',
+                        nebenwirkung.valueBoolean = false;
+        };
 
-            values.value as value where "$this.value.exists() and $this.value = 'N/A' or $this.value = 'N\/A'" then
-            {
-                value ->    tgt.extension as nebenwirkung,
-                            nebenwirkung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung',
-                            nebenwirkung.valueBoolean as valueBoolean,
-                            valueBoolean.extension as dataAbsentReason,
-                            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                            dataAbsentReason.valueCode = cast('not-applicable', 'FHIR.code');
-            };
+        values.value as value where "$this.value.exists() and $this.value = 'N/A' or $this.value = 'N\/A'" then
+        {
+            value ->    tgt.extension as nebenwirkung,
+                        nebenwirkung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/Nebenwirkung',
+                        nebenwirkung.valueBoolean as valueBoolean,
+                        valueBoolean.extension as dataAbsentReason,
+                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+                        dataAbsentReason.valueCode = cast('not-applicable', 'FHIR.code');
         };
     };
 }
 
 /* ------------------------------ Check if Patient needs to be created ---------------------------- */
-group CreatePatientSystemischeTherapie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreatePatientSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
     {
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
+        operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
         {
-            src -> tgt.resource = create('Patient') as patient then TransformPatientSystemischeTherapie(src, patient); 
+            operations then TransformPatientSystemischeTherapie(operations, patient, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ Patient ---------------------------- */
-group TransformPatientSystemischeTherapie(source src: CTS_Transport, target tgt: Patient)
+group TransformPatientSystemischeTherapie(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
 {
-    // Unique identifier
-    src -> tgt.id = uuid();
-
     // Profile url
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
 
-    // Name: item required on simplifier
-    src ->  tgt.name as name,
-            name.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // Name
+    operations -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    // Gender: item required on simplifier
-    src ->  tgt.gender as gender,
-            gender.extension as otherAmtlich,
-            otherAmtlich.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de',
-            otherAmtlich.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // Gender
+    operations -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    // BirthDate: item required on simplifier
-    src ->  tgt.birthDate as birthDate,
-            birthDate.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // BirthDate
+    operations -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_nngm_patient3'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as patient, patient.reference = evaluate(value, '\'Patient/\' + $this');
+        };
+
         // Todesdatum: deceased.deceasedDateTime
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
         {
@@ -566,42 +562,48 @@ group TransformPatientSystemischeTherapie(source src: CTS_Transport, target tgt:
 }
 
 /* ------------------------------ Check if EpisodeOfCare needs to be created ---------------------------- */
-group CreateEpisodeOfCareSystemischeTherapie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateEpisodeOfCareSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1545'" then
     {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1545'" then
+        operations -> bundle.entry as entry, entry.resource = create('EpisodeOfCare') as episodeOfCare then 
         {
-            src -> tgt.resource = create('EpisodeOfCare') as episodeOfCare then TransformEpisodeOfCareSystemischeTherapie(src, episodeOfCare); 
+            operations then TransformEpisodeOfCareSystemischeTherapie(operations, episodeOfCare, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(episodeOfCare, '\'EpisodeOfCare/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ EpisodeOfCare ---------------------------- */
-group TransformEpisodeOfCareSystemischeTherapie(source src: CTS_Transport, target tgt: EpisodeOfCare)
+group TransformEpisodeOfCareSystemischeTherapie(source operations: BackboneElement, target tgt: EpisodeOfCare, target composition: Composition, target section: BackboneElement)
 {
-    // Unique identifier
-    src -> tgt.id = uuid();
-
     // Profile url
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
 
     // Identifier.system and Identifier.value: items required on simplifier
-    src ->  tgt.identifier = create('Identifier') as nngmFallnummer,
-            nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
-            nngmFallnummer.value as value,
-            value.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.identifier = create('Identifier') as nngmFallnummer,
+                    nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
+                    nngmFallnummer.value as value,
+                    value.extension as dataAbsentReason,
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Status: item required on simplifier
-    src -> tgt.status = 'active';
+    operations -> tgt.status = 'active';
 
-    // Patient: item required on simplifier
-    src.patid as patid -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Patient
+    operations -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_nngm_dateOfProgress'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as episodeOfCare, episodeOfCare.reference = evaluate(value, '\'EpisodeOfCare/\' + $this');
+        };
+
         //Datum Progress: EpisodeOfCare.extension:datumProgress
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1545'" then
         {
@@ -613,40 +615,46 @@ group TransformEpisodeOfCareSystemischeTherapie(source src: CTS_Transport, targe
 }
 
 /* ------------------------------ Check if Observation ECOG needs to be created ---------------------------- */
-group CreateObservationEcogSystemischeTherapie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationEcogSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2415'" then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2415'" then
+        operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationEcogSystemischeTherapie(src, observation); 
+            operations then TransformObservationEcogSystemischeTherapie(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ Observation ECOG ---------------------------- */
-group TransformObservationEcogSystemischeTherapie(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationEcogSystemischeTherapie(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    // Unique identifier
-    src -> tgt.id = uuid();
-
     // Profile url
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog';
 
     // Status: item required on simplifier
-    src -> tgt.status = 'final';
+    operations -> tgt.status = 'final';
 
     // Category: item required on simplifier
-    src -> tgt.category = cc('http://hl7.org/fhir/ValueSet/observation-category', 'survey');
+    operations -> tgt.category = cc('http://hl7.org/fhir/ValueSet/observation-category', 'survey');
 
     // Code: item required on simplifier
-    src -> tgt.code = cc('http://loinc.org', '89247-1');
+    operations -> tgt.code = cc('http://loinc.org', '89247-1');
 
-    // Patient: item required on simplifier
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_ecog2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // ECOG Performance Status bei Therapiebeginn: valueCodeableConcept
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2415'" then
         {
@@ -687,50 +695,64 @@ group TransformObservationEcogSystemischeTherapie(source src: CTS_Transport, tar
 }
 
 /* ------------------------------ Check if Observation BestResponse needs to be created ---------------------------- */
-group CreateObservationBestResponseSystemischeTherapie(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateObservationBestResponseSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
+
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1354'
+                                                        or blockindex = 5 and groupindex = 0 and itemid = 'id_1355'" then
     {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1354'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_1355'" then
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationBestResponseSystemischeTherapie(src, observation); 
+            operations then TransformObservationBestResponseSystemischeTherapie(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
         };
     };
 }
 
 /* ------------------------------ Observation BestResponse ---------------------------- */
-group TransformObservationBestResponseSystemischeTherapie(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationBestResponseSystemischeTherapie(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    // Unique identifier
-    src -> tgt.id = uuid();
-
     // Profile url
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/best-response';
-
-    // PartOf: item required on simplifier
-    src ->  tgt.partOf as partOf,
-            partOf.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/best-response';
 
     // Status: item required on simplifier
-    src ->  tgt.status as status,
-            status.extension as dataAbsentReason,
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.status as status,
+                status.extension as dataAbsentReason,
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Category: item required on simplifier
-    src -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'therapy');
+    operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'therapy');
 
     // Code: item required on simplifier
-    src -> tgt.code = cc('http://ncit.nci.nih.gov', 'C94536');
+    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C94536');
 
-    // Patient: item required on simplifier
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_nngm_bestResponse'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        // Referenzen
+        // PartOf
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_nngm_MedicationAdministration'" then
+        {
+            values.value as value where "unit.exists().not()" then // to not use the unit = _changed uuid value element
+            {
+                values.value as value -> tgt.partOf = create('Reference') as medAdmin, medAdmin.reference = evaluate(value, '\'MedicationAdministration/\' + $this');
+            };
+        };
+
         // Bestes Ansprechen: valueCodeableConcept
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1354'" then
         {
