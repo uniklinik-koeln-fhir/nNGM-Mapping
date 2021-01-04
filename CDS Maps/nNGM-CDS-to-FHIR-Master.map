@@ -15,7 +15,7 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
 
 // Antrag
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
 
@@ -185,7 +185,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
     let index = create('RepeatIndex');
 
     /* ------------------------------ Antrag ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset index
+    src then InitCaseIndex(src, index); // Reset caseIndex and maxIndex
     src.operations as operations,
         // Execute as many times as there are Basisangaben
         operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
@@ -198,6 +198,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
         let caseIndex = evaluate(index, '$this.caseIndex');
+        let maxIndex = evaluate(index, '$this.maxIndex');
 
         /* ------------------------------ Bundle ---------------------------- */
 
@@ -244,7 +245,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         src then InitFormIndex(src, index);
         src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
         {
-            src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag);
+            // src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag);
             src then IncrementFormIndex(src, index);
         };
 
@@ -258,11 +259,16 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
         // Resistenztestung
         src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
+        src.operations as operations, operations where "%index.formIndex < %maxIndex" then
         {
-            // src then TransformBundleResistenztestung(operations, bundleAntrag, compositionAntrag);
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleResistenztestung(operations, bundleAntrag, compositionAntrag);
+                src -> tgt.id = evaluate(index, '$this.maxIndex');
+            };                
             src then IncrementFormIndex(src, index);
         };
+        
 
         // Vorbefund
         src then InitFormIndex(src, index);
@@ -492,11 +498,45 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
     src -> index.caseIndex = 1;
+    src then InitMaxIndex(src, index); // find max formIndex given this caseIndex
 }
 
 group IncrementCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
     src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
+}
+
+group InitMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
+{
+    // Create this let because we can't check on two parameters with the same name in FHIRPath
+    let caseIndex = evaluate(index, '$this.caseIndex');
+
+    src -> index.maxIndex = 1;
+    // Antrag: find highest formIndex
+    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.maxIndex.toString() and type = 'save'" then
+    {
+        src then IncrementMaxIndex(src, index);
+    };
+    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.maxIndex.toString() and type = 'save'" then
+    {
+        src then IncrementMaxIndex(src, index);
+    };
+    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.maxIndex.toString() and type = 'save'" then
+    {
+        src then IncrementMaxIndex(src, index);
+    };
+    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.maxIndex.toString() and type = 'save'" then
+    {
+        src then IncrementMaxIndex(src, index);
+    };
+
+    // Befund: find highest formIndex
+
+}
+
+group IncrementMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
+{
+    src -> index.maxIndex = evaluate(index, '$this.maxIndex + 1');
 }
 
 group InitFormIndex(source src: CTS_Transport, target index: RepeatIndex)
