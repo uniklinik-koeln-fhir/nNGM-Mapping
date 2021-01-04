@@ -3,7 +3,8 @@
 
 /*
 TODO
-- The repeatindex for the observation is not implemented
+    - repeatindex is off by +1 thus there are always 1 too many observation referenced in DiagnosticReport and ServiceRequest
+    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR" = nNGM_Mapping_SonstigeUntersuchungenFHIR
@@ -19,36 +20,83 @@ group TransformBundleSonstigeUntersuchungen(source operations: BackboneElement, 
 {
     operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'sonstige-untersuchungen') then
     {        
-        //Check if any fields are filled in before creating the DiagnosticReport
-        operations then CreateDiagnosticReportSonstigeUntersuchungen(operations, bundle, composition, section);
-
-        //Check if any fields are filled in before creating the Organization
         operations then CreateOrganizationSonstigeUntersuchungen(operations, bundle, composition, section);
-
-        //Check if any fields are filled in before creating the ServiceRequest
-        operations then CreateServiceRequestSonstigeUntersuchungen(operations, bundle, composition, section);
-
-        //Check if any fields are filled in before creating the observation
+        // operations then CreateSpecimenSonstigeUntersuchungen(operations, bundle, composition, section);
+        // there may be more than 1 instance of Observation, thus an index is needed to reference (and create) the correct observation
+        operations then CreateDiagnosticReportSonstigeUntersuchungen(operations, bundle, composition, section, index);
+        operations then CreateServiceRequestSonstigeUntersuchungen(operations, bundle, composition, section, index);
         operations then CreateObservationSonstigeUntersuchungen(operations, bundle, composition, section, index);
     };
 }
 
+/*-----------------Specimen-----------------------*/
+group CreateSpecimenSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+{
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+    {
+        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
+        {
+            operations then TransformSpecimenIHC(operations, specimen, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
+        };
+    };
+}
+
+group TransformSpecimenSonstigeUntersuchungen(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
+{
+    // Metadata
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+
+    // fixed status
+    operations -> tgt.type = create('BackboneElement') as cc, cc.coding as type,
+                      type.system = 'http://snomed.info/sct', 
+                      type.version = 'http://snomed.info/sct/900000000000207008',
+                      type.code as code, 
+                      code.extension as dataAbsentReason, 
+                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then 
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
+
+        // Referenzen
+        // Request
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        {
+            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+    };
+}
+
 /* ------------------------------ Check if DiagnosticReport needs to be created ---------------------------- */
-group CreateDiagnosticReportSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+group CreateDiagnosticReportSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
     operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
     {
         operations -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticReport then
         {
-            operations then TransformDiagnosticReportSonstigeUntersuchungen(operations, diagnosticReport, composition, section);
+            operations then TransformDiagnosticReportSonstigeUntersuchungen(operations, diagnosticReport, composition, section, index);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticReport, '\'DiagnosticReport/\' + $this.id');
         }; 
     };
 }
 
 /* ------------------------------ DiagnosticReport ---------------------------- */
-group TransformDiagnosticReportSonstigeUntersuchungen(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement)
+group TransformDiagnosticReportSonstigeUntersuchungen(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
+    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+
     // Metadata
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
@@ -64,11 +112,12 @@ group TransformDiagnosticReportSonstigeUntersuchungen(source operations: Backbon
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
+    // Subject 
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
     operations.data as data then
     {
-        // Create index for observations
-        let index = create('RepeatIndex');
-
         // ID + Composition insert
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
         {
@@ -76,13 +125,11 @@ group TransformDiagnosticReportSonstigeUntersuchungen(source operations: Backbon
             values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
         };
 
-        // Reference Patient
-        operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
         // Reference Observations
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_weitereUntersuchung'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_weitereUntersuchung'" then
         {
             values.value as value -> tgt.result = create('Reference') as result, result.reference = evaluate(value, '\'Observation/\' + $this');
+            operations then IncrementSectionIndex(operations, index);
         };
 
         // Reference performer -> Organization
@@ -99,21 +146,24 @@ group TransformDiagnosticReportSonstigeUntersuchungen(source operations: Backbon
                                                           befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
                                                           befundNummer.value = id;
         };
+
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
 }
 
 /* ------------------------------ Organization ---------------------------- */
 group CreateOrganizationSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then
         {
-            operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then
-            {
-                operations then TransformOrganizationSonstigeUntersuchungen(operations, organization, composition, section);
-                operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
-            };
+            operations then TransformOrganizationSonstigeUntersuchungen(operations, organization, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
         };
     };
 }
@@ -145,15 +195,23 @@ group TransformOrganizationSonstigeUntersuchungen(source operations: BackboneEle
 /* ------------------------------ Check if Observation needs to be created ---------------------------- */
 group CreateObservationSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
+    // since there can be more than 1 instance of the Untersuchung section we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index);
-    operations.data as data, data.values as values where "repeatindex = %index.sectionIndex" then
+
+    operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 3 and groupindex = 0 and itemid = 'id_2026'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2527'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2027'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2028'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2282'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2283'
+                                                                                                or blockindex = 3 and groupindex = 0 and itemid = 'id_2031')" then
     {
         operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
         {
             operations then TransformObservationSonstigeUntersuchungen(operations, observation, composition, section, index);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
-            operations then IncrementSectionIndex(operations, index);
         }; 
+        operations then IncrementSectionIndex(operations, index);
     };
 }
 
@@ -173,6 +231,10 @@ group TransformObservationSonstigeUntersuchungen(source operations: BackboneElem
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
+    // Subject 
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
     operations.data as data then
     {
         // ID
@@ -182,10 +244,7 @@ group TransformObservationSonstigeUntersuchungen(source operations: BackboneElem
             values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        // References
-        // Subject
-        operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-        
+        // References        
         // Organization
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
         {
@@ -193,10 +252,10 @@ group TransformObservationSonstigeUntersuchungen(source operations: BackboneElem
         };
 
         // Specimen
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        {
-            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        };
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
 
         // SOP-Versionsnummer des Standorts
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2618'" then
@@ -308,25 +367,32 @@ group TransformObservationSonstigeUntersuchungen(source operations: BackboneElem
     };
 }
 
-
 /* -------------------------------------- Check if ServiceRequest needs to be created -------------------------------------------- */
-group CreateServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+group CreateServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
+
     operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'
-                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
-                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
+                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
     {
-        operations -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
         {
-            operations then TransformServiceRequestSonstigeUntersuchungen(operations, serviceRequest, composition, section);
+            operations then TransformServiceRequestSonstigeUntersuchungen(operations, serviceRequest, composition, section, index);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
         };
-    };
+    }; 
 }
 
 /* -------------------------------------- ServiceRequest -------------------------------------------- */
-group TransformServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
+group TransformServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
+    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+
     // Metadata
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
@@ -352,7 +418,8 @@ group TransformServiceRequestSonstigeUntersuchungen(source operations: BackboneE
             code.extension as dataAbsentReason, 
             dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');    
-        
+
+    // Access data    
     operations.data as data then
     {
         // References
@@ -363,20 +430,24 @@ group TransformServiceRequestSonstigeUntersuchungen(source operations: BackboneE
             values.value as value -> section.entry = create('Reference') as anforderungTestung, anforderungTestung.reference = evaluate(value, '\'ServiceRequest/\' + $this');
         };
 
-        // Reference Patient
-        operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-        // Reference performer -> Organization
+        // Organization
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
         {
-            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
         };
 
         // Reference Observations
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_weitereUntersuchung'" then
+        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_weitereUntersuchung'" then
         {
             values.value as value -> tgt.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(value, '\'Observation/\' + $this');
+            operations then IncrementSectionIndex(operations, index);
         };
+
+        // Reference Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
 
         //Status der Untersuchungen
         //Durchfuehrung
