@@ -157,7 +157,9 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
     let index = create('RepeatIndex');
 
     /* ------------------------------ Antrag ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset caseIndex and maxIndex
+    src then InitCaseIndex(src, index); // Reset caseIndex
+    src then InitMaxIndexAntrag(src, index); // Reset maxIndex
+
     src.operations as operations,
         // Execute as many times as there are Basisangaben
         operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
@@ -251,6 +253,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
         /* ------------------------------ Increment index ---------------------------- */
         src then IncrementCaseIndex(src, index);
+        src then InitMaxIndexAntrag(src, index); // Reset maxIndex
         //src -> tgt.id = evaluate(index, '$this.formIndex');
     };
 }
@@ -261,7 +264,9 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
     let index = create('RepeatIndex');
 
     /* ------------------------------ Befund ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset caseIndex and maxIndex
+    src then InitCaseIndex(src, index); // Reset caseIndex
+    src then InitMaxIndexBefund(src, index); // Reset maxIndex
+
     src.operations as operations,
     // Execute as many times as there are Basisangaben
     operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" -> 
@@ -389,6 +394,7 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 
         /* ------------------------------ Increment index ---------------------------- */
         src then IncrementCaseIndex(src, index);
+        src then InitMaxIndexBefund(src, index); // Reset maxIndex
         //src -> tgt.id = evaluate(index, '$this.formIndex');
     };
 }
@@ -413,16 +419,14 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
     src -> index.caseIndex = 1;
-    src then InitMaxIndex(src, index); // find max formIndex given this caseIndex
 }
 
 group IncrementCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
     src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
-    src then InitMaxIndex(src, index); // find max formIndex given this increased caseIndex
 }
 
-group InitMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
+group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
 {
     // Create this let because we can't check on two parameters with the same name in FHIRPath
     let caseIndex = evaluate(index, '$this.caseIndex');
@@ -430,7 +434,6 @@ group InitMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
     // init maxIndex, then find maxFormIndex
     src -> index.maxIndex = 1;
 
-    /* ------------------------------ Antrag ---------------------------- */
     // Anforderung
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-AF') and type = 'save'" then
     {
@@ -462,8 +465,16 @@ group InitMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
         operations where "crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger() > %index.maxIndex" 
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger()');
     };
+}
 
-    /* ------------------------------ Befund ---------------------------- */
+group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
+{
+    // Create this let because we can't check on two parameters with the same name in FHIRPath
+    let caseIndex = evaluate(index, '$this.caseIndex');
+
+    // init maxIndex, then find maxFormIndex
+    src -> index.maxIndex = 1;
+
     // Histologie
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-HL') and type = 'save'" then
     {
@@ -528,6 +539,7 @@ group InitMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger()');
     };
 }
+
 
 group InitFormIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
