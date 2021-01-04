@@ -1,6 +1,15 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_FastTrack"
 
+/*
+TODO
+    - what to do with uuid_fasttrack_egfr1921? Should there be another observation created for this uuid? Should the other Observations than be a member of this one?
+    - Observation.code: ValueSet seem to have changed
+        - clarify difference between https://simplifier.net/nngm-molpatho-form/actnonactna-value-codes and https://simplifier.net/nngm-molpatho-form/ergebnis-fasttrack
+          both ValueSets contain the same codes but used as Observation.code and Observation.valueCodeableConcept despite Observation.Code is assigned like 'BRAF Exon 15'
+    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
+*/
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackFHIR" = nNGM_Mapping_FastTrackFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
@@ -11,88 +20,104 @@ uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
 
 /* ------------------------------ Bundle ---------------------------- */
-group TransformBundleFastTrack(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleFastTrack(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
 {
-    src -> bundle.entry as entry then CreateSpecimenFastTrack(src, entry);
-    src -> bundle.entry as entry then CreateDiagnosticReportFastTrack(src, entry);
-    src -> bundle.entry as entry then CreateOrganizationFastTrack(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationBRAFExon15(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationBRAFExon19(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationBRAFExon20(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationBRAFExon21(src, entry);
-    src -> bundle.entry as entry then CreateTransformObservationKRASExon2(src, entry);
-    src -> bundle.entry as entry then CreateServiceRequestFastTrack(src, entry);
+    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'fast-track') then
+    {
+        // operations then CreateSpecimenFastTrack(operations, bundle, composition, section);
+        operations then CreateDiagnosticReportFastTrack(operations, bundle, composition, section);
+        operations then CreateOrganizationFastTrack(operations, bundle, composition, section);
+        operations then CreateObservationFastTrack(operations, bundle, composition, section);
+        operations then CreateServiceRequestFastTrack(operations, bundle, composition, section);
+    };
 }
 
 /* ------------------------------ Check if Specimen needs to be created ---------------------------- */
-group CreateSpecimenFastTrack(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateSpecimenFastTrack(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
         {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenFastTrack(src, specimen);
+            operations then TransformSpecimenFastTrack(operations, specimen, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimenFastTrack(source src: CTS_Transport, target tgt: Specimen)
+group TransformSpecimenFastTrack(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
     // Type
-    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+    operations -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
                                                                     snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
                                                                     snomedGlobalPatientSet.code = 'UNKNOWN';
 
     // Patient reference 
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
-        // Biopsy-ID
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
         {
-            values.value as bid -> tgt.identifier = create('identifier') as biopsieID,
-                                                            biopsieID.system= 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer',
-                                                            biopsieID.value = bid;
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         };
 
+        // Referenzen
+        // Request
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        {
+            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
     };
 }
 
 /* ------------------------------ Check if DiagnosticReport needs to be created ---------------------------- */
-group CreateDiagnosticReportFastTrack(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateDiagnosticReportFastTrack(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
     {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        operations -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticreport then 
         {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportFastTrack(src, diagnosticReport);
+            operations then TransformDiagnosticReportFastTrack(operations, diagnosticreport, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticreport, '\'DiagnosticReport/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ DiagnosticReport ---------------------------- */
-group TransformDiagnosticReportFastTrack(source src: CTS_Transport, target tgt: DiagnosticReport)
+group TransformDiagnosticReportFastTrack(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
     
-    src ->  tgt.status as status, 
-            status.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.status as status, 
+                status.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src ->  tgt.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-            
-    src.operations as operations, operations.data as data then
+    operations ->  tgt.code as code, 
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+      
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
         // Untersuchungs ID
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
         {
@@ -100,29 +125,63 @@ group TransformDiagnosticReportFastTrack(source src: CTS_Transport, target tgt: 
                                                             befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
                                                             befundNummer.value = id;
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+        
+        // Observations
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2512'" then
+        {
+            // if EGFR Exon 19-21: create 3 observation references
+            values.value where "$this.value = 'EGFR Exon 19-21'" then
+            {
+                let EGFFR19 = 'EGFR Exon 19';
+                let EGFFR20 = 'EGFR Exon 20';
+                let EGFFR21 = 'EGFR Exon 21';
+                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, EGFFR19, reference);
+                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, EGFFR20, reference);
+                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, EGFFR21, reference);
+            };
+            values.value where "$this.value != 'EGFR Exon 19-21'" then
+            {
+                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, value, reference);
+            };
+        };
     };
 }
 
 /* ------------------------------ Check if Organization needs to be created ---------------------------- */
-group CreateOrganizationFastTrack(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateOrganizationFastTrack(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then 
         {
-            src -> tgt.resource = create('Organization') as organization then TransformOrganizationFastTrack(src, organization);
+            operations then TransformOrganizationFastTrack(operations, organization, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ Organization ---------------------------- */
-group TransformOrganizationFastTrack(source src: CTS_Transport, target tgt: Organization)
+group TransformOrganizationFastTrack(source operations: BackboneElement, target tgt: Organization, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
         // Standort
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
         {
@@ -131,37 +190,69 @@ group TransformOrganizationFastTrack(source src: CTS_Transport, target tgt: Orga
     };
 }
         
-/* ------------------------------ Check if Observation BRAF Exon 15 needs to be created---------------------------- */
-group CreateTransformObservationBRAFExon15(source src: CTS_Transport, target tgt: BackboneElement)
+/* ------------------------------ Check which Observation is required ---------------------------- */
+group CreateObservationFastTrack(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    // Check whether observation should be created
+    operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2512'" then
     {
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1945'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1912'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1913'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1946'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1947'
-        or blockindex = 4 and groupindex = 0 and itemid = 'id_1948'" then
+        // BRAF Exon 15
+        values.value as value where "value = 'BRAF Exon 15'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon15(src, observation);
+            operations then TransformObservationBRAFExon15(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
+        };
+        // EGFR 19-21
+        values.value as value where "value = 'EGFR Exon 19-21'" then 
+        {
+            operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+            {
+                operations then TransformObservationEGFRExon19(operations, observation, composition, section);
+                operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id'); 
+            };
+            operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+            {
+                operations then TransformObservationEGFRExon20(operations, observation, composition, section);
+                operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id'); 
+            };
+            operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+            {
+                operations then TransformObservationEGFRExon21(operations, observation, composition, section);
+                operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id'); 
+            };                    
+        };
+        // KRAS Exon 2
+        values.value as value where "value = 'KRAS Exon 2'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
+        {
+            operations then TransformObservationKRASExon2(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');        
         };
     };
 }
 
 /* ------------------------------ Observation BRAF Exon 15 ---------------------------- */
-group TransformObservationBRAFExon15(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationBRAFExon15(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
     
     //Fast Track code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C158854', 'BRAF Exon 15 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C158854', 'BRAF Exon 15 Mutation');
 
     //Fast track category
-    src then MapSopNumberCategoryMethodStatus(src, tgt);
+    operations then MapSopNumberCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_fasttrack_braf15'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
 
         // Date of Assessment
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1945'" then
@@ -192,7 +283,7 @@ group TransformObservationBRAFExon15(source src: CTS_Transport, target tgt: Obse
         // Ergebnis
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1946'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('https://simplifier.net/nngm-molpatho-form/ergebnis-fasttrack', ergebnis);
         };
         
         //Change DNA
@@ -215,43 +306,46 @@ group TransformObservationBRAFExon15(source src: CTS_Transport, target tgt: Obse
             };
         };
 
-    };
-}
-
-/* ------------------------------ Check if Observation EGFR Exon 19 needs to be created---------------------------- */
-group CreateTransformObservationBRAFExon19(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1950'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_1951'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_1952'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon19(src, observation);
-        };
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
 /* ------------------------------ Observation EGFR Exon 19 ---------------------------- */
-group TransformObservationBRAFExon19(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationEGFRExon19(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
     //Fast Track code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128662','EGFR Exon 19 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128662','EGFR Exon 19 Mutation');
 
     //Fast track category
-    src then MapSopNumberCategoryMethodStatus(src, tgt);
+    operations then MapSopNumberCategoryMethodStatus(operations, tgt);
 
-    src then MapEGFREXO1921(src, tgt);
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Date of Assessment, Assay, Hersteller
+    operations then MapEGFREXO1921(operations, tgt);
     
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr19'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1950'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('https://simplifier.net/nngm-molpatho-form/ergebnis-fasttrack', ergebnis);
         };
 
         //Change DNA
@@ -273,44 +367,47 @@ group TransformObservationBRAFExon19(source src: CTS_Transport, target tgt: Obse
                 AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
             };
         };
-    };
-}
 
-/* ------------------------------ Check if Observation EGFR Exon 20 needs to be created ---------------------------- */
-group CreateTransformObservationBRAFExon20(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1954'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_1955'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_1956'
-        " then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon20(src, observation);
-        };
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
 /* ------------------------------ Observation EGFR Exon 20 ---------------------------- */
-group TransformObservationBRAFExon20(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationEGFRExon20(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
     //Fast Track code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128663','EGFR Exon 20 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128663','EGFR Exon 20 Mutation');
 
     //Fast track category
-    src then MapSopNumberCategoryMethodStatus(src, tgt);
+    operations then MapSopNumberCategoryMethodStatus(operations, tgt);
+    
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src then MapEGFREXO1921(src, tgt);
+    // Date of Assessment, Assay, Hersteller
+    operations then MapEGFREXO1921(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr20'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1954'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('https://simplifier.net/nngm-molpatho-form/ergebnis-fasttrack', ergebnis);
         };
 
         //Change DNA
@@ -332,44 +429,47 @@ group TransformObservationBRAFExon20(source src: CTS_Transport, target tgt: Obse
                 AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
             };
         };
-    };
-}
 
-/* ------------------------------ Check if Observation EGFR Exon 21 needs to be created ---------------------------- */
-group CreateTransformObservationBRAFExon21(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1958'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_1959'
-        or blockindex = 5 and groupindex = 0 and itemid = 'id_1960'
-        " then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationBRAFExon21(src, observation);
-        };
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
 }
 
 /* ------------------------------ Observation EGFR Exon 21 ---------------------------- */
-group TransformObservationBRAFExon21(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationEGFRExon21(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
     //Fast Track code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128666','EGFR Exon 21 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C128666','EGFR Exon 21 Mutation');
 
     //Fast track category
-    src then MapSopNumberCategoryMethodStatus(src, tgt);
+    operations then MapSopNumberCategoryMethodStatus(operations, tgt);
+    
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src then MapEGFREXO1921(src, tgt);
+    // Date of Assessment, Assay, Hersteller
+    operations then MapEGFREXO1921(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr21'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1958'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('https://simplifier.net/nngm-molpatho-form/ergebnis-fasttrack', ergebnis);
         };
 
         //Change DNA
@@ -391,41 +491,40 @@ group TransformObservationBRAFExon21(source src: CTS_Transport, target tgt: Obse
                 AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
             };
         };
-    };
-}
-
-/* ------------------------------ Check if Observation KRAS Exon 2 needs to be created ---------------------------- */
-group CreateTransformObservationKRASExon2(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1961'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2610'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_2611'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_1962'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_1963'
-        or blockindex = 6 and groupindex = 0 and itemid = 'id_1964'
-        " then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationKRASExon2(src, observation);
-        };
+        
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
 /* ------------------------------ Observation KRAS Exon 2 ---------------------------- */
-group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationKRASExon2(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack';
 
     //Fast Track code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C135715','KRAS Exon 2 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/fasttrack-obs-codes', 'C135715','KRAS Exon 2 Mutation');
 
     //Fast track category
-    src then MapSopNumberCategoryMethodStatus(src, tgt);
+    operations then MapSopNumberCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fasttrack_kras2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1961'" then
         {
@@ -455,8 +554,9 @@ group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Obser
         // Ergebnis
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1962'" then
         {
-            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/act_non_act_na-value-codes', ergebnis, ergebnis);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('https://simplifier.net/nngm-molpatho-form/ergebnis-fasttrack', ergebnis);
         };
+
         //Change DNA
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1963'" then
         {
@@ -466,6 +566,7 @@ group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Obser
                 DNAchg -> componentDNAchg.valueString = DNAchg;
             };
         };
+
         //Change Protein
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1964'" then
         {
@@ -475,47 +576,195 @@ group TransformObservationKRASExon2(source src: CTS_Transport, target tgt: Obser
                 AminoAcidChg -> componentAminoAcidChg.valueString = AminoAcidChg;
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
 
+/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
+group CreateServiceRequestFastTrack(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+{
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
 
-group MapSopNumberCategoryMethodStatus(source src: CTS_Transport, target tgt: Observation)
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'
+                                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2462'
+                                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+    {
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+        {
+            operations then TransformServiceRequestFastTrack(operations, serviceRequest, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
+        };
+    };
+}
+
+/* -------------------------------------- Service Request -------------------------------------------- */
+group TransformServiceRequestFastTrack(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
+{
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    // Status Extensions
+    operations then TransformFastTrackStatusExtension(operations, tgt);
+
+    // Intent
+    operations -> tgt.intent = cast('proposal', 'FHIR.code');
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Category
+    operations -> tgt.category as category, 
+                category.coding as coding,
+                coding.code as code,
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Code 
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'fast-track');
+
+    // authoredOn
+    operations -> tgt.authoredOn as code, 
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Access data
+    operations.data as data then
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+
+        //Status der Untersuchungen
+        //Durchfuehrung
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
+        {
+            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            {
+                value -> tgt.status = 'active';
+            };
+            values.value as value where "$this.value = 'abgeschlossen'" then 
+            {
+                value -> tgt.status = 'completed';
+            };
+        };
+
+        // Referenzen
+        // DiagnosticReport
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
+         // Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        // Observations
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2512'" then
+        {
+            // if EGFR Exon 19-21: create 3 observation references
+            values.value where "$this.value = 'EGFR Exon 19-21'" then
+            {
+                let EGFFR19 = 'EGFR Exon 19';
+                let EGFFR20 = 'EGFR Exon 20';
+                let EGFFR21 = 'EGFR Exon 21';
+                values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, EGFFR19, reference);
+                values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, EGFFR20, reference);
+                values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, EGFFR21, reference);
+            };
+            values.value where "$this.value != 'EGFR Exon 19-21'" then
+            {
+                values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, value, reference);
+            };
+        };
+
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+    };
+}
+
+/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
+group TransformFastTrackStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
+{
+    operations.data as data then
+    {
+        // Status des Abschlusses
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            {
+                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+                {
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.url = 'status';
+                };
+            };
+        };
+
+        //Datum des Abschlusses
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+        {
+            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
+            {
+                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+                {
+                    value -> datumExtension.valueDate = dateOp(value, 'date');
+                    value -> datumExtension.url = 'datum';
+                };
+            };
+        };
+    };
+}
+
+/*-----------------HELPERS----------------------------*/
+group MapSopNumberCategoryMethodStatus(source operations: BackboneElement, target tgt: Observation)
 {
     // Method
-    src -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
+    operations -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
 
     // Status
-    src ->  tgt.status as status, 
-            status.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.status = cast('final', 'FHIR.code');
 
     // SOP-Versionsnummer des Standorts
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2486'" then
     {
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2486'" then
+        values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
         {
-            values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
-            {
-                sop -> componentSop.valueString = sop;
-                sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
-            };
+            sop -> componentSop.valueString = sop;
+            sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
         };
     };
     
     //FISH category
-    src -> tgt.category as category then
+    operations -> tgt.category as category then
     {
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
-                                                                coding.code = 'laboratory';                                                    
+        operations -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                    coding.code = 'laboratory';                                                    
     };
 }
 
-
-group MapEGFREXO1921(source src: CTS_Transport, target tgt: Observation)
+group MapEGFREXO1921(source operations: BackboneElement, target tgt: Observation)
 {
     // ------------------------------ EGFR Exon 19-21 ---------------------------- 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
         // Date of Assessment
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'ft_grp_egfr_19-21'" then
@@ -545,99 +794,42 @@ group MapEGFREXO1921(source src: CTS_Transport, target tgt: Observation)
     };
 }
 
-/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
-group CreateServiceRequestFastTrack(source src: CTS_Transport, target tgt: BackboneElement)
+group SetReferenceToObservation(source operations: BackboneElement, source name: string, target tgt: Reference)
 {
-    src.operations as operations, operations.data as data then
+    // Check which observation should be referenced
+    name where "%name = 'BRAF Exon 15'" then 
     {
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2462'
-        or blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+        operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_fasttrack_braf15'" then
         {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestFastTrack(src, serviceRequest);
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
-}
-
-/* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestFastTrack(source src: CTS_Transport, target tgt: ServiceRequest)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // intent
-    src -> tgt.intent = 'proposal';
-
-     // Subject
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-    // Category
-    src -> tgt.category as category, 
-            category.coding as coding,
-            coding.code as code,
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Code 
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'fast-track');
-
-    // authoredOn
-    src -> tgt.authoredOn as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    src.operations as operations, operations.data as data then
+    name where "%name = 'EGFR Exon 19'" then 
     {
-        //Status der Untersuchungen
-        //Durchfuehrung
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
+        operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr19'" then
         {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
-            {
-                value -> tgt.status = 'active';
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = 'completed';
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
-
-    // Extensions
-    src then TransformFastTrackStatusExtension(src, tgt);
-}
-
-/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
-group TransformFastTrackStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
-{
-    src.operations as operations, operations.data as data then
+    name where "%name = 'EGFR Exon 20'" then 
     {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
+        operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr20'" then
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
-                    value -> statusExtension.url = 'status';
-                };
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
-
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+    };
+    name where "%name = 'EGFR Exon 21'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr21'" then
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
-                {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
-                };
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'KRAS Exon 2'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fasttrack_kras2'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
 }
