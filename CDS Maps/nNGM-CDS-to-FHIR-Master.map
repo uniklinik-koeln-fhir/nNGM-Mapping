@@ -231,7 +231,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
         // Resistenztestung
         src then InitFormIndex(src, index);
-        src.operations as operations, operations where "%index.formIndex < %maxIndex" then
+        src.operations as operations, operations where "%index.formIndex <= %maxIndex" then
         {
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
             {
@@ -417,6 +417,7 @@ group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 group IncrementCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
     src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
+    src then InitMaxIndex(src, index); // find max formIndex given this increased caseIndex
 }
 
 group InitMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
@@ -425,31 +426,38 @@ group InitMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
     let caseIndex = evaluate(index, '$this.caseIndex');
 
     src -> index.maxIndex = 1;
+
     // Antrag: find highest formIndex
-    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.maxIndex.toString() and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-AF') and type = 'save'" then
     {
-        src then IncrementMaxIndex(src, index);
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'-AF\') + \'-AF\'.length()).toInteger() > %index.maxIndex" 
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-AF\') + \'-AF\'.length()).toInteger()');
     };
-    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.maxIndex.toString() and type = 'save'" then
+
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-TNM') and type = 'save'" then
     {
-        src then IncrementMaxIndex(src, index);
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'-TNM\') + \'-TNM\'.length()).toInteger() > %index.maxIndex" 
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-TNM\') + \'-TNM\'.length()).toInteger()');
     };
-    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.maxIndex.toString() and type = 'save'" then
+
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-RT') and type = 'save'" then
     {
-        src then IncrementMaxIndex(src, index);
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'-RT\') + \'-RT\'.length()).toInteger() > %index.maxIndex" 
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-RT\') + \'-RT\'.length()).toInteger()');
     };
-    src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.maxIndex.toString() and type = 'save'" then
+
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-VB') and type = 'save'" then
     {
-        src then IncrementMaxIndex(src, index);
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger() > %index.maxIndex" 
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger()');
     };
 
     // Befund: find highest formIndex
 
-}
-
-group IncrementMaxIndex(source src: CTS_Transport, target index: RepeatIndex)
-{
-    src -> index.maxIndex = evaluate(index, '$this.maxIndex + 1');
 }
 
 group InitFormIndex(source src: CTS_Transport, target index: RepeatIndex)
