@@ -48,7 +48,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     //src then MapVorbefund(src, tgt);
     
     // TODO
-    // src then MapAntrag(src, tgt);
+    src then MapAntrag(src, tgt);
 
     // TODO
     src then MapBefund(src, tgt);
@@ -261,7 +261,7 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
     let index = create('RepeatIndex');
 
     /* ------------------------------ Befund ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset index
+    src then InitCaseIndex(src, index); // Reset caseIndex and maxIndex
     src.operations as operations,
     // Execute as many times as there are Basisangaben
     operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" -> 
@@ -274,6 +274,7 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
         let caseIndex = evaluate(index, '$this.caseIndex');
+        let maxIndex = evaluate(index, '$this.maxIndex');
 
         /* ------------------------------ Bundle ---------------------------- */
 
@@ -368,14 +369,16 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
             src then IncrementFormIndex(src, index);
         };
 
-        // Liquid Biopsy
         src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'" then
+        src.operations as operations, operations where "%index.formIndex <= %maxIndex" then
         {
-            src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, index);
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, index);
+            };                
             src then IncrementFormIndex(src, index);
         };
-
+        
         // Beurteilung
         src then InitFormIndex(src, index);
         src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
