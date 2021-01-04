@@ -2,7 +2,11 @@
 ///title = "FusionNGSFHIR"
 /*
 TODO
-- Repeatindex
+    - Repeatindex is off by +1
+    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
+
+    - Observations: component: erster/zweiter Fusionspartner.valueCodeableConcept binding needs update, 
+      probably https://simplifier.net/nngm-molpatho-form/hgnc-codes now as http://uk-koeln.de/fhir/ValueSet/hgnc-codes doesn't exist?
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR" = nNGM_Mapping_FusionNGSFHIR
@@ -17,140 +21,299 @@ uses "http://hl7.org/fhir/StructureDefinition/ServiceReqeust" as target
 
 
 /* ------------------------------ Bundle ---------------------------- */
-group TransformBundleFusionNGS(source src: CTS_Transport, target bundle: Bundle)
+group TransformBundleFusionNGS(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target index: RepeatIndex)
 {
-    src -> bundle.id = uuid();
-    src -> bundle.type = 'collection';
+    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'fusion-ngs') then
+    {
+        // operations then CreateSpecimenFusionNGS(operations, bundle, composition, section);
+        operations then CreateOrganizationFusionNGS(operations, bundle, composition, section);
 
-    src -> bundle.entry as entry then CreateSpecimenFusionNGS(src, entry);
-    src -> bundle.entry as entry then CreateDiagnosticReportFusionNGS(src, entry);
-    src -> bundle.entry as entry then CreateObservationALK(src, entry);
-    src -> bundle.entry as entry then CreateObservationRET(src, entry);
-    src -> bundle.entry as entry then CreateObservationROS1(src, entry);
-    src -> bundle.entry as entry then CreateObservationNTRK1(src, entry);
-    src -> bundle.entry as entry then CreateObservationNTRK2(src, entry);
-    src -> bundle.entry as entry then CreateObservationNTRK3(src, entry);
-    src -> bundle.entry as entry then CreateObservationFGFR1(src, entry);
-    src -> bundle.entry as entry then CreateObservationFGFR2(src, entry);
-    src -> bundle.entry as entry then CreateObservationFGFR3(src, entry);
-    src -> bundle.entry as entry then CreateObservationSonstigesFusionNGS(src, entry);
-    src -> bundle.entry as entry then CreateServiceRequestFusionNGS(src, entry);
+        // there may be more than 1 instance of Observation, thus an index is needed to reference (and create) the correct observation
+        operations then CreateDiagnosticReportFusionNGS(operations, bundle, composition, section, index);
+        operations then CreateObservationsFusionNGS(operations, bundle, composition, section, index);
+        operations then CreateServiceRequestFusionNGS(operations, bundle, composition, section, index);
+    };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
-group CreateSpecimenFusionNGS(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateSpecimenFusionNGS(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
         {
-            src -> tgt.resource = create('Specimen') as specimen then TransformSpecimenFusionNGS(src, specimen);
+            operations then TransformSpecimenFusionNGS(operations, specimen, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
         };
     };
 }
+
 /* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimenFusionNGS(source src: CTS_Transport, target tgt: Specimen)
+group TransformSpecimenFusionNGS(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
 
     // Type : Item required on simplifier
-    src -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
-                                                                    snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                                    snomedGlobalPatientSet.code = 'UNKNOWN';
+    operations -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                            snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                            snomedGlobalPatientSet.code = 'UNKNOWN';
 
-    // Patient 
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    // Subject 
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {           
-        //Biopsy-ID  
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
         {
-            values.value as value ->  tgt.identifier = create('Identifier') as biopsieId, 
-                                      biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'),
-                                      biopsieId.value = value;
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
+
+        // Referenzen
+        // Request
+        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        {
+            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
         };
     };
 }
+
 /* ------------------------------DiagnosticReport---------------------------- */
-group CreateDiagnosticReportFusionNGS(source src: CTS_Transport, target tgt: BackboneElement)
+group CreateDiagnosticReportFusionNGS(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
     {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
+        operations -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticreport then 
         {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticReport then TransformDiagnosticReportFusionNGS(src, diagnosticReport);
-        };          
-    };
+            operations then TransformDiagnosticReportFusionNGS(operations, diagnosticreport, composition, section, index);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticreport, '\'DiagnosticReport/\' + $this.id');
+        };
+    }; 
 }
+
 /* ------------------------------DiagnosticReport---------------------------- */
-group TransformDiagnosticReportFusionNGS(source src: CTS_Transport, target tgt: DiagnosticReport)
+group TransformDiagnosticReportFusionNGS(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
+    // since there can be more than 1 instance of the Sonstiges Observation we need an index to assign the corresponding data to each observation
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     //status: Item required on simplifier
-    src ->  tgt.status as status, 
-            status.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // TODO: has binding on http://uk-koeln.de/fhir/ValueSet/beurteilungStatus
+    operations ->  tgt.status as status, 
+                status.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     //code: Item required on simplifie
-    src ->  tgt.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.code as code, 
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    src.operations as operations, operations.data as data then
+    // Subject 
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
-        /* ------------------------------Referenzen---------------------------- */
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
+        // Referenzen
         // Untersuchungs-ID
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
         {
-            values.value as id ->    tgt.identifier = create('identifier') as befundNummer,
-                                                            befundNummer.system= 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
-                                                            befundNummer.value = id;
+            values.value as id -> tgt.identifier = create('identifier') as befundNummer,
+                                                    befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                    befundNummer.value  = id;
+        };
+
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+
+        // Observations
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2511'" then
+        {
+            // if Sonstiges: create n observation references (with n according to repeatindex)
+            values.value where "$this.value = 'Sonstiges'" then
+            {
+                operations.data as data, data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsFusionExpression_sonstiges'" then
+                {
+                    values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+                    operations then IncrementSectionIndex(operations, index);
+                };
+            };
+            values.value where "$this.value != 'Sonstiges'" then
+            {   
+                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, value, reference);
+            };
         };
     };
 }
 
-/* ------------------ Check if Observation ALK needs to be creared  --------------------- */
-group CreateObservationALK(source src: CTS_Transport, target tgt: BackboneElement)
+/* ---------------------------- Organization -------------------------- */
+group CreateOrganizationFusionNGS(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
     {
-        data.values as values where   "blockindex = 5 and groupindex = 0 and itemid ='id_2098'
-                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2099'
-                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2127'
-                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2128'
-                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2129'
-                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2130'
-                                    or blockindex = 5 and groupindex = 0 and itemid ='id_2131'" then
+        operations -> bundle.entry as entry, entry.resource = create('Organization') as organization then 
         {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationALK(src, observation);
+            operations then TransformOrganizationFusionNGS(operations, organization, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(organization, '\'Organization/\' + $this.id');
         };
     };
 }
-/* ------------------------------ Observation ALK ----------------------------------- */
-group TransformObservationALK(source src: CTS_Transport, target tgt: Observation)
+
+/* ---------------------------- Organization -------------------------- */
+group TransformOrganizationFusionNGS(source operations: BackboneElement, target tgt: Organization, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
+
+    // Access data
+    operations.data as data then
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        /* ------------------------------ Netzwerkzentrum ---------------------------- */
+        // Standort
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
+        {
+            values.value as name -> tgt.name = name;
+        };
+    };
+}
+
+/* ------------------------------ Check which Observation is required ---------------------------- */
+group CreateObservationsFusionNGS(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+{
+    // since there can be more than 1 instance of the Sonstiges Observation we need an index to assign the corresponding data to each observation
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+
+    // Check whether observation should be created
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2511'" then
+    {
+        // ALK
+        values.value where "$this.value = 'ALK'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationALK(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // RET
+        values.value where "$this.value = 'RET'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationRET(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // ROS1
+        values.value where "$this.value = 'ROS1'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationROS1(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // NTRK1
+        values.value where "$this.value = 'NTRK1'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationNTRK1(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // NTRK2
+        values.value where "$this.value = 'NTRK2'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationNTRK2(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // NTRK3
+        values.value where "$this.value = 'NTRK3'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationNTRK3(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // FGFR1
+        values.value where "$this.value = 'FGFR1'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationFGFR1(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // FGFR2
+        values.value where "$this.value = 'FGFR2'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationFGFR2(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // FGFR3
+        values.value where "$this.value = 'FGFR3'" -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationFGFR3(operations, observation, composition, section);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');   
+        };
+        // Sonstiges: create n observation (with n according to repeatindex)
+        values.value where "$this.value = 'Sonstiges'" then
+        {
+            operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 14 and groupindex = 0 and itemid ='id_2246'
+                                                                                                        or blockindex = 14 and groupindex = 0 and itemid ='id_2254'
+                                                                                                        or blockindex = 14 and groupindex = 0 and itemid ='id_2255'
+                                                                                                        or blockindex = 14 and groupindex = 0 and itemid ='id_2256'
+                                                                                                        or blockindex = 14 and groupindex = 0 and itemid ='id_2257'
+                                                                                                        or blockindex = 14 and groupindex = 0 and itemid ='id_2258'
+                                                                                                        or blockindex = 14 and groupindex = 0 and itemid ='id_2259')" then
+            {
+                operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+                {
+                    operations then TransformObservationSonstigesFusionNGS(operations, observation, composition, section, index);
+                    operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id'); 
+                };
+                operations then IncrementSectionIndex(operations, index);
+            };
+        };
+    };
+}
+
+/* ------------------------------ Observation ALK ----------------------------------- */
+group TransformObservationALK(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
+{
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ALK', 'ALK');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ALK', 'ALK');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_alk'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid ='id_2098'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         //Phänotyp
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2099'" then
         {
@@ -223,46 +386,47 @@ group TransformObservationALK(source src: CTS_Transport, target tgt: Observation
                 value -> componentExon.code = cc('http://ncit.nci.nih.gov', 'C13231');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation RET needs to be creared  --------------------- */
-group CreateObservationRET(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 6 and  groupindex = 0 and itemid ='id_2183'
-                                    or blockindex = 6 and  groupindex = 0 and itemid ='id_2184'
-                                    or blockindex = 6 and  groupindex = 0 and itemid ='id_2206'
-                                    or blockindex = 6 and  groupindex = 0 and itemid ='id_2207'
-                                    or blockindex = 6 and  groupindex = 0 and itemid ='id_2208'
-                                    or blockindex = 6 and  groupindex = 0 and itemid ='id_2209'
-                                    or blockindex = 6 and  groupindex = 0 and itemid ='id_2210'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationRET(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation RET ----------------------------------- */
-group TransformObservationRET(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationRET(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'RET', 'RET');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'RET', 'RET');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ret'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2183'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         //Phänotyp
-        
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2184'" then
         {
             values.value as value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
@@ -274,6 +438,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
                 };
             };
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2206'" then
@@ -293,6 +458,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2207'" then
         {
@@ -302,6 +468,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2208'" then
         {
@@ -311,6 +478,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2209'" then
         {
@@ -320,6 +488,7 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
         //RET Exon
         data.values as values where "blockindex = 6 and  groupindex = 0 and itemid ='id_2210'" then
         {
@@ -329,44 +498,46 @@ group TransformObservationRET(source src: CTS_Transport, target tgt: Observation
                 value -> componentExon.code = cc('http://ncit.nci.nih.gov', 'C13231');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation ROS1 needs to be creared  --------------------- */
-group CreateObservationROS1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 7 and groupindex = 0 and itemid = 'id_2211'
-                                    or blockindex = 7 and groupindex = 0 and itemid = 'id_2212'
-                                    or blockindex = 7 and groupindex = 0 and itemid = 'id_2241'
-                                    or blockindex = 7 and groupindex = 0 and itemid = 'id_2242'
-                                    or blockindex = 7 and groupindex = 0 and itemid = 'id_2243'
-                                    or blockindex = 7 and groupindex = 0 and itemid = 'id_2244'
-                                    or blockindex = 7 and groupindex = 0 and itemid = 'id_2245'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationROS1(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation ROS1 ----------------------------------- */
-group TransformObservationROS1(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationROS1(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ROS1', 'ROS1');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'ROS1', 'ROS1');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ros1'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2211'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         //Phänotyp
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2212'" then
         {
@@ -379,6 +550,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
                 };
             };
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2241'" then
@@ -398,6 +570,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2242'" then
         {
@@ -407,6 +580,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2243'" then
         {
@@ -416,6 +590,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2244'" then
         {
@@ -425,6 +600,7 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
         //ROS1 Exon
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2245'" then
         {
@@ -434,42 +610,46 @@ group TransformObservationROS1(source src: CTS_Transport, target tgt: Observatio
                 value -> componentExon.code = cc('http://ncit.nci.nih.gov', 'C13231');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation NTRK1 needs to be creared  --------------------- */
-group CreateObservationNTRK1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 8 and groupindex = 0 and itemid = 'id_2540'
-                                    or blockindex = 8 and groupindex = 0 and itemid = 'id_2547'
-                                    or blockindex = 8 and groupindex = 0 and itemid = 'id_2548'
-                                    or blockindex = 8 and groupindex = 0 and itemid = 'id_2549'
-                                    or blockindex = 8 and groupindex = 0 and itemid = 'id_2550'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationNTRK1(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation NTRK1 ----------------------------------- */
-group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationNTRK1(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'NTRK1', 'NTRK1');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'NTRK1', 'NTRK1');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ntrk1'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2540'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2547'" then
@@ -489,6 +669,7 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2548'" then
         {
@@ -498,6 +679,7 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2549'" then
         {
@@ -507,6 +689,7 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2550'" then
         {
@@ -516,42 +699,46 @@ group TransformObservationNTRK1(source src: CTS_Transport, target tgt: Observati
                 value -> componentExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation NTRK2 needs to be creared  --------------------- */
-group CreateObservationNTRK2(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 9 and groupindex = 0 and itemid = 'id_2592'
-                                    or blockindex = 9 and groupindex = 0 and itemid = 'id_2596'
-                                    or blockindex = 9 and groupindex = 0 and itemid = 'id_2597'
-                                    or blockindex = 9 and groupindex = 0 and itemid = 'id_2598'
-                                    or blockindex = 9 and groupindex = 0 and itemid = 'id_2599'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationNTRK2(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation NTRK2 ----------------------------------- */
-group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationNTRK2(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'NTRK2', 'NTRK2');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'NTRK2', 'NTRK2');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ntrk2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2592'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2596'" then
@@ -571,6 +758,7 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2597'" then
         {
@@ -580,6 +768,7 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2598'" then
         {
@@ -589,6 +778,7 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2599'" then
         {
@@ -598,42 +788,46 @@ group TransformObservationNTRK2(source src: CTS_Transport, target tgt: Observati
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation NTRK3 needs to be creared  --------------------- */
-group CreateObservationNTRK3(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 10 and groupindex = 0 and itemid = 'id_2584'
-                                    or blockindex = 10 and groupindex = 0 and itemid = 'id_2588'
-                                    or blockindex = 10 and groupindex = 0 and itemid = 'id_2589'
-                                    or blockindex = 10 and groupindex = 0 and itemid = 'id_2590'
-                                    or blockindex = 10 and groupindex = 0 and itemid = 'id_2591'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationNTRK3(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation NTRK3 ----------------------------------- */
-group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationNTRK3(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'NTRK3', 'NTRK3');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'NTRK3', 'NTRK3');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ntrk3'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2584'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2588'" then
@@ -653,6 +847,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2589'" then
         {
@@ -662,6 +857,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2590'" then
         {
@@ -671,6 +867,7 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2591'" then
         {
@@ -680,42 +877,46 @@ group TransformObservationNTRK3(source src: CTS_Transport, target tgt: Observati
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation FGFR1 needs to be creared  --------------------- */
-group CreateObservationFGFR1(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 11 and groupindex = 0 and itemid = 'id_2576'
-                                    or blockindex = 11 and groupindex = 0 and itemid = 'id_2580'
-                                    or blockindex = 11 and groupindex = 0 and itemid = 'id_2581'
-                                    or blockindex = 11 and groupindex = 0 and itemid = 'id_2582'
-                                    or blockindex = 11 and groupindex = 0 and itemid = 'id_2583'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationFGFR1(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation FGFR1 ----------------------------------- */
-group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationFGFR1(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'FGFR1', 'FGFR1');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'FGFR1', 'FGFR1');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_fgfr1'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2576'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2580'" then
@@ -735,6 +936,7 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2581'" then
         {
@@ -744,6 +946,7 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2582'" then
         {
@@ -753,6 +956,7 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2583'" then
         {
@@ -762,42 +966,46 @@ group TransformObservationFGFR1(source src: CTS_Transport, target tgt: Observati
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation FGFR2 needs to be creared  --------------------- */
-group CreateObservationFGFR2(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 12 and groupindex = 0 and itemid = 'id_2568'
-                                    or blockindex = 12 and groupindex = 0 and itemid = 'id_2572'
-                                    or blockindex = 12 and groupindex = 0 and itemid = 'id_2573'
-                                    or blockindex = 12 and groupindex = 0 and itemid = 'id_2574'
-                                    or blockindex = 12 and groupindex = 0 and itemid = 'id_2575'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationFGFR2(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation FGFR2 ----------------------------------- */
-group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationFGFR2(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'FGFR2', 'FGFR2');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'FGFR2', 'FGFR2');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_fgfr2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2568'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2572'" then
@@ -817,6 +1025,7 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2573'" then
         {
@@ -826,6 +1035,7 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2574'" then
         {
@@ -835,6 +1045,7 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2575'" then
         {
@@ -844,42 +1055,46 @@ group TransformObservationFGFR2(source src: CTS_Transport, target tgt: Observati
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation FGFR3 needs to be creared  --------------------- */
-group CreateObservationFGFR3(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 13 and groupindex = 0 and itemid = 'id_2560'
-                                    or blockindex = 13 and groupindex = 0 and itemid = 'id_2564'
-                                    or blockindex = 13 and groupindex = 0 and itemid = 'id_2565'
-                                    or blockindex = 13 and groupindex = 0 and itemid = 'id_2566'
-                                    or blockindex = 13 and groupindex = 0 and itemid = 'id_2567'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationFGFR3(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation FGFR3 ----------------------------------- */
-group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationFGFR3(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'FGFR3', 'FGFR3');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'FGFR3', 'FGFR3');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_fgfr3'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2560'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2564'" then
@@ -899,6 +1114,7 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Fusionspartner
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2565'" then
         {
@@ -908,6 +1124,7 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
                 fusionspartner -> componentFusionspartner.code = cc('http://ncit.nci.nih.gov', 'C28510');
             };
         };
+
         //Anzahl der Fusionsreads
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2566'" then
         {
@@ -917,6 +1134,7 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
                 value -> componentAnzahlDerFusionsreads.code = cc('http://loinc.org', '82121-5');
             };
         };
+
         //5' Fusionspartner Exon
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2567'" then
         {
@@ -926,48 +1144,49 @@ group TransformObservationFGFR3(source src: CTS_Transport, target tgt: Observati
                 value -> componentFusionsPartnerExon.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'fusionspartner-exon');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
-/* ------------------ Check if Observation Sonstiges needs to be creared  --------------------- */
-group CreateObservationSonstigesFusionNGS(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2246'
-                                    or blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2254'
-                                    or blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2255'
-                                    or blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2256'
-                                    or blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2257'
-                                    or blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2258'
-                                    or blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2259'" then
-        {
-            src -> tgt.resource = create('Observation') as observation then TransformObservationSonstigesFusionNGS(src, observation);
-        };
-    };
-}
+
 /* ------------------------------ Observation Sonstiges ----------------------------------- */
-group TransformObservationSonstigesFusionNGS(source src: CTS_Transport, target tgt: Observation)
+group TransformObservationSonstigesFusionNGS(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression';
 
     //Code: Item required on simplifier profil
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Sonstiges', 'Sonstiges');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'Sonstiges', 'Sonstiges');
 
     //Fusion NGS
-    src then MapSOPAssayHerstellerCategoryMethodStatus(src, tgt);
+    operations then MapSOPAssayHerstellerCategoryMethodStatus(operations, tgt);
 
-    src.operations as operations, operations.data as data then
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsFusionExpression_sonstiges'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
         // Date of Assessment
-        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2246'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2246'" then
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
 
         /*---------------------NGS Fusion -------------------------------*/
         //Ergebnis
-        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2254'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2254'" then
         {
             values.value where "$this.value = 'positiv'" then 
                 {
@@ -984,8 +1203,9 @@ group TransformObservationSonstigesFusionNGS(source src: CTS_Transport, target t
                     values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/ergebnis-posNegIndNoCall', 'LA18198-4', 'No call');
                 };
         };
+
         //Erster Fusionspartner
-        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2255'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2255'" then
         {
             values.value as ersterfusionspartner -> tgt.component = create('BackboneElement') as componentErsterFusionspartner then
             {
@@ -993,8 +1213,9 @@ group TransformObservationSonstigesFusionNGS(source src: CTS_Transport, target t
                 ersterfusionspartner -> componentErsterFusionspartner.code = cc('http://loinc.org', '48018-6');
             };
         };
+
         //Zweiter Fusionspartner
-        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2256'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2256'" then
         {
             values.value as fusionspartner -> tgt.component = create('BackboneElement') as componentFusionspartner then
             {
@@ -1003,7 +1224,7 @@ group TransformObservationSonstigesFusionNGS(source src: CTS_Transport, target t
             };
         };
         //Anzahl der Fusionsreads
-        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2257'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2257'" then
         {
             values.value as value -> tgt.component = create('BackboneElement') as componentAnzahlDerFusionsreads then
             {
@@ -1013,7 +1234,7 @@ group TransformObservationSonstigesFusionNGS(source src: CTS_Transport, target t
         };
         
         //Exon erster Fusionspartner
-        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2258'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2258'" then
         {
             values.value as value -> tgt.component = create('BackboneElement') as componentErsterFusionspartnerExon then
             {
@@ -1022,7 +1243,7 @@ group TransformObservationSonstigesFusionNGS(source src: CTS_Transport, target t
             };
         };
         //Exon zweiter Fusionspartner
-        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = 0 and itemid ='id_2259'" then
+        data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_2259'" then
         {
             values.value as value -> tgt.component = create('BackboneElement') as componentFusionsPartnerExon then
             {
@@ -1030,26 +1251,32 @@ group TransformObservationSonstigesFusionNGS(source src: CTS_Transport, target t
                 value -> componentFusionsPartnerExon.code = cc('http://ncit.nci.nih.gov', 'fusionspartner-exon');
             };
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // }; 
     };
 }
+
 /* ------ Items for all the observation created---------- */
-group MapSOPAssayHerstellerCategoryMethodStatus(source src :CTS_Transport, target tgt: Observation){
+group MapSOPAssayHerstellerCategoryMethodStatus(source operations: BackboneElement, target tgt: Observation)
+{
     // Status : Item required on simplifier
-    src ->  tgt.status as status, 
-            status.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.status = cast('final', 'FHIR.code');
 
     //FISH category
-    src -> tgt.category as category then
+    operations -> tgt.category as category then
     {
-        src -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
-                                                                coding.code = 'laboratory';                                                    
+        operations -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                    coding.code = 'laboratory';                                                    
     };
 
-    src -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
+    operations -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
 
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {                      
         // SOP-Versionsnummer des Standorts
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2612'" then
@@ -1061,15 +1288,15 @@ group MapSOPAssayHerstellerCategoryMethodStatus(source src :CTS_Transport, targe
             };
         };
 
-        // Netzwerkzentrum
+        // Standort
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2435'" then
         {
-            values.value as nz -> tgt.component = create('BackboneElement') as nzcomponent then
+            values.value as nz -> tgt.component = create('BackboneElement') as standort then
             {
                 values.value as value where "%tgt.component.where(code = 'C25341').exists().not()" then
                 {
-                    nz -> nzcomponent.valueString = nz;
-                    nz -> nzcomponent.code = cc('http://ncit.nci.nih.gov', 'C25341');
+                    nz -> standort.valueString = nz;
+                    nz -> standort.code = cc('http://ncit.nci.nih.gov', 'C25341');
                 };
             };
         };
@@ -1096,49 +1323,128 @@ group MapSOPAssayHerstellerCategoryMethodStatus(source src :CTS_Transport, targe
         };
     };
 }
-/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
-group CreateServiceRequestFusionNGS(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where   "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'
-                                    or blockindex = 15 and groupindex = 0 and itemid = 'id_2462'
-                                    or blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            src -> tgt.resource = create('ServiceRequest') as serviceRequest then TransformServiceRequestFusionNGS(src, serviceRequest);
-        };
-    };
-}
-/* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestFusionNGS(source src: CTS_Transport, target tgt: ServiceRequest)
-{
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
-    src.operations as operations, operations.data as data then
+/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
+group CreateServiceRequestFusionNGS(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+{
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
+
+    operations.data as data, data.values as values where "blockindex = 15 and groupindex = 0 and itemid ='id_2520'
+                                                        or blockindex = 15 and groupindex = 0 and itemid ='id_2462'
+                                                        or blockindex = 15 and groupindex = 0 and itemid ='id_2521'" then
     {
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+        {
+            operations then TransformServiceRequestFusionNGS(operations, serviceRequest, composition, section, index);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
+        };
+    }; 
+}
+
+/* -------------------------------------- Service Request -------------------------------------------- */
+group TransformServiceRequestFusionNGS(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+{
+    // since there can be more than 1 instance of the Sonstiges Observation we need an index to assign the corresponding data to each observation
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+    
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    // intent : Item required on simplifier
+    operations -> tgt.intent = 'proposal';
+
+    // category : Item required on simplifier
+    operations -> tgt.category as category, 
+                category.coding as coding, 
+                coding.system as system, 
+                system.extension as dataAbsentReason, 
+                dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // code : Item required on simplifier
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'ngs-lung-panel');
+    
+    // Subjekt
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // authoredOn : Item required on simplifier
+    operations ->  tgt.authoredOn as authoredOn, 
+                    authoredOn.extension as dataAbsentReason, 
+                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Access data
+    operations.data as data then
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+
         //Status der Untersuchungen
         //Durchfuehrung
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'" then
         {
             values.value as value where "$this.value = 'in Bearbeitung'" then 
             {
-                value -> tgt.status = 'active' collate;
+                value -> tgt.status = 'active';
             };
             values.value as value where "$this.value = 'abgeschlossen'" then 
             {
-                value -> tgt.status = 'completed' collate;
+                value -> tgt.status = 'completed';
             };
         };
+
+        // Referenzen
+        // DiagnosticReport
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+        };
+
+        // Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+
+        // Observations
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2511'" then
+        {
+            // if Sonstiges: create n observation references (with n according to repeatindex)
+            values.value where "$this.value = 'Sonstiges'" then
+            {
+                operations.data as data, data.values as values where "blockindex = 14 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsFusionExpression_sonstiges'" then
+                {
+                    values.value as value -> tgt.reasonReference = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+                    operations then IncrementSectionIndex(operations, index);
+                };
+            };
+            values.value where "$this.value != 'Sonstiges'" then
+            {   
+                values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, value, reference);
+            };
+        };
+
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
 
     // Extensions
-    src then TransformFusionNGSStatusExtension(src, tgt);
+    operations then TransformFusionNGSStatusExtension(operations, tgt);
 }
+
 /* -------------------------------------- Create double extensions for Fusion NGS -------------------------------------------- */
-group TransformFusionNGSStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformFusionNGSStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
         // Status des Abschlusses
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2462'" then
@@ -1164,6 +1470,75 @@ group TransformFusionNGSStatusExtension(source src: CTS_Transport, target tgt: S
                     value -> datumExtension.url = 'datum';
                 };
             };
+        };
+    };
+}
+
+/*-----------------HELPERS----------------------------*/
+group SetReferenceToObservation(source operations: BackboneElement, source name: string, target tgt: Reference)
+{
+    // Check which observation should be referenced
+    name where "%name = 'ALK'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_alk'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'RET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ret'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ros1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'NTRK1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ntrk1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'NTRK2'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ntrk2'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'NTRK3'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_ntrk3'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'FGFR1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_fgfr1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'FGFR2'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_fgfr2'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'FGFR3'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'uuid_ngsFusionExpression_fgfr3'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
 }
