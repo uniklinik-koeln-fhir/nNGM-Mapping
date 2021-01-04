@@ -30,10 +30,10 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR"
 
-// Operation
+// Therapien
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR"
 
 group MapCDS(source src: CTS_Transport, target tgt: Bundle)
@@ -54,7 +54,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     src then MapBefund(src, tgt);
 
     // TODO
-    // src then MapTherapies(src, tgt);
+    src then MapTherapies(src, tgt);
 
     // TODO
     //src then TransformBundleTNM(src, tgt);
@@ -387,15 +387,76 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 {
     let index = create('RepeatIndex');
-    src then InitCaseIndex(src, index); // Reset index
 
-    /* ------------------------------ Therapie ---------------------------- */
-    /*
-    src then TransformBundleStrahlentherapie(src, tgt);
-    src then TransformBundleSonstigeTherapie(src, tgt);
-    src then TransformBundleOperationTherapie(src, tgt);
-    src then TransformBundleSystemischeTherapie(src, tgt);
-    */
+    /* ------------------------------ Therapien ---------------------------- */
+    src then InitCaseIndex(src, index); // Reset index    
+    src ->
+    // Add a transaction bundle to the collection bundle
+    tgt.entry as entry,
+    entry.resource = create('Bundle') as bundleTherapie,
+    // Add a composition to the transaction bundle
+    bundleTherapie.entry as entryTherapie, 
+    entryTherapie.resource = create('Composition') as compositionTherapie then
+    {
+        /* ------------------------------ Bundle ---------------------------- */
+
+        // Meta
+        src -> bundleTherapie.id = uuid();
+        src -> bundleTherapie.type = 'transaction';
+
+
+        /* ------------------------------ Composition ---------------------------- */
+
+        // Meta
+        src -> compositionTherapie.id = uuid();
+        src -> compositionTherapie.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert';
+        src -> compositionTherapie.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'therapie');
+
+        // Category idat or psn depends on which type of patient/consent is in the bundle
+        src -> compositionTherapie.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
+
+        // Title
+        src -> compositionTherapie.title = 'Therapie pseudonymisiert';
+
+        // Identifier i.e. Case ID
+        src -> compositionTherapie.identifier as identifier, identifier.value = 1;
+
+        // Status
+        src -> compositionTherapie.status = cast('final', 'FHIR.code');
+
+        // Subject
+        src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionTherapie.subject = create('Reference') as subject, subject.reference = value;
+
+        // TODO: which timestamp and author to use? the one of Stammdaten or the first Basisangaben?
+        // Date
+        // operations.timestamp as timestamp -> compositionTherapie.date = dateOp(timestamp, 'dateTime');
+
+        // Author
+        // operations.editor as author -> compositionTherapie.author = create('Reference') as subject, subject.reference = author;
+        
+        /* ------------------------------ Section ---------------------------- */
+
+        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'therapie') then
+        {
+            /* ------------------------------ Therapie ---------------------------- */
+        
+            // Operation
+            src then InitFormIndex(src, index);
+            src.operations as operations, operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleOperationTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
+                src then IncrementFormIndex(src, index);
+            };
+
+            // src then TransformBundleStrahlentherapie(src, tgt);
+            // src then TransformBundleSonstigeTherapie(src, tgt);
+            // src then TransformBundleSystemischeTherapie(src, tgt);
+        };  
+        
+        /* ------------------------------ Increment index ---------------------------- */
+        src then IncrementCaseIndex(src, index);
+        //src -> tgt.id = evaluate(index, '$this.formIndex');
+    };
 }
 
 
