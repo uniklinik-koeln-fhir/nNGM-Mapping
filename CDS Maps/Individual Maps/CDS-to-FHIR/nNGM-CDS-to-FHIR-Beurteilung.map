@@ -1,77 +1,87 @@
 /// version = 0.1
 /// title = "Beurteilung"
 
+/* 
+TODO
+    - repeatindex is off by +1
+*/
+
 map "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR" = BeurteilungFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
-group TransformBundleBeurteilung(source src: CTS_Transport, target tgt: Bundle)
+group TransformBundleBeurteilung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target index: RepeatIndex)
 {
-    src -> tgt.entry as entry then CreateDiagnosticReportBeurteilung(src, entry);
-    src -> tgt.entry as entry then CreateServiceRequestBeurteilung(src, entry);
-}
-
-group CreateDiagnosticReportBeurteilung(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
+    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'beurteilung') then
     {
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1352'
-        or blockindex = 0 and groupindex = 0 and itemid ='bu_creation_date'
-        or blockindex = 0 and groupindex = 0 and itemid ='bu_vesion'
-        or blockindex = 0 and groupindex = 0 and itemid ='id_2405'" then
-        {
-            src -> tgt.resource = create('DiagnosticReport') as diagnosticreport then TransformDiagnosticReportBeurteilung(src, diagnosticreport);
-        };
-    };
-}
-
-group CreateServiceRequestBeurteilung(source src: CTS_Transport, target tgt: BackboneElement)
-{
-    src.operations as operations, operations.data as data then
-    {
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2523'
-        or blockindex = 1 and groupindex = 0 and itemid ='id_bu_closing'
-        or blockindex = 1 and groupindex = 0 and itemid ='id_2524' 
-        or blockindex = 1 and groupindex = 0 and itemid ='id_2525'" then
-        {
-            src -> tgt.resource = create('ServiceRequest') as servicerequest then TransformServiceRequestBeurteilung(src, servicerequest);
-        };
+        // there may be more than 1 instance of DiagnosticReport, thus an index is needed to reference (and create) the correct resource
+        operations then CreateDiagnosticReportBeurteilung(operations, bundle, composition, section, index);
+        operations then CreateServiceRequestBeurteilung(operations, bundle, composition, section, index);
     };
 }
 
 /* ------------------------------DiagnosticReport---------------------------- */
-group TransformDiagnosticReportBeurteilung(source src: CTS_Transport, target tgt: DiagnosticReport)
+group CreateDiagnosticReportBeurteilung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/Beurteilung';
+    // since there can be more than 1 instance of the Beurteilung section we need an index to assign the corresponding data to each DiagnosticReport
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
 
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
-
-
-    src.operations as operations, operations.data as data then
+    operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 0 and groupindex = 0 and itemid = 'id_1352'
+                                                                                                or blockindex = 0 and groupindex = 0 and itemid ='bu_creation_date'
+                                                                                                or blockindex = 0 and groupindex = 0 and itemid ='bu_vesion'
+                                                                                                or blockindex = 0 and groupindex = 0 and itemid ='id_2405')" then
     {
-        /*--------------Erstelldatum------------*/
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'bu_creation_date'" then
+        operations -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticreport then
+        {
+            operations then TransformDiagnosticReportBeurteilung(operations, diagnosticreport, composition, section, index);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticreport, '\'DiagnosticReport/\' + $this.id');
+        };
+        operations then IncrementSectionIndex(operations, index);
+    };
+}
+
+group TransformDiagnosticReportBeurteilung(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+{
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/beurteilung';
+
+    // Patient reference
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Code
+    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C125009');
+
+    // Access data
+    operations.data as data then
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_nngm_beurteilung'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+
+        // Erstelldatum
+        data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'bu_creation_date'" then
          {
             values.value as date -> tgt.effectiveDateTime = dateOp(date, 'dateTime');
          };
 
-		/*--------------Version------------*/
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'bu_version'" then
+		// Status
+        data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'bu_version'" then
          {   
             values.value as code -> tgt.status = code; //cc('', code);
          };   
 
-        /*--------------Klinische Information------------*/
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1352'" then
+        // Klinische Information 
+        data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'id_1352'" then
         {  
             values.value as value -> tgt.conclusion = value;
         };
 
-        /*----------------Empfehlung einer systemischen Therapie------------*/
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2405'" then
+        // Empfehlung einer systemischen Therapie
+        data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'id_2405'" then
         {   
             values.value as signature where "$this.value = 'Ja'" then
             {
@@ -91,37 +101,67 @@ group TransformDiagnosticReportBeurteilung(source src: CTS_Transport, target tgt
 }
 
 /* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestBeurteilung(source src: CTS_Transport, target tgt: ServiceRequest)
+group CreateServiceRequestBeurteilung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // Metadata
-    src -> tgt.id = uuid();
-    src -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+    let resourceIsCreated = create('Boolean');
+    operations then SetBooleanToFalse(operations, resourceIsCreated);
 
-    // Patient ID
-    src.patid as patid -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this');
+    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2523'
+                                                        or blockindex = 1 and groupindex = 0 and itemid ='bu_closing'
+                                                        or blockindex = 1 and groupindex = 0 and itemid ='id_2524' 
+                                                        or blockindex = 1 and groupindex = 0 and itemid ='id_2525'" then
+    {
+        // if resource is not created yet: call transform
+        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+        {
+            operations then TransformServiceRequestBeurteilung(operations, serviceRequest, composition, section, index);
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
+            operations then SetBooleanToTrue(operations, resourceIsCreated);
+        };
+    };
+}
+
+group TransformServiceRequestBeurteilung(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+{
+    // since there can be more than 1 instance of the Beurteilung section we need an index to assign the corresponding data to each DiagnosticReport
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+
+    // Metadata
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
     
     // Intent
-    src -> tgt.intent = cast('proposal', ' FHIR.code'); 
+    operations -> tgt.intent = cast('proposal', ' FHIR.code'); 
 
     // Category
-    src -> tgt.category as category, 
-            category.coding as coding, 
-            coding.system as system, 
-            system.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.category as category, 
+                category.coding as coding, 
+                coding.system as system, 
+                system.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Code
-    src -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'beurteilung');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'beurteilung');
 
     // authoredOn
-    src -> tgt.authoredOn as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');    
+    operations -> tgt.authoredOn as code, 
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');    
 
-    src.operations as operations, operations.data as data then
+    // Access data
+    operations.data as data then
     {
+        // ID + Composition insert
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_testung3'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
+        };
+
         //Status der Untersuchungen
         //Durchfuehrung
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2523'" then
@@ -135,16 +175,24 @@ group TransformServiceRequestBeurteilung(source src: CTS_Transport, target tgt: 
                 value -> tgt.status = 'completed';
             };
         };
+
+        // Referenzen
+        // DiagnosticReports
+        data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_nngm_beurteilung'" then
+        {
+            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
+            operations then IncrementSectionIndex(operations, index);
+        };
     };
 
     // Extensions
-    src then TransformBeurteilungStatusExtension(src, tgt);
+    operations then TransformBeurteilungStatusExtension(operations, tgt);
 }
 
 /* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
-group TransformBeurteilungStatusExtension(source src: CTS_Transport, target tgt: ServiceRequest)
+group TransformBeurteilungStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
 {
-    src.operations as operations, operations.data as data then
+    operations.data as data then
     {
         // Status des Abschlusses
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'bu_closing'" then
@@ -172,7 +220,7 @@ group TransformBeurteilungStatusExtension(source src: CTS_Transport, target tgt:
             };
         };
 
-        /*---------------Datum des versands -----------*/
+        /*---------------Datum des Versands -----------*/
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2525'" then
         {   
             values.value as datumversands -> tgt.extension as datumVersands,
