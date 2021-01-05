@@ -10,14 +10,12 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 // Stammdaten
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
 
-// Vorbefund
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
-
 // Antrag
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
 
 // Befund
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackFHIR"
@@ -42,10 +40,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     src -> tgt.id = uuid();
     src -> tgt.type = 'collection';
 
-    src then MapStammdaten(src, tgt);
-
-    // TODO
-    //src then MapVorbefund(src, tgt);
+    // src then MapStammdaten(src, tgt);
     
     // TODO
     src then MapAntrag(src, tgt);
@@ -101,81 +96,6 @@ group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
             
         /* ------------------------------ Resources ---------------------------- */
         operations then TransformBundleStammdaten(operations, bundleStammdaten, compositionStammdaten);
-    };
-}
-
-// TODO
-group MapVorbefund(source src: CTS_Transport, target tgt: Bundle)
-{
-    let index = create('RepeatIndex');
-
-    /* ------------------------------ Vorbefund ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset index
-    src.operations as operations,
-    // Execute as many times as there are Basisangaben
-    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" -> 
-    // Add a transaction bundle to the collection bundle
-    tgt.entry as entry,
-    entry.resource = create('Bundle') as bundleVorbefund,
-    // Add a composition to the transaction bundle
-    bundleVorbefund.entry as entryVorbefund, 
-    entryVorbefund.resource = create('Composition') as compositionVorbefund then
-    {
-        // Create this let because we can't check on two parameters with the same name in FHIRPath
-        let caseIndex = evaluate(index, '$this.caseIndex');
-
-        /* ------------------------------ Bundle ---------------------------- */
-
-        // Meta
-        src -> bundleVorbefund.id = uuid();
-        src -> bundleVorbefund.type = 'transaction';
-
-
-        /* ------------------------------ Composition ---------------------------- */
-
-        // Meta
-        src -> compositionVorbefund.id = uuid();
-        src -> compositionVorbefund.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert';
-        src -> compositionVorbefund.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'vorbefunde');
-
-        // Category idat or psn depends on which type of patient/consent is in the bundle
-        src -> compositionVorbefund.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
-
-        // Title
-        src -> compositionVorbefund.title = 'Vorbefunde';
-
-        // Identifier i.e. Case ID
-        src -> compositionVorbefund.identifier as identifier, identifier.value = evaluate(index, '$this.caseIndex.toString()');
-
-        // Status
-        src -> compositionVorbefund.status = cast('final', 'FHIR.code');
-
-        // Subject
-        src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionVorbefund.subject = create('Reference') as subject, subject.reference = value;
-
-        // Date
-        operations.timestamp as timestamp -> compositionVorbefund.date = dateOp(timestamp, 'dateTime');
-
-        // Author
-        operations.editor as author -> compositionVorbefund.author = create('Reference') as subject, subject.reference = author;
-
-        /* ------------------------------ Resources ---------------------------- */
-
-        // Vorbefund
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "%index.formIndex < 5" then // TODO: remove this workaround; this tries to transform all existing forms and even if a formindex in between is missing (1-VB1, 1-VB3)
-        {
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.formIndex.toString() and type = 'save'" then
-            {
-                src then TransformBundleVorbefundFHIR(operations, bundleVorbefund, compositionVorbefund, index);
-            };
-            src then IncrementFormIndex(src, index);
-
-        };
-
-        /* ------------------------------ Increment index ---------------------------- */
-        src then IncrementCaseIndex(src, index);
-        //src -> tgt.id = evaluate(index, '$this.formIndex');    
     };
 }
 
@@ -239,47 +159,50 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
             
         /* ------------------------------ Resources ---------------------------- */
 
-        // Basisangaben
-        // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BA' and type = 'save'" then
-        // {
-        //     src then TransformBundleBasisangaben(operations, bundleAntrag, compositionAntrag);
-        // };
+        // Basisangaben (Antrag.basisangaben)
+        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BA' and type = 'save'" then
+        {
+            src then TransformBundleBasisangaben(operations, bundleAntrag, compositionAntrag);
+        };
 
-        // Biopsie(n)
-        src then InitFormIndex(src, index);
+        // Biopsie(n) (Antrag.biopsie)
+        // create 1 biopsieSection per biopsie (in the CDS)
+        src then InitFormIndex(src, index); // the formIndex indicates which biopsie (an thus which biopsieSection) should be created
         src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionAntrag.section = create('BackboneElement') as biopsieSection then
         {
+            /* ------------------------------ Section ---------------------------- */
+            // Meta
             src -> biopsieSection.title = 'biopsy';
             src -> biopsieSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections','biopsie');
-            // TODO: entry is Reference(Resource), should we create a Reference here then?
             src -> biopsieSection.entry = create('Reference') as reference, reference.identifier = create('Identifier') as formularId,
                                                 formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
                                                 formularId.value = evaluate(index, '$this.formIndex.toString()');
         
-            // Anforderung
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection);
-            // };
+            /* ------------------------------ Resources ---------------------------- */
+            // Anforderung (Antrag.biopsie.anforderung)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection);
+            };
                 
-            // TNM
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     // src then TransformBundleTNM(operations, bundleAntrag, compositionAntrag, biopsieSection);
-            // };
+            // TNM (Antrag.biopsie.tnm)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'" then
+            { 
+                src then TransformBundleTNM(operations, bundleAntrag, compositionAntrag, biopsieSection);
+            };
  
-            // Resistenztestung
+            // Resistenztestung (Antrag.biopsie.resistenztestung)
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleResistenztestung(operations, bundleAntrag, compositionAntrag);
                 src -> tgt.id = evaluate(index, '$this.maxIndex');
             };                
             
-            // Vorbefund
-            // // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
-            // // {
-            // //     src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection, index);
-            // // };
+            // Vorbefund (Antrag.biopsie.vorbefund)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleVorbefundFHIR(operations, bundleAntrag, compositionAntrag, biopsieSection, index);
+            }; 
 
             src then IncrementFormIndex(src, index);
         };
