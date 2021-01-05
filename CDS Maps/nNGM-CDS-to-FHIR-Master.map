@@ -14,10 +14,10 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
 
 // Antrag
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
 
 // Befund
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackFHIR"
@@ -205,23 +205,25 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         /* ------------------------------ Bundle ---------------------------- */
 
         // Meta
-        src -> bundleAntrag.id = uuid();
+        src -> bundleAntrag.id = uuid(); 
         src -> bundleAntrag.type = 'transaction';
 
 
         /* ------------------------------ Composition ---------------------------- */
 
         // Meta
-        src -> compositionAntrag.title = 'Anmeldung';
+        src -> compositionAntrag.title = 'Antrag';
         src -> compositionAntrag.id = uuid();
-        src -> compositionAntrag.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Anmeldung';
+        src -> compositionAntrag.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag';
         src -> compositionAntrag.status = cast('final', 'FHIR.code');
 
         // Identifier i.e. Case ID
-        src -> compositionAntrag.identifier as identifier, identifier.value = evaluate(index, '$this.caseIndex.toString()');
+        src -> compositionAntrag.identifier = create('Identifier') as FallIdentifier,
+                                                    FallIdentifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
+                                                    FallIdentifier.value = evaluate(index, '$this.caseIndex.toString()');
 
         // Type check for type of content
-        src -> compositionAntrag.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'anmeldung');
+        src -> compositionAntrag.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'antrag');
 
         // Category idat or not idat
         src -> compositionAntrag.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
@@ -243,40 +245,42 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         //     src then TransformBundleBasisangaben(operations, bundleAntrag, compositionAntrag);
         // };
 
-        // Anforderung
+        // Biopsie(n)
         src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
+        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionAntrag.section = create('BackboneElement') as biopsieSection then
         {
-            // src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag);
-            src then IncrementFormIndex(src, index);
-        };
-
-        // TNM
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'" then
-        {
-            // src then TransformBundleTNM(operations, bundleAntrag, compositionAntrag);
-            src then IncrementFormIndex(src, index);
-        };
-
-        // Resistenztestung
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "%index.formIndex <= %maxIndex" then
-        {
+            src -> biopsieSection.title = 'biopsy';
+            src -> biopsieSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections','biopsie');
+            // TODO: entry is Reference(Resource), should we create a Reference here then?
+            src -> biopsieSection.entry = create('Reference') as reference, reference.identifier = create('Identifier') as formularId,
+                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
+        
+            // Anforderung
+            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
+            // {
+            //     src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection);
+            // };
+                
+            // TNM
+            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'" then
+            // {
+            //     // src then TransformBundleTNM(operations, bundleAntrag, compositionAntrag, biopsieSection);
+            // };
+ 
+            // Resistenztestung
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleResistenztestung(operations, bundleAntrag, compositionAntrag);
                 src -> tgt.id = evaluate(index, '$this.maxIndex');
             };                
-            src then IncrementFormIndex(src, index);
-        };
-        
+            
+            // Vorbefund
+            // // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
+            // // {
+            // //     src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection, index);
+            // // };
 
-        // Vorbefund
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
-        {
-            //src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, index);
             src then IncrementFormIndex(src, index);
         };
 
