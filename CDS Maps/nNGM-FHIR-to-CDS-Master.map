@@ -6,8 +6,11 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGMv09c" = nNGMv09c
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
+// Stammdaten
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
+
+/*
 // Antrag
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCTS"
@@ -30,22 +33,16 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieCTS"
+*/
 
 group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
-    src -> tgt.version = '1.1';
+    src -> tgt.version = '1.0';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    // Patient ID
-    src.entry as entry then
-    {
-        entry.resource as patient where "resource is Patient" then
-        {
-            patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
-        };
-    };
+    src then MapStammdaten(src, tgt);
+    /*
     // Antrag
-    src -> tgt.operations as operations then TransformStammdatenCTS(src, operations);
     src -> tgt.operations as operations then TransformTNMCTS(src, operations);
     src -> tgt.operations as operations then TransformResistenztestungCTS(src, operations);
     src -> tgt.operations as operations then TransformAnforderungCTS(src, operations);
@@ -68,4 +65,16 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
     src -> tgt.operations as operations then TransformSonstigeTherapieCTS(src, operations);
     src -> tgt.operations as operations then TransformOperationTherapieCTS(src, operations);
     src -> tgt.operations as operations then TransformSystemischeTherapieCTS(src, operations);
+    */
+}
+
+group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
+{
+        // Patient ID
+    src.entry as entry, entry.resource as patient where "resource is Patient" then
+    {
+        patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
+    };
+    
+    src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
 }
