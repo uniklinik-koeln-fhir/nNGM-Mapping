@@ -40,10 +40,10 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     src -> tgt.id = uuid();
     src -> tgt.type = 'collection';
 
-    // src then MapStammdaten(src, tgt);
+    src then MapStammdaten(src, tgt);
     
     // TODO
-    src then MapAntrag(src, tgt);
+    // src then MapAntrag(src, tgt);
 
     // TODO
     //src then MapBefund(src, tgt);
@@ -86,8 +86,10 @@ group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionStammdaten.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
 
         // Subject
-        //operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionStammdaten.subject = create('Reference') as subject, subject.reference = value;
-        src.patid as patid -> compositionStammdaten.subject = create('Reference') as subject, subject.reference = evaluate(patid, '\'Patient/\' + $this'), subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
+        operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
+        {
+            src.patid as patid, values.value as value -> compositionStammdaten.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
+        };
 
         // Date
         operations.timestamp as timestamp -> compositionStammdaten.date = dateOp(timestamp, 'dateTime');
@@ -129,7 +131,6 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         src -> bundleAntrag.id = uuid(); 
         src -> bundleAntrag.type = 'transaction';
 
-
         /* ------------------------------ Composition ---------------------------- */
 
         // Meta
@@ -150,7 +151,10 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionAntrag.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
 
         // Subject
-        src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionAntrag.subject = create('Reference') as subject, subject.reference = value;
+        src.operations as operations, operations where "crfid = 'SD'", operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
+        {
+            src.patid as patid, values.value as value -> compositionAntrag.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
+        };
 
         // Date
         operations.timestamp as timestamp -> compositionAntrag.date = dateOp(timestamp, 'dateTime');
@@ -264,8 +268,11 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionBefund.status = cast('final', 'FHIR.code');
 
         // Subject
-        src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionBefund.subject = create('Reference') as subject, subject.reference = value;
-
+        src.operations as operations, operations where "crfid = 'SD'", operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
+        {
+            src.patid as patid, values.value as value -> compositionBefund.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
+        };
+        
         // Date
         operations.timestamp as timestamp -> compositionBefund.date = dateOp(timestamp, 'dateTime');
 
@@ -395,7 +402,10 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionTherapie.status = cast('final', 'FHIR.code');
 
         // Subject
-        src.operations as ops, ops where "crfid = 'SD'", ops.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'", values.value as value  -> compositionTherapie.subject = create('Reference') as subject, subject.reference = value;
+        src.operations as operations, operations where "crfid = 'SD'", operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
+        {
+            src.patid as patid, values.value as value -> compositionTherapie.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
+        };
 
         // TODO: which timestamp and author to use? the one of Stammdaten or the first Basisangaben?
         // Date
