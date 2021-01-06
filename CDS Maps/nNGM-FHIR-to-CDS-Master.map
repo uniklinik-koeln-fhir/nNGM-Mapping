@@ -11,9 +11,9 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
 
 // Antrag
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
 
 /*
@@ -83,63 +83,52 @@ group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
 
 group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 {
-    src.entry as entry, entry.resource as composition where "resource is Composition", composition.identifier as identifier, identifier.value as fallnummer then
+    src.entry as entry, entry.resource as composition where "resource is Composition", composition.identifier as identifier, identifier.value as fallNummer then
     {
         // Patid
         composition.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
 
+        /*
         // Basisangaben
         composition.section as section, section where "code.coding.code = 'basisangaben'" -> tgt.operations as operations then
         {   
-            src -> tgt.version = '1.0';
+            section -> tgt.version = '1.0';
             section -> operations.type = 'save';
-            section -> operations.crfid = evaluate(fallnummer, '$this + \'-BA\'');
+            section -> operations.crfid = evaluate(fallNummer, '$this + \'-BA\'');
 
-            /*
-            section.entry as sectionEntry, sectionEntry.reference as reference then 
+            section.entry as sectionEntry, sectionEntry.reference as reference then
             {
-                let referenceId = evaluate(reference, '$this.split(\'/\').last()');
-
-                src.entry as entry, entry.resource as resource where "resource.id = %referenceId" then 
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
                 {
-                    //resource.id as id -> operations.type = id;
-                    //let resourceId = evaluate(resource, '$this.id');
-                    section then TransformBasisangabenCDS(src, operations);
+                    section then TransformBasisangabenCDS(entry, operations);
                 };
             };
-            
+        };
+        */
 
-            /*
-            section.entry as sectionEntry, sectionEntry.reference as reference then 
+        // Biopsie
+        composition.section as section, section where "code.coding.code = 'biopsie'" -> tgt.operations as operations then
+        {   
+            //let formNummer = evaluate(section, '$this.entry.identifier.value');
+
+            // Anforderung
+            section.section as nestedSection, nestedSection where "code.coding.code = 'anforderung'" -> tgt.operations as operations then
             {
-                let referenceId = evaluate(reference, '$this.split(\'/\').last()');
+                let crfidOne = evaluate(fallNummer, '$this + \'-AF\'');
+                let crfidTwo = evaluate(crfidOne, '%crfidOne + $this');
 
-                src.entry as entry, entry.resource as resource then 
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = crfidOne;
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
-                    resource -> operations.crfid = referenceId; 
-                    resource.id as id -> operations.type = id;
-                    //let resourceId = evaluate(resource, '$this.id');
-                    //section then TransformBasisangabenCDS(src, operations);
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformAnforderungCDS(entry, operations);
+                    };
                 };
             };
-            */
-            
-            
-            src.entry as entry, entry.resource as resource then
-            {
-                let resourceId = evaluate(resource, '$this.id'); // ResourceId
-                //section -> operations.type = resourceId;
-
-                //section.entry as entry, entry.reference as reference -> operations.crfid = evaluate(reference, '$this.split(\'/\').last()'); 
-
-                    
-                resource where "%section.entry.reference.where($this.split(\'/\').last() = %resourceId).exists()" then
-                {
-                    section then TransformBasisangabenCDS(src, operations);
-                };
-            };
-            
-
         };
     };
 
