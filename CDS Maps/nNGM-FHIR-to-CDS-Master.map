@@ -9,13 +9,15 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 // Stammdaten
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
 
-/*
 // Antrag
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
+
+/*
+
 
 // Befund
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS"
@@ -37,10 +39,9 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieCT
 
 group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
-    src -> tgt.version = '1.0';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    src then MapStammdaten(src, tgt);
+    //src then MapStammdaten(src, tgt);
     src then MapAntrag(src, tgt);
 
     /*
@@ -67,23 +68,8 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 
 group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
 {
-        // Patient ID
-        src.entry as srcentry, srcentry.resource as bundle where "resource is Bundle", bundle.entry as entry then
-        {
-            /* ------------------------------- Patient ---------------------------- */
-            entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
-            {   
-                patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
-            };
-        };
-    
-    src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
-}
-
-group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
-{
     // Patient ID
-    src.entry as srcentry, srcentry.resource as bundle where "resource is Bundle", bundle.entry as entry then
+    src.entry as entry then
     {
         /* ------------------------------- Patient ---------------------------- */
         entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
@@ -91,9 +77,73 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
             patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
         };
     };
+    
+    src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
+}
 
-    // Basisangaben
-    src -> tgt.operations as operations then TransformBasisangabenCTS(src, operations);
+group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
+{
+    src.entry as entry, entry.resource as composition where "resource is Composition", composition.identifier as identifier, identifier.value as fallnummer then
+    {
+        // Patid
+        composition.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+
+        // Basisangaben
+        composition.section as section, section where "code.coding.code = 'basisangaben'" -> tgt.operations as operations then
+        {   
+            src -> tgt.version = '1.0';
+            section -> operations.type = 'save';
+            section -> operations.crfid = evaluate(fallnummer, '$this + \'-BA\'');
+
+            /*
+            section.entry as sectionEntry, sectionEntry.reference as reference then 
+            {
+                let referenceId = evaluate(reference, '$this.split(\'/\').last()');
+
+                src.entry as entry, entry.resource as resource where "resource.id = %referenceId" then 
+                {
+                    //resource.id as id -> operations.type = id;
+                    //let resourceId = evaluate(resource, '$this.id');
+                    section then TransformBasisangabenCDS(src, operations);
+                };
+            };
+            
+
+            /*
+            section.entry as sectionEntry, sectionEntry.reference as reference then 
+            {
+                let referenceId = evaluate(reference, '$this.split(\'/\').last()');
+
+                src.entry as entry, entry.resource as resource then 
+                {
+                    resource -> operations.crfid = referenceId; 
+                    resource.id as id -> operations.type = id;
+                    //let resourceId = evaluate(resource, '$this.id');
+                    //section then TransformBasisangabenCDS(src, operations);
+                };
+            };
+            */
+            
+            
+            src.entry as entry, entry.resource as resource then
+            {
+                let resourceId = evaluate(resource, '$this.id'); // ResourceId
+                //section -> operations.type = resourceId;
+
+                //section.entry as entry, entry.reference as reference -> operations.crfid = evaluate(reference, '$this.split(\'/\').last()'); 
+
+                    
+                resource where "%section.entry.reference.where($this.split(\'/\').last() = %resourceId).exists()" then
+                {
+                    section then TransformBasisangabenCDS(src, operations);
+                };
+            };
+            
+
+        };
+    };
+
+
     
     // Antrag
     // src -> tgt.operations as operations then TransformAnforderungCTS(src, operations);
