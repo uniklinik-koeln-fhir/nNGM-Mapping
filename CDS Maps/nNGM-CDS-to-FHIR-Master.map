@@ -43,7 +43,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     src then MapStammdaten(src, tgt);
     
     // TODO
-    src then MapAntrag(src, tgt);
+    //src then MapAntrag(src, tgt);
 
     // TODO
     //src then MapBefund(src, tgt);
@@ -52,7 +52,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     //src then MapTherapies(src, tgt);
 
     // TODO
-    //src then TransformBundleTNM(src, tgt);
+    src then MapTNM(src, tgt);
 }
 
 // TODO
@@ -254,7 +254,7 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         // Meta
         src -> compositionBefund.id = uuid();
         src -> compositionBefund.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert';
-        src -> compositionBefund.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'molpatho-befund');
+        src -> compositionBefund.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'tnm');
 
         // Category idat or psn depends on which type of patient/consent is in the bundle
         src -> compositionBefund.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
@@ -440,6 +440,71 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
     };
 }
 
+group MapTNM(source src: CTS_Transport, target tgt: Bundle)
+{
+    let index = create('RepeatIndex');
+
+    /* ------------------------------ Therapien ---------------------------- */
+    src ->
+    // Add a transaction bundle to the collection bundle
+    tgt.entry as entry,
+    entry.resource = create('Bundle') as BundleTNM,
+    // Add a composition to the transaction bundle
+    TNMTherapie.entry as entryTherapie, 
+    entryTherapie.resource = create('Composition') as compositionTNM then
+    {
+        /* ------------------------------ Bundle ---------------------------- */
+
+        // Meta
+        src -> TNMTherapie.id = uuid();
+        src -> TNMTherapie.type = 'transaction';
+
+
+        /* ------------------------------ Composition ---------------------------- */
+
+        // Meta
+        src -> compositionTNM.id = uuid();
+        src -> compositionTNM.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/TNM-pseudonymisiert';
+        src -> compositionTNM.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'tnm');
+
+        // Category idat or psn depends on which type of patient/consent is in the bundle
+        src -> compositionTNM.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
+
+        // Title
+        src -> compositionTNM.title = 'TNM pseudonymisiert';
+
+        // Identifier i.e. Case ID
+        src -> compositionTNM.identifier as identifier, identifier.value = 1;
+
+        // Status
+        src -> compositionTNM.status = cast('final', 'FHIR.code');
+
+        // Subject
+        src.patid as patid, values.value as value -> compositionTNM.subject = create('Reference') as subject, subject.reference = evaluate(patid, "Patient\/\?identifier=http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier| + $this"), subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
+
+
+        // TODO: CTS timestamp or creation of composition?
+        // operations.timestamp as timestamp -> compositionTNM.date = dateOp(timestamp, 'dateTime');
+
+        // Author
+        operations.editor as author -> compositionTNM.author = create('Reference') as subject, subject.reference = author;
+        
+        /* ------------------------------ Section ---------------------------- */
+
+        src -> compositionTNM.section = create('BackboneElement') as sectionTNM, sectionTNM.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'tnm') then
+        {
+            /* ------------------------------ Therapie ---------------------------- */
+        
+            // Operation
+            src then InitFormIndex(src, index);
+            src.operations as operations, operations where "crfid = 'TNM' + %index.formIndex.toString() and type = 'save'" then
+            {
+                // src then TransformBundleTNM(operations, bundleTNM, compositionTNM, sectionTNM);
+                src then IncrementFormIndex(src, index);
+            };
+        };  
+    };
+}
 
 // Helper functions
 group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
