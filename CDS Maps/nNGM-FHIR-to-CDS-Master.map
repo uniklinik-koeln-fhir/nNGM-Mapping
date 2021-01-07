@@ -17,8 +17,6 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
 
 /*
-
-
 // Befund
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS"
@@ -41,7 +39,7 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    //src then MapStammdaten(src, tgt);
+    src then MapStammdaten(src, tgt);
     src then MapAntrag(src, tgt);
 
     /*
@@ -106,20 +104,23 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
         };
         */
 
+        //section.entry as biopsieSection, biopsieSection.identifier as biopsieIdentifier, biopsieIdentifier.value as fallNummer
+
         // Biopsie
         composition.section as section, section where "code.coding.code = 'biopsie'" -> tgt.operations as operations then
         {   
-            //let formNummer = evaluate(section, '$this.entry.identifier.value');
+            let formNummer = evaluate(section, '$this.entry.identifier.value');
 
             // Anforderung
             section.section as nestedSection, nestedSection where "code.coding.code = 'anforderung'" -> tgt.operations as operations then
             {
-                let crfidOne = append(fallNummer, '\'-AF\'');
+                let crfidOne = append(fallNummer, '-AF');
+                let crfidTwo = append(crfidOne, formNummer);
                 //let crfidTwo = evaluate(crfidOne, '%crfidOne + $section');
 
                 nestedSection -> tgt.version = '1.0';
                 nestedSection -> operations.type = 'save';
-                nestedSection -> operations.crfid = crfidOne;
+                nestedSection -> operations.crfid = crfidTwo;
 
                 nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
