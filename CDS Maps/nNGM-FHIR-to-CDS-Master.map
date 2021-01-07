@@ -39,12 +39,10 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    src then MapStammdaten(src, tgt);
+    //src then MapStammdaten(src, tgt);
     src then MapAntrag(src, tgt);
 
     /*
-
-
     // Befund
     src -> tgt.operations as operations then TransformFastTrackCTS(src, operations);
     src -> tgt.operations as operations then TransformHistologieCTS(src, operations);
@@ -67,26 +65,23 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
 {
     // Patient ID
-    src.entry as entry then
+    src.entry as entry, entry.resource as composition where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Stammdaten-pseudonymisiert'" then
     {
-        /* ------------------------------- Patient ---------------------------- */
-        entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
-        {   
-            patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
-        };
+        // Patid
+        composition.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+        src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
     };
     
-    src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
 }
 
 group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 {
-    src.entry as entry, entry.resource as composition where "resource is Composition", composition.identifier as identifier, identifier.value as fallNummer then
+    src.entry as entry, entry.resource as composition where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert'", composition.identifier as identifier, identifier.value as fallNummer then
     {
         // Patid
-        composition.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+        composition.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
 
-        /*
+        
         // Basisangaben
         composition.section as section, section where "code.coding.code = 'basisangaben'" -> tgt.operations as operations then
         {   
@@ -102,7 +97,7 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
         };
-        */
+        
 
         //section.entry as biopsieSection, biopsieSection.identifier as biopsieIdentifier, biopsieIdentifier.value as fallNummer
 
@@ -115,12 +110,10 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
             section.section as nestedSection, nestedSection where "code.coding.code = 'anforderung'" -> tgt.operations as operations then
             {
                 let crfidOne = append(fallNummer, '-AF');
-                let crfidTwo = append(crfidOne, formNummer);
-                //let crfidTwo = evaluate(crfidOne, '%crfidOne + $section');
 
                 nestedSection -> tgt.version = '1.0';
                 nestedSection -> operations.type = 'save';
-                nestedSection -> operations.crfid = crfidTwo;
+                nestedSection -> operations.crfid = append(crfidOne, formNummer);
 
                 nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
