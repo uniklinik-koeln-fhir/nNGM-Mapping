@@ -12,9 +12,9 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
 // Antrag
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
 /*
 // Befund
@@ -101,7 +101,7 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 
         //section.entry as biopsieSection, biopsieSection.identifier as biopsieIdentifier, biopsieIdentifier.value as fallNummer
 
-        // Biopsie
+        // Biopsie(n)
         composition.section as section, section where "code.coding.code = 'biopsie'" -> tgt.operations as operations then
         {   
             let formNummer = evaluate(section, '$this.entry.identifier.value');
@@ -109,11 +109,11 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
             // Anforderung
             section.section as nestedSection, nestedSection where "code.coding.code = 'anforderung'" -> tgt.operations as operations then
             {
-                let crfidOne = append(fallNummer, '-AF');
+                let crfidLeft = append(fallNummer, '-AF');
 
                 nestedSection -> tgt.version = '1.0';
                 nestedSection -> operations.type = 'save';
-                nestedSection -> operations.crfid = append(crfidOne, formNummer);
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
 
                 nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
@@ -123,14 +123,75 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
+
+            // TNM
+            section.section as nestedSection, nestedSection where "code.coding.code = 'tnm'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-TNM');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformTNMCTS(entry, operations);
+                    };
+                };
+            };
+            
+            // Resistenztestung
+            section.section as nestedSection, nestedSection where "code.coding.code = 'resistenztestung'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-RT');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformResistenztestungCTS(entry, operations);
+                    };
+                };
+            };
+
+            // Vorbefund 
+            // TODO: repeatindex isn't working as expected; see "id_35" for example:
+            // repeatindex becomes an array with 1 element instead of integer and 
+            // where-loop for NGS Panel (and Fusion NGS) is executed only once instead of 2 or 3 times (with this test data)
+            section.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-VB');
+                let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformVorbefundCTS(entry, operations, index);
+                    };
+                };
+            };
         };
     };
+}
 
+// Helper functions
+group InitSectionIndex(source src: BackboneElement, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = 0;
+}
 
-    
-    // Antrag
-    // src -> tgt.operations as operations then TransformAnforderungCTS(src, operations);
-    // src -> tgt.operations as operations then TransformTNMCTS(src, operations);
-    // src -> tgt.operations as operations then TransformResistenztestungCTS(src, operations);
-    // src -> tgt.operations as operations then TransformVorbefundCTS(src, operations);
+group IncrementSectionIndex(source src: BackboneElement, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = evaluate(index, '$this.sectionIndex + 1');
 }
