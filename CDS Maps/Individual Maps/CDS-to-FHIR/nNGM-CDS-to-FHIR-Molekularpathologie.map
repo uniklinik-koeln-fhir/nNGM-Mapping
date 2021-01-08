@@ -16,11 +16,11 @@ TODO
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR" = nNGM_Mapping_MolekularphatologieFHIR
 
 /* ------------------------------ Bundle ---------------------------- */
-group TransformBundleMolekularpathologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition)
+group TransformBundleMolekularpathologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target diagnosticSection: BackboneElement)
 {
-    operations -> composition.section = create('BackboneElement') as section, section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie') then
+    operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'molekularpathologie', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie') then
     {
-        // operations then CreateSpecimenMP(operations, bundle, composition, section);
+        operations then CreateSpecimenMP(operations, bundle, composition, section);
         operations then CreateDiagnosticReportMP(operations, bundle, composition, section);
         operations then CreateOrganizationMP(operations, bundle, composition, section);
         operations then CreateServiceRequestMP(operations, bundle, composition, section);
@@ -136,13 +136,11 @@ group TransformDiagnosticReportMP(source operations: BackboneElement, target tgt
         // Observations CISH and FISH
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2509'" then
         {
-            let cish = 'CISH';
-            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, cish, value, reference);
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationCISH(operations, value, reference);
         };
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2510'" then
         {
-            let fish = 'FISH';
-            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservation(operations, fish, value, reference);
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFISH(operations, value, reference);
         };
     };
 }
@@ -273,13 +271,11 @@ group TransformServiceRequestMP(source operations: BackboneElement, target tgt: 
         // Observations CISH and FISH
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2509'" then
         {
-            let cish = 'CISH';
-            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, cish, value, reference);
+            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservationCISH(operations, value, reference);
         };
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2510'" then
         {
-            let fish = 'FISH';
-            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservation(operations, fish, value, reference);
+            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservationFISH(operations, value, reference);
         };
 
         // Specimen
@@ -1496,71 +1492,68 @@ group MapCode(source operations: BackboneElement, source name: string, target tg
 }
 
 // Reference
-group SetReferenceToObservation(source operations: BackboneElement, source cishFish: string, source name: string, target tgt: Reference)
+group SetReferenceToObservationCISH(source operations: BackboneElement, source name: string, target tgt: Reference)
 {
     // Check which CISH observation should be referenced
-    cishFish where "%cishFish = 'CISH'" then 
+    name where "%name = 'ALK'" then 
     {
-        name where "%name = 'ALK'" then 
+        operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_ish_alk'" then
         {
-            operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_ish_alk'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
-        name where "%name = 'MET'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_ish_met'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'RET'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_ish_ret'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'ROS1'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ish_ros1'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
     };
-
-    // Check which FISH observation should be referenced
-    cishFish where "%cishFish = 'FISH'" then 
+    name where "%name = 'MET'" then 
     {
-        name where "%name = 'ALK'" then 
+        operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_ish_met'" then
         {
-            operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_fish_alk'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
-        name where "%name = 'MET'" then 
+    }; 
+    name where "%name = 'RET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_ish_ret'" then
         {
-            operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_fish_met'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'RET'" then 
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ish_ros1'" then
         {
-            operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fish_ret'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'ROS1'" then 
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+}
+
+group SetReferenceToObservationFISH(source operations: BackboneElement, source name: string, target tgt: Reference)
+{
+    // Check which FISH observation should be referenced
+    name where "%name = 'ALK'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_fish_alk'" then
         {
-            operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fish_ros1'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'MET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_fish_met'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'RET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_fish_ret'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fish_ros1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
 }

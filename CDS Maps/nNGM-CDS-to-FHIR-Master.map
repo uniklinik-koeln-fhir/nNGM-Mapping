@@ -18,15 +18,15 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
 
 // Befund
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR"
 
 // Therapien
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR"
@@ -40,13 +40,13 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     src -> tgt.id = uuid();
     src -> tgt.type = 'collection';
 
-    src then MapStammdaten(src, tgt);
-    
-    // TODO
-    src then MapAntrag(src, tgt);
+    // src then MapStammdaten(src, tgt);
 
     // TODO
-    //src then MapBefund(src, tgt);
+    // src then MapAntrag(src, tgt);
+
+    // TODO
+    src then MapBefund(src, tgt);
 
     // TODO
     //src then MapTherapies(src, tgt);
@@ -59,10 +59,10 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
 group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
 {
     /* ------------------------------ Stammdaten ---------------------------- */
-    src.operations as operations, operations where "crfid = 'SD' and type = 'save'" -> 
+    src.operations as operations, operations where "crfid = 'SD' and type = 'save'" ->
         tgt.entry as entry,
         entry.resource = create('Bundle') as bundleStammdaten,
-        bundleStammdaten.entry as entryStammdaten, 
+        bundleStammdaten.entry as entryStammdaten,
         entryStammdaten.resource = create('Composition') as compositionStammdaten then
     {
         /* ------------------------------ Bundle ---------------------------- */
@@ -96,7 +96,7 @@ group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
 
         // Author TODO We need a practiioner which is not part of Stammdaten
         // operations.editor as author -> compositionStammdaten.author = create('Reference') as subject, subject.reference = author;
-            
+
         /* ------------------------------ Resources ---------------------------- */
         operations then TransformBundleStammdaten(operations, bundleStammdaten, compositionStammdaten);
     };
@@ -118,7 +118,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         tgt.entry as entry,
         entry.resource = create('Bundle') as bundleAntrag,
         // Add a composition to the transaction bundle
-        bundleAntrag.entry as entryAntrag, 
+        bundleAntrag.entry as entryAntrag,
         entryAntrag.resource = create('Composition') as compositionAntrag then
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
@@ -128,13 +128,13 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         /* ------------------------------ Bundle ---------------------------- */
 
         // Meta
-        src -> bundleAntrag.id = uuid(); 
+        src -> bundleAntrag.id = uuid();
         src -> bundleAntrag.type = 'transaction';
 
         /* ------------------------------ Composition ---------------------------- */
 
         // Meta
-        src -> compositionAntrag.title = 'Antrag';
+        src -> compositionAntrag.title = 'Antrag pseudonymisiert';
         src -> compositionAntrag.id = uuid();
         src -> compositionAntrag.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert';
         src -> compositionAntrag.status = cast('final', 'FHIR.code');
@@ -161,7 +161,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
         // Author
         operations.editor as author -> compositionAntrag.author = create('Reference') as subject, subject.reference = author;
-            
+
         /* ------------------------------ Resources ---------------------------- */
 
         // Basisangaben (Antrag.basisangaben)
@@ -182,31 +182,31 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
             src -> biopsieSection.entry = create('Reference') as reference, reference.identifier = create('Identifier') as formularId,
                                                 formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
                                                 formularId.value = evaluate(index, '$this.formIndex.toString()');
-        
+
             /* ------------------------------ Resources ---------------------------- */
             // Anforderung (Antrag.biopsie.anforderung)
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection);
             };
-                
+
             // TNM (Antrag.biopsie.tnm)
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'" then
-            { 
+            {
                 src then TransformBundleTNM(operations, bundleAntrag, compositionAntrag, biopsieSection);
             };
- 
+
             // Resistenztestung (Antrag.biopsie.resistenztestung)
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleResistenztestung(operations, bundleAntrag, compositionAntrag, biopsieSection);
-            };                
-            
+            };
+
             // Vorbefund (Antrag.biopsie.vorbefund)
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleVorbefundFHIR(operations, bundleAntrag, compositionAntrag, biopsieSection, index);
-            }; 
+            };
 
             src then IncrementFormIndex(src, index);
         };
@@ -229,12 +229,12 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 
     src.operations as operations,
     // Execute as many times as there are Basisangaben
-    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" -> 
+    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
     // Add a transaction bundle to the collection bundle
     tgt.entry as entry,
     entry.resource = create('Bundle') as bundleBefund,
     // Add a composition to the transaction bundle
-    bundleBefund.entry as entryBefund, 
+    bundleBefund.entry as entryBefund,
     entryBefund.resource = create('Composition') as compositionBefund then
     {
         // Create this let because we can't check on two parameters with the same name in FHIRPath
@@ -247,7 +247,6 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         src -> bundleBefund.id = uuid();
         src -> bundleBefund.type = 'transaction';
 
-
         /* ------------------------------ Composition ---------------------------- */
 
         // Meta
@@ -259,10 +258,12 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionBefund.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
 
         // Title
-        src -> compositionBefund.title = 'Molpatho-befund pseudonymisiert';
+        src -> compositionBefund.title = 'Befund pseudonymisiert';
 
         // Identifier i.e. Case ID
-        src -> compositionBefund.identifier as identifier, identifier.value = evaluate(index, '$this.caseIndex.toString()');
+        src -> compositionBefund.identifier = create('Identifier') as FallIdentifier,
+                                                    FallIdentifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
+                                                    FallIdentifier.value = evaluate(index, '$this.caseIndex.toString()');
 
         // Status
         src -> compositionBefund.status = cast('final', 'FHIR.code');
@@ -272,82 +273,82 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         {
             src.patid as patid, values.value as value -> compositionBefund.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
         };
-        
+
         // Date
         operations.timestamp as timestamp -> compositionBefund.date = dateOp(timestamp, 'dateTime');
 
         // Author
         operations.editor as author -> compositionBefund.author = create('Reference') as subject, subject.reference = author;
-            
+
         /* ------------------------------ Resources ---------------------------- */
 
-        // Histologie
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-HL' + %index.formIndex.toString() and type = 'save'" then
+        // Diagnostik(en) (Befund.diagnostik)
+        // create 1 diagnosticSection per diagnostik (in the CDS)
+        src then InitFormIndex(src, index); // the formIndex indicates which diagnostik (an thus which diagnosticSection) should be created
+        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionBefund.section = create('BackboneElement') as diagnosticSection then
         {
-            // src then TransformBundleHistologie(operations, bundleBefund, compositionBefund);
-            src then IncrementFormIndex(src, index);
-        };
+            /* ------------------------------ Section ---------------------------- */
+            // Meta
+            src -> diagnosticSection.title = 'diagnostik';
+            src -> diagnosticSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections','diagnostik');
+            src -> diagnosticSection.entry = create('Reference') as reference, reference.identifier = create('Identifier') as formularId,
+                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
 
-        // Immunhistochemie
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save'" then
-        {
-            src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund);
-            src then IncrementFormIndex(src, index);
-        };
+            /* ------------------------------ Resources ---------------------------- */
+            // Immunhistochemie (Befund.diagnostik.immunhistochemie)
+            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save'" then
+            // {
+            //     // TODO
+            //     src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund, diagnosticSection);
+            // };
 
-        // NGS Lung Panel
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'" then
-        {
-            src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, index);
-            src then IncrementFormIndex(src, index);
-        };
+            // Histologie (Befund.diagnostik.histologie)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-HL' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleHistologie(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-        // Molekularpathologie
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'" then
-        {
-            // src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund);
-            src then IncrementFormIndex(src, index);
-        };
+            // Molekularpathologie (Befund.diagnostik.molekularpathologie)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-        // Fusion NGS
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'" then
-        {
-            src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, index);
-            src then IncrementFormIndex(src, index);
-        };
+            // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
 
-        // Fast Track
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'" then
-        {
-            src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund);
-            src then IncrementFormIndex(src, index);
-        };
-        
-        // Sonstige Untersuchungen
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'" then
-        {
-            src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, index);
-            src then IncrementFormIndex(src, index);
-        };
+            // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
 
-        src then InitFormIndex(src, index);
-        src.operations as operations, operations where "%index.formIndex <= %maxIndex" then
-        {
+            // Fast Track (Befund.diagnostik.fast-track)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
+
+            // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'" then
+            {
+                src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
+            
+            // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'" then
             {
-                src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, index);
-            };                
+                src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
+
             src then IncrementFormIndex(src, index);
         };
-        
-        // Beurteilung
+
+        // Beurteilung (Befund.beurteilung)
         src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BU' and type = 'save'" then
         {
             src then TransformBundleBeurteilung(operations, bundleBefund, compositionBefund, index);
@@ -366,13 +367,13 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
     let index = create('RepeatIndex');
 
     /* ------------------------------ Therapien ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset index    
+    src then InitCaseIndex(src, index); // Reset index
     src ->
     // Add a transaction bundle to the collection bundle
     tgt.entry as entry,
     entry.resource = create('Bundle') as bundleTherapie,
     // Add a composition to the transaction bundle
-    bundleTherapie.entry as entryTherapie, 
+    bundleTherapie.entry as entryTherapie,
     entryTherapie.resource = create('Composition') as compositionTherapie then
     {
         /* ------------------------------ Bundle ---------------------------- */
@@ -413,13 +414,13 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 
         // Author
         // operations.editor as author -> compositionTherapie.author = create('Reference') as subject, subject.reference = author;
-        
+
         /* ------------------------------ Section ---------------------------- */
 
         src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'therapie') then
         {
             /* ------------------------------ Therapie ---------------------------- */
-        
+
             // Operation
             src then InitFormIndex(src, index);
             src.operations as operations, operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'" then
@@ -435,7 +436,7 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
                 src then TransformBundleSystemischeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
                 src then IncrementFormIndex(src, index);
             };
-        };  
+        };
     };
 }
 
@@ -463,7 +464,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-AF') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-AF\') + \'-AF\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-AF\') + \'-AF\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-AF\') + \'-AF\'.length()).toInteger()');
     };
 
@@ -471,7 +472,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-TNM') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-TNM\') + \'-TNM\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-TNM\') + \'-TNM\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-TNM\') + \'-TNM\'.length()).toInteger()');
     };
 
@@ -479,7 +480,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-RT') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-RT\') + \'-RT\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-RT\') + \'-RT\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-RT\') + \'-RT\'.length()).toInteger()');
     };
 
@@ -487,7 +488,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-VB') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger()');
     };
 }
@@ -504,7 +505,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-HL') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-HL\') + \'-HL\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-HL\') + \'-HL\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-HL\') + \'-HL\'.length()).toInteger()');
     };
 
@@ -512,15 +513,15 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-IHC') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-IHC\') + \'-IHC\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-IHC\') + \'-IHC\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-IHC\') + \'-IHC\'.length()).toInteger()');
     };
-    
+
     // NGS Lung Panel
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-LP') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-LP\') + \'-LP\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-LP\') + \'-LP\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-LP\') + \'-LP\'.length()).toInteger()');
     };
 
@@ -528,7 +529,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-MP') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-MP\') + \'-MP\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-MP\') + \'-MP\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-MP\') + \'-MP\'.length()).toInteger()');
     };
 
@@ -536,7 +537,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-FS') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-FS\') + \'-FS\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-FS\') + \'-FS\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-FS\') + \'-FS\'.length()).toInteger()');
     };
 
@@ -544,7 +545,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-FT') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-FT\') + \'-FT\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-FT\') + \'-FT\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-FT\') + \'-FT\'.length()).toInteger()');
     };
 
@@ -552,7 +553,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-SU') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-SU\') + \'-SU\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-SU\') + \'-SU\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-SU\') + \'-SU\'.length()).toInteger()');
     };
 
@@ -560,7 +561,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-LB') and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger() > %index.maxIndex" 
+        operations where "crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger()');
     };
 }
