@@ -16,18 +16,18 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
 
-/*
 // Befund
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCDS"
 
+/*
 // Operation
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS"
@@ -39,21 +39,11 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    //src then MapStammdaten(src, tgt);
-    src then MapAntrag(src, tgt);
+    // src then MapStammdaten(src, tgt);
+    // src then MapAntrag(src, tgt);
+    src then MapBefund(src, tgt);
 
     /*
-    // Befund
-    src -> tgt.operations as operations then TransformFastTrackCTS(src, operations);
-    src -> tgt.operations as operations then TransformHistologieCTS(src, operations);
-    src -> tgt.operations as operations then TransformSonstigeUntersuchungCTS(src, operations);
-    src -> tgt.operations as operations then TransformImmunhistochemieCTS(src, operations);
-    src -> tgt.operations as operations then TransformBeurteilungCTS(src, operations);
-    src -> tgt.operations as operations then TransformNGSLungPanelCTS(src, operations);
-    src -> tgt.operations as operations then TransformLiquidBiopsyCTS(src, operations);
-    src -> tgt.operations as operations then TransformFusionNGSCTS(src, operations);
-    src -> tgt.operations as operations then TransformMolekularpathologieCTS(src, operations);
-
     // Operation
     src -> tgt.operations as operations then TransformStrahlentherapieCTS(src, operations);
     src -> tgt.operations as operations then TransformSonstigeTherapieCTS(src, operations);
@@ -133,4 +123,68 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
     // src -> tgt.operations as operations then TransformTNMCTS(src, operations);
     // src -> tgt.operations as operations then TransformResistenztestungCTS(src, operations);
     // src -> tgt.operations as operations then TransformVorbefundCTS(src, operations);
+}
+
+group MapBefund(source src: Bundle, target tgt: CTS_Transport)
+{
+    src.entry as entry, entry.resource as compositionBefund where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert'", 
+                                            compositionBefund.identifier as identifier, identifier.value as fallNummer then
+    {
+        // Patid
+        compositionBefund.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
+
+        // Diagnostik(en) (Befund.diagnostik)
+        // compositionBefund.section as diagnosticSection, diagnosticSection where "code.coding.code = 'diagnostik'" -> tgt.operations as operations then
+        // {
+        //     let formNummer = evaluate(diagnosticSection, '$this.entry.identifier.value');
+
+        //     // Immunhistochemie (Befund.diagnostik.immunhistochemie)
+
+        //     // Histologie (Befund.diagnostik.histologie)
+
+        //     // Molekularpathologie (Befund.diagnostik.molekularpathologie)
+
+        //     // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
+
+        //     // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
+
+        //     // Fast Track (Befund.diagnostik.fast-track)
+
+        //     // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+
+        //     // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
+
+        // };
+
+        // Beurteilung (Befund.beurteilung) 
+        compositionBefund.section as section, section where "code.coding.code = 'beurteilung'" -> tgt.operations as operations then
+        {
+            let index = create('RepeatIndex'); // repeatindex needed for DiagnosticReport
+            src then InitSectionIndex(src, index); 
+
+            section -> tgt.version = '1.0';
+            section -> operations.type = 'save';
+            section -> operations.crfid = evaluate(fallNummer, '$this + \'-BU\'');
+
+            section.entry as sectionEntry, sectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    section then TransformBeurteilungCDS(entry, operations, index);
+                    entry.resource where "resource is DiagnosticReport" then IncrementSectionIndex(src, index);
+                };
+            };
+        }; 
+    };
+}
+
+// Helper functions
+group InitSectionIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = 0;
+}
+
+group IncrementSectionIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = evaluate(index, '$this.sectionIndex + 1');
 }
