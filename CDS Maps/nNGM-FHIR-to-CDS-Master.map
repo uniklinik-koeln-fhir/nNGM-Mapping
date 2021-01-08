@@ -159,13 +159,12 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
             };
 
             // Vorbefund (Antrag.biopsie.vorbefund)
-            // TODO: repeatindex isn't working as expected; see "id_35" for example:
-            // repeatindex becomes an array with 1 element instead of integer and 
-            // where-loop for NGS Panel (and Fusion NGS) is executed only once instead of 2 or 3 times (with this test data)
             biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
             {
                 let crfidLeft = append(fallNummer, '-VB');
                 let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
+                src then InitSectionIndex(src, index); // used for NGS Lung Panel
+                src then InitCaseIndex(src, index);  // used for Fusion NGS
 
                 nestedSection -> tgt.version = '1.0';
                 nestedSection -> operations.type = 'save';
@@ -176,6 +175,13 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                     src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
                     {
                         nestedSection then TransformVorbefundCDS(entry, operations, index);
+
+                        entry where "resource is Observation 
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+                                    IncrementSectionIndex(src, index);
+                        entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+                                    IncrementCaseIndex(src, index);
                     };
                 };
             };
@@ -184,12 +190,22 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 }
 
 // Helper functions
-group InitSectionIndex(source src: BackboneElement, target index: RepeatIndex)
+group InitSectionIndex(source src: Bundle, target index: RepeatIndex)
 {
     src -> index.sectionIndex = 0;
 }
 
-group IncrementSectionIndex(source src: BackboneElement, target index: RepeatIndex)
+group InitCaseIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.caseIndex = 0;
+}
+
+group IncrementSectionIndex(source src: Bundle, target index: RepeatIndex)
 {
     src -> index.sectionIndex = evaluate(index, '$this.sectionIndex + 1');
+}
+
+group IncrementCaseIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
 }
