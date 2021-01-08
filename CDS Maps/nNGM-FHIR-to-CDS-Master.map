@@ -6,14 +6,17 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGMv09c" = nNGMv09c
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-// Antrag
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
+// Stammdaten
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
 
+// Antrag
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
+//imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
+//imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
+//imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
+
+/*
 // Befund
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS"
@@ -30,28 +33,16 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieCTS"
+*/
 
 group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
-    src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    // Patient ID
-    src.entry as entry then
-    {
-        entry.resource as patient where "resource is Patient" then
-        {
-            patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
-        };
-    };
-    // Antrag
-    src -> tgt.operations as operations then TransformStammdatenCTS(src, operations);
-    src -> tgt.operations as operations then TransformTNMCTS(src, operations);
-    src -> tgt.operations as operations then TransformResistenztestungCTS(src, operations);
-    src -> tgt.operations as operations then TransformAnforderungCTS(src, operations);
-    src -> tgt.operations as operations then TransformBasisangabenCTS(src, operations);
-    src -> tgt.operations as operations then TransformVorbefundCTS(src, operations);
+    src then MapStammdaten(src, tgt);
+    src then MapAntrag(src, tgt);
 
+    /*
     // Befund
     src -> tgt.operations as operations then TransformFastTrackCTS(src, operations);
     src -> tgt.operations as operations then TransformHistologieCTS(src, operations);
@@ -68,4 +59,78 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
     src -> tgt.operations as operations then TransformSonstigeTherapieCTS(src, operations);
     src -> tgt.operations as operations then TransformOperationTherapieCTS(src, operations);
     src -> tgt.operations as operations then TransformSystemischeTherapieCTS(src, operations);
+    */
+}
+
+group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
+{
+    // Patient ID
+    src.entry as entry, entry.resource as composition where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Stammdaten-pseudonymisiert'" then
+    {
+        // Patid
+        composition.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+        src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
+    };
+    
+}
+
+group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
+{
+    src.entry as entry, entry.resource as composition where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert'", composition.identifier as identifier, identifier.value as fallNummer then
+    {
+        // Patid
+        composition.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
+
+        
+        // Basisangaben
+        composition.section as section, section where "code.coding.code = 'basisangaben'" -> tgt.operations as operations then
+        {   
+            section -> tgt.version = '1.0';
+            section -> operations.type = 'save';
+            section -> operations.crfid = evaluate(fallNummer, '$this + \'-BA\'');
+
+            section.entry as sectionEntry, sectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    section then TransformBasisangabenCDS(entry, operations);
+                };
+            };
+        };
+        
+
+        //section.entry as biopsieSection, biopsieSection.identifier as biopsieIdentifier, biopsieIdentifier.value as fallNummer
+
+        // Biopsie
+        composition.section as section, section where "code.coding.code = 'biopsie'" -> tgt.operations as operations then
+        {   
+            let formNummer = evaluate(section, '$this.entry.identifier.value');
+
+            // Anforderung
+            section.section as nestedSection, nestedSection where "code.coding.code = 'anforderung'" -> tgt.operations as operations then
+            {
+                let crfidOne = append(fallNummer, '-AF');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidOne, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformAnforderungCDS(entry, operations);
+                    };
+                };
+            };
+        };
+    };
+
+
+    
+    // Antrag
+    // src -> tgt.operations as operations then TransformAnforderungCTS(src, operations);
+    // src -> tgt.operations as operations then TransformTNMCTS(src, operations);
+    // src -> tgt.operations as operations then TransformResistenztestungCTS(src, operations);
+    // src -> tgt.operations as operations then TransformVorbefundCTS(src, operations);
 }
