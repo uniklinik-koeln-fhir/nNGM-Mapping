@@ -1,283 +1,276 @@
 /// version = 0.1
-/// title = "nNGM: Mapping Histologie CTS"
+/// title = "nNGM: Mapping Histologie CDS"
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS" = nNGM_Mapping_HistologieCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCDS" = nNGM_Mapping_HistologieCDS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformHistologieCTS(source src: Bundle, target tgt: BackboneElement)
+group TransformHistologieCDS(source entry: BackboneElement, target tgt: BackboneElement)
 {
-    // Metadata
-    src -> tgt.crfid = '*-HL1';
-    src -> tgt.type = 'save';
-
-    src.entry as entry then
+    /*------------------------------ Specimen -------------------------------*/
+    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
     {
-        /*------------------------------ Specimen -------------------------------*/
-        entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
+        // biopsieId.value --> Biopsy-ID
+        specimen -> tgt.data as data then
         {
-            // biopsieId.value --> Biopsy-ID
-            specimen -> tgt.data as data then
-            {
-                specimen.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
-                {   
-                    specimen -> data.blockindex = 1;
-                    specimen -> data.groupindex = 0;
-                    specimen -> data.itemid = 'id_1601';
-                    value -> data.values as values, values.value = value, values.unit = 'count';
-                };
+            specimen.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer'" then
+            {   
+                specimen -> data.blockindex = 1;
+                specimen -> data.groupindex = 0;
+                specimen -> data.itemid = 'id_1601';
+                value -> data.values as values, values.value = value, values.unit = 'count';
             };
+        };
 
-            //receivedTime -> Eingang des Tumormaterials in der Pathologie
-            specimen -> tgt.data as data then
-            {
-                specimen.receivedTime as receivedtime then
-                {   
-                    specimen -> data.blockindex = 0;
-                    specimen -> data.groupindex = 0;
-                    specimen -> data.itemid = 'id_2515';
-                    receivedtime -> data.values as values, values.value = receivedtime;
-                };
+        //receivedTime -> Eingang des Tumormaterials in der Pathologie
+        specimen -> tgt.data as data then
+        {
+            specimen.receivedTime as receivedtime then
+            {   
+                specimen -> data.blockindex = 0;
+                specimen -> data.groupindex = 0;
+                specimen -> data.itemid = 'id_2515';
+                receivedtime -> data.values as values, values.value = receivedtime;
             };
+        };
+    
+        //accessionIdentifier.value -> Eingangsnummer des Tumormaterials in der Pathologie
+        specimen -> tgt.data as data then
+        {
+            specimen.accessionIdentifier as identifier, identifier.value as identValue then
+            {   
+                specimen -> data.blockindex = 0;
+                specimen -> data.groupindex = 0;
+                specimen -> data.itemid = 'id_2516';
+                identValue -> data.values as values, values.value = identValue;
+            };
+        };
+
+        //type.text -> Tumormaterial 
+        specimen -> tgt.data as data then
+        {
+            specimen.type as type, type.text as text then
+            {   
+                specimen -> data.blockindex = 0;
+                specimen -> data.groupindex = 0;
+                specimen -> data.itemid = 'id_2517';
+                text -> data.values as values, values.value = text;
+            };
+        };
+    };
+
+    /*------------------------------ DiagnosticReport -------------------------------*/
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" then
+    {
+        // Pathologie-Fall-ID
+        diagnosticReport -> tgt.data as data then
+        {
+            diagnosticReport.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/externePathoBefundnummer'" then
+            {   
+                value -> data.blockindex = 0;
+                value -> data.groupindex = 0;
+                value -> data.itemid = 'extern_patho_case_id';
+                value -> data.values as values, values.value = value;
+            };
+        };
+
+        // Untersuchungs ID
+        diagnosticReport -> tgt.data as data then
+        {
+            diagnosticReport.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
+            {   
+                value -> data.blockindex = 5;
+                value -> data.groupindex = 0;
+                value -> data.itemid = 'assessment_id';
+                value -> data.values as values, values.value = value;
+            };
+        };
+    };
         
-            //accessionIdentifier.value -> Eingangsnummer des Tumormaterials in der Pathologie
-            specimen -> tgt.data as data then
-            {
-                specimen.accessionIdentifier as identifier, identifier.value as identValue then
-                {   
-                    specimen -> data.blockindex = 0;
-                    specimen -> data.groupindex = 0;
-                    specimen -> data.itemid = 'id_2516';
-                    identValue -> data.values as values, values.value = identValue;
-                };
-            };
-
-            //type.text -> Tumormaterial 
-            specimen -> tgt.data as data then
-            {
-                specimen.type as type, type.text as text then
-                {   
-                    specimen -> data.blockindex = 0;
-                    specimen -> data.groupindex = 0;
-                    specimen -> data.itemid = 'id_2517';
-                    text -> data.values as values, values.value = text;
-                };
-            };
-        };
-
-        /*------------------------------ DiagnosticReport -------------------------------*/
-        entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" then
+    /*------------------------------Observation-------------------------------*/
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histologie'" then
+    {
+        //Component.code -> Klassifikation
+        observation -> tgt.data as data then
         {
-            // Pathologie-Fall-ID
-            diagnosticReport -> tgt.data as data then
-            {
-                diagnosticReport.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/externePathoBefundnummer'" then
-                {   
-                    value -> data.blockindex = 0;
-                    value -> data.groupindex = 0;
-                    value -> data.itemid = 'extern_patho_case_id';
-                    value -> data.values as values, values.value = value;
-                };
-            };
-
-            // Untersuchungs ID
-            diagnosticReport -> tgt.data as data then
-            {
-                diagnosticReport.identifier as identifier, identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
-                {   
-                    value -> data.blockindex = 5;
-                    value -> data.groupindex = 0;
-                    value -> data.itemid = 'assessment_id';
-                    value -> data.values as values, values.value = value;
-                };
-            };
-        };
-            
-        /*------------------------------Observation-------------------------------*/
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histologie'" then
-        {
-            //Component.code -> Klassifikation
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {   
-                    component.valueCodeableConcept as valueCodeableConcept where "code.coding.system = 'http://ncit.nci.nih.gov' and code.coding.code = 'C25161'" then
-                    {
-                        observation -> data.blockindex = 2;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1658';
-                        valueCodeableConcept -> data.values as values, values.value = evaluate(valueCodeableConcept, 'coding.code + \'\\t\' + coding.display');
-                    };
-                };
-            };
-
-            //bodysite -> Lokalisation
-            observation -> tgt.data as data then
-            {
-                observation.bodySite as bodySite where "$this.bodySite.coding.system = 'http://uk-koeln.de/fhir/ValueSet/icd-o-3-bodysite'", bodySite.coding as coding then
-                {   
+            observation.component as component then
+            {   
+                component.valueCodeableConcept as valueCodeableConcept where "code.coding.system = 'http://ncit.nci.nih.gov' and code.coding.code = 'C25161'" then
+                {
                     observation -> data.blockindex = 2;
                     observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2469';
-                    bodySite -> data.values as values, values.value = evaluate(bodySite, 'coding.code + \'\\t\' + coding.display');
-                };
-            };
-
-            // valueCodeableConcept -> Grading
-            observation -> tgt.data as data then
-            {
-                observation.valueCodeableConcept as cc, cc.coding as coding then
-                {   
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2403';
-                    coding.code as code -> data.values as values, values.value = code;
-                };
-            };
-            
-            //Wachstumsmuster bei Adenokarzinom lepidisch
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {   
-                    component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8250/3'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1286';
-                        valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                    };
-                };
-            };
-
-            //Wachstumsmuster bei Adenokarzinom azinär
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {   
-                    component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8551/3'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1296';
-                        valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                    };
-                };
-            };
-
-            //Wachstumsmuster bei Adenokarzinom papillär
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {   
-                    component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8260/3'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1294';
-                        valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                    };
-                };
-            };
-
-            //Wachstumsmuster bei Adenokarzinom mikropapillär
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {   
-                    component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8265/3'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1288';
-                        valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                    };
-                };
-            };
-
-            //Wachstumsmuster bei Adenokarzinom solide
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {   
-                    component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8230/3'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1292';
-                        valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                    };
-                };
-            };
-
-            //Anteil an Siegelringzellkarzinomen 
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {   
-                    component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8490/3'" then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2519';
-                        valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
-                    };
+                    observation -> data.itemid = 'id_1658';
+                    valueCodeableConcept -> data.values as values, values.value = evaluate(valueCodeableConcept, 'coding.code + \'\\t\' + coding.display');
                 };
             };
         };
 
-        /* --------------- ServiceRequest ---------------------- */
-        entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'histologie'" then
+        //bodysite -> Lokalisation
+        observation -> tgt.data as data then
         {
-            //Durchfuehrung -> 4,0,  id_2520
-            serviceRequest -> tgt.data as data then
+            observation.bodySite as bodySite where "$this.bodySite.coding.system = 'http://uk-koeln.de/fhir/ValueSet/icd-o-3-bodysite'", bodySite.coding as coding then
+            {   
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2469';
+                bodySite -> data.values as values, values.value = evaluate(bodySite, 'coding.code + \'\\t\' + coding.display');
+            };
+        };
+
+        // valueCodeableConcept -> Grading
+        observation -> tgt.data as data then
+        {
+            observation.valueCodeableConcept as cc, cc.coding as coding then
+            {   
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2403';
+                coding.code as code -> data.values as values, values.value = code;
+            };
+        };
+        
+        //Wachstumsmuster bei Adenokarzinom lepidisch
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {   
+                component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8250/3'" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1286';
+                    valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                };
+            };
+        };
+
+        //Wachstumsmuster bei Adenokarzinom azinär
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {   
+                component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8551/3'" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1296';
+                    valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                };
+            };
+        };
+
+        //Wachstumsmuster bei Adenokarzinom papillär
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {   
+                component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8260/3'" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1294';
+                    valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                };
+            };
+        };
+
+        //Wachstumsmuster bei Adenokarzinom mikropapillär
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {   
+                component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8265/3'" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1288';
+                    valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                };
+            };
+        };
+
+        //Wachstumsmuster bei Adenokarzinom solide
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {   
+                component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8230/3'" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1292';
+                    valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                };
+            };
+        };
+
+        //Anteil an Siegelringzellkarzinomen 
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {   
+                component.valueQuantity as valuequantity where "code.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1' and code.coding.code = '8490/3'" then
+                {
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2519';
+                    valuequantity.value as value -> data.values as values, values.value = value, values.unit = 'percent';
+                };
+            };
+        };
+    };
+
+    /* --------------- ServiceRequest ---------------------- */
+    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'histologie'" then
+    {
+        //Durchfuehrung -> 4,0,  id_2520
+        serviceRequest -> tgt.data as data then
+        {
+            serviceRequest.status as status where "$this.status = 'active'" then
             {
-                serviceRequest.status as status where "$this.status = 'active'" then
+                serviceRequest ->  data.blockindex = 4;
+                serviceRequest ->  data.groupindex = 0;
+                serviceRequest ->  data.itemid = 'id_2520';
+                status -> data.values as values,values.value = 'in Bearbeitung';
+            };
+            serviceRequest.status as status where "$this.status = 'completed'" then
+            {
+                serviceRequest ->  data.blockindex = 4;
+                serviceRequest ->  data.groupindex = 0;
+                serviceRequest ->  data.itemid = 'id_2520';
+                status -> data.values as values,values.value = 'abgeschlossen';
+            };
+        };
+
+        //Abschluss -> 4,0, id_2462
+        serviceRequest -> tgt.data as data then
+        {
+            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
+            {
+                statusextension where "$this.url ='status'" then
                 {
                     serviceRequest ->  data.blockindex = 4;
                     serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2520';
-                    status -> data.values as values,values.value = 'in Bearbeitung';
+                    serviceRequest ->  data.itemid = 'id_2462';
+                    statusextension.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code  -> data.values as values,values.value = code;
                 };
-                serviceRequest.status as status where "$this.status = 'completed'" then
+            };
+        };
+    
+        //Datum des Abschlusses -> 4,0, id_2521
+        serviceRequest -> tgt.data as data then
+        {
+            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+            {
+                datumextension where "$this.url ='datum'" then
                 {
                     serviceRequest ->  data.blockindex = 4;
                     serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2520';
-                    status -> data.values as values,values.value = 'abgeschlossen';
-                };
-            };
-
-            //Abschluss -> 4,0, id_2462
-            serviceRequest -> tgt.data as data then
-            {
-                serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
-                {
-                    statusextension where "$this.url ='status'" then
-                    {
-                        serviceRequest ->  data.blockindex = 4;
-                        serviceRequest ->  data.groupindex = 0;
-                        serviceRequest ->  data.itemid = 'id_2462';
-                        statusextension.valueCodeableConcept as valueCodeableConcept,
-                        valueCodeableConcept.coding as coding,
-                        coding.code as code  -> data.values as values,values.value = code;
-                    };
-                };
-            };
-        
-            //Datum des Abschlusses -> 4,0, id_2521
-            serviceRequest -> tgt.data as data then
-            {
-                serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
-                {
-                    datumextension where "$this.url ='datum'" then
-                    {
-                        serviceRequest ->  data.blockindex = 4;
-                        serviceRequest ->  data.groupindex = 0;
-                        serviceRequest ->  data.itemid = 'id_2521';
-                        datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
-                    };
+                    serviceRequest ->  data.itemid = 'id_2521';
+                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
                 };
             };
         };
