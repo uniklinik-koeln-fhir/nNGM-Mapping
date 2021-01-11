@@ -12,9 +12,9 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
 // Antrag
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
-//imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS"
-//imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCTS"
-//imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCTS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
 /*
 // Befund
@@ -65,10 +65,10 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
 {
     // Patient ID
-    src.entry as entry, entry.resource as composition where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Stammdaten-pseudonymisiert'" then
+    src.entry as entry, entry.resource as compositionAntrag where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Stammdaten-pseudonymisiert'" then
     {
         // Patid
-        composition.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+        compositionAntrag.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
         src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
     };
     
@@ -76,14 +76,15 @@ group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
 
 group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 {
-    src.entry as entry, entry.resource as composition where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert'", composition.identifier as identifier, identifier.value as fallNummer then
+    src.entry as entry, entry.resource as compositionAntrag where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert'", 
+                                            compositionAntrag.identifier as identifier, identifier.value as fallNummer then
     {
         // Patid
-        composition.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
+        compositionAntrag.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
 
         
-        // Basisangaben
-        composition.section as section, section where "code.coding.code = 'basisangaben'" -> tgt.operations as operations then
+        // Basisangaben (Antrag.basisangaben)
+        compositionAntrag.section as section, section where "code.coding.code = 'basisangaben'" -> tgt.operations as operations then
         {   
             section -> tgt.version = '1.0';
             section -> operations.type = 'save';
@@ -97,23 +98,20 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
         };
-        
-
-        //section.entry as biopsieSection, biopsieSection.identifier as biopsieIdentifier, biopsieIdentifier.value as fallNummer
-
-        // Biopsie
-        composition.section as section, section where "code.coding.code = 'biopsie'" -> tgt.operations as operations then
+    
+        // Biopsie(n) (Antrag.biopsie)
+        compositionAntrag.section as biopsieSection, biopsieSection where "code.coding.code = 'biopsie'" -> tgt.operations as operations then
         {   
-            let formNummer = evaluate(section, '$this.entry.identifier.value');
+            let formNummer = evaluate(biopsieSection, '$this.entry.identifier.value');
 
-            // Anforderung
-            section.section as nestedSection, nestedSection where "code.coding.code = 'anforderung'" -> tgt.operations as operations then
+            // Anforderung (Antrag.biopsie.anforderung)
+            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'anforderung'" -> tgt.operations as operations then
             {
-                let crfidOne = append(fallNummer, '-AF');
+                let crfidLeft = append(fallNummer, '-AF');
 
                 nestedSection -> tgt.version = '1.0';
                 nestedSection -> operations.type = 'save';
-                nestedSection -> operations.crfid = append(crfidOne, formNummer);
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
 
                 nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
@@ -123,14 +121,91 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                     };
                 };
             };
+
+            // TNM (Antrag.biopsie.tnm)
+            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'tnm'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-TNM');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformTNMCDS(entry, operations);
+                    };
+                };
+            };
+            
+            // Resistenztestung (Antrag.biopsie.resistenztestung)
+            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'resistenztestung'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-RT');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformResistenztestungCDS(entry, operations);
+                    };
+                };
+            };
+
+            // Vorbefund (Antrag.biopsie.vorbefund)
+            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-VB');
+                let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
+                src then InitSectionIndex(src, index); // used for NGS Lung Panel
+                src then InitCaseIndex(src, index);  // used for Fusion NGS
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformVorbefundCDS(entry, operations, index);
+
+                        entry where "resource is Observation 
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+                                    IncrementSectionIndex(src, index);
+                        entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+                                    IncrementCaseIndex(src, index);
+                    };
+                };
+            };
         };
     };
+}
 
+// Helper functions
+group InitSectionIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = 0;
+}
 
-    
-    // Antrag
-    // src -> tgt.operations as operations then TransformAnforderungCTS(src, operations);
-    // src -> tgt.operations as operations then TransformTNMCTS(src, operations);
-    // src -> tgt.operations as operations then TransformResistenztestungCTS(src, operations);
-    // src -> tgt.operations as operations then TransformVorbefundCTS(src, operations);
+group InitCaseIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.caseIndex = 0;
+}
+
+group IncrementSectionIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = evaluate(index, '$this.sectionIndex + 1');
+}
+
+group IncrementCaseIndex(source src: Bundle, target index: RepeatIndex)
+{
+    src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
 }
