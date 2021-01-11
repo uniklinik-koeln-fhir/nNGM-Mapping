@@ -1,6 +1,12 @@
 /// version = 0.1
 /// title = "nNGM: nNGMv09c - FHIR to CTS"
 
+/* TODO
+    - The repeatindex gets mapped to an array with 1 element of integer in the CTS_Transport but should be just unsigned int.  
+    - general issue: when passing a single Fhir resource at a time into the CDS-maps, how to combine with data from another resource?
+                for example when transforming the checkboxes which list e.g. the types of every given observation in the MP under id_2509/10
+*/
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGMv09c" = nNGMv09c
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
@@ -138,45 +144,42 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
         {
             let formNummer = evaluate(diagnosticSection, '$this.entry.identifier.value');
 
-            // TODO: in general when passing a single Fhir resource at a time into the CDS-maps, how to combine data from a group of resources?
-            //       for example when transforming the checkboxes which list e.g. the types of every given observation in the MP under id_2509/10
-
             // Immunhistochemie (Befund.diagnostik.immunhistochemie)
-            // TODO: somehow the ServiceRequest.status is also written at 3_0_id_2508 (despite the map saying otherwise)
-            // diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'immunhistochemie'" -> tgt.operations as operations then
-            // {
-            //     let crfidLeft = append(fallNummer, '-IHC');
+            // TODO: somehow the ServiceRequest.status is also written in the checkboxes at 3_0_id_2508 (despite the map saying otherwise)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'immunhistochemie'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-IHC');
 
-            //     nestedSection -> tgt.version = '1.0';
-            //     nestedSection -> operations.type = 'save';
-            //     nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
 
-            //     nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
-            //     {
-            //         src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
-            //         {
-            //             nestedSection then TransformImmunhistochemieCDS(entry, operations);
-            //         };
-            //     };
-            // };
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformImmunhistochemieCDS(entry, operations);
+                    };
+                };
+            };
 
             // Histologie (Befund.diagnostik.histologie)
-            // diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'histologie'" -> tgt.operations as operations then
-            // {
-            //     let crfidLeft = append(fallNummer, '-HL');
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'histologie'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-HL');
 
-            //     nestedSection -> tgt.version = '1.0';
-            //     nestedSection -> operations.type = 'save';
-            //     nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
 
-            //     nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
-            //     {
-            //         src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
-            //         {
-            //             nestedSection then TransformHistologieCDS(entry, operations);
-            //         };
-            //     };
-            // };
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformHistologieCDS(entry, operations);
+                    };
+                };
+            };
 
             // Molekularpathologie (Befund.diagnostik.molekularpathologie)
             diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'molekularpathologie'" -> tgt.operations as operations then
@@ -197,15 +200,115 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
             };
 
             // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
+            // TODO: Currently the data for Panel Gen Forschung Observation gets the same repeatindex as the Observation. Is this correct?
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'ngs-lung-panel'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-LP');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index); 
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformNGSLungPanelCDS(entry, operations, index);
+
+                        entry where "resource is Observation 
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+                                    IncrementSectionIndex(src, index);
+                    };
+                };
+            };
 
             // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'fusion-ngs'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-FS');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index); 
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformFusionNGSCDS(entry, operations, index);
+
+                        entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+                                    IncrementSectionIndex(src, index);
+                    };
+                };
+            };
 
             // Fast Track (Befund.diagnostik.fast-track)
+            // TODO: somehow the DiagnosticReport.identifier.value as assessmentid is also written in the checkboxes at 3_0_id_2512 (despite the map saying otherwise)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'fast-track'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-FT');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformFastTrackCDS(entry, operations);
+                    };
+                };
+            };
 
             // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+            // TODO: DiagnosticReport and ServiceRequest are mapped twice instead of only once
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'sonstige-untersuchungen'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-SU');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index);
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformSonstigeUntersuchungCDS(entry, operations, index);
+                        entry where "resource is Observation" then IncrementSectionIndex(src, index);
+                    };
+                };
+            };
 
             // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'liquid-biopsy'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-LB');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index);
 
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformLiquidBiopsyCDS(entry, operations, index);
+                        entry where "resource is Observation" then IncrementSectionIndex(src, index);
+                    };
+                };
+            };
         };
 
         // Beurteilung (Befund.beurteilung) 

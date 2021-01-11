@@ -1,1568 +1,1555 @@
 /// version = 0.1
-/// title = "nNGM: Mapping Fusion NGS CTS"
+/// title = "nNGM: Mapping FusionNGS CDS"
 
-/*
-TODO
-- Repeatindex
-*/
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCTS" = nNGM_Mapping_FusionNGSCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCDS" = nNGM_Mapping_FusionNGSCDS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformFusionNGSCTS(source src: Bundle, target tgt: BackboneElement)
+group TransformFusionNGSCDS(source entry: BackboneElement, target tgt: BackboneElement, target index: RepeatIndex)
 {
-    src->tgt.crfid = '*-FS1';
-    src->tgt.type = 'save';
-
     // Checkboxes
-    src then TransformFusionCheckboxes(src, tgt);
+    entry then TransformFusionCheckboxes(entry, tgt);
 
-    src.entry as entry then
+    //------------------------ Specimen ------------------------
+    entry.resource as specimen where "resource is Specimen" then
     {
-        //------------------------ Specimen ------------------------
-        entry.resource as specimen where "resource is Specimen" then
+        //Biopsy-ID -> 0, 0, id_1601
+        specimen->tgt.data as data then
         {
-            //Biopsy-ID -> 0, 0, id_1601
-            specimen->tgt.data as data then
+            specimen.identifier as identifier then
             {
-                specimen.identifier as identifier then
-                {
-                    specimen->data.blockindex = 0;
-                    specimen->data.groupindex = 0;
-                    specimen->data.itemid = 'id_1601';
-                    identifier.value as value->data.values as values, values.unit = 'count', values.value = value;
-                };
+                specimen->data.blockindex = 0;
+                specimen->data.groupindex = 0;
+                specimen->data.itemid = 'id_1601';
+                identifier.value as value->data.values as values, values.unit = 'count', values.value = value;
             };
         };
-        //------------------------ DiagnosticReport ------------------------
-        entry.resource as diagnosticReport where "resource is DiagnosticReport" then
+    };
+    //------------------------ DiagnosticReport ------------------------
+    entry.resource as diagnosticReport where "resource is DiagnosticReport" then
+    {
+        //Untersuchungs-ID -> 1, 0, assessment_id
+        diagnosticReport->tgt.data as data then
         {
-            //Untersuchungs-ID -> 1, 0, assessment_id
-            diagnosticReport->tgt.data as data then
+            diagnosticReport.identifier as identifier,
+                identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
             {
-                diagnosticReport.identifier as identifier,
-                    identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
-                {
-                    diagnosticReport->data.blockindex = 1;
-                    diagnosticReport->data.groupindex = 0;
-                    diagnosticReport->data.itemid = 'assessment_id';
-                    identifier.value as value->data.values as values, values.value = value;
-                };
+                diagnosticReport->data.blockindex = 1;
+                diagnosticReport->data.groupindex = 0;
+                diagnosticReport->data.itemid = 'assessment_id';
+                identifier.value as value->data.values as values, values.value = value;
             };
         };
-       
-        /*---------------------- Observation ALK ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ALK'" then
+    };
+    
+    /*---------------------- Observation ALK ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ALK'" then
+    {
+        //Date of Assessment -> 5, 0, id_2098
+        observation->tgt.data as data then
         {
-            //Date of Assessment -> 5, 0, id_2098
-            observation->tgt.data as data then
+            observation.effectiveDateTime as effectiveDateTime then
             {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 5;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2098';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-            
-            //PhÃ¤notyp ->5, 0 ,id_2099
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C16977'" then
-                    {
-                        component.valueString as string then
-                        {
-                            observation->data.blockindex = 5;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2099';
-                            string ->data.values as values, values.unit = 'predef', values.value = string;
-                        };
-                    };
-                };
-            };
-
-            //Ergebnis -> 5, 0, id_2127
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 5;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2127';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 5;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2127';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 5;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2127';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 5, 0, id_2128
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 5;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2128';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 5, 0, id_2129
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 5;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2129';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 5, 0, id_2130
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 5;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2130';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //ALK Exon -> 5, 0, id_2131
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C13231'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 5;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2131';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2098';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
             };
         };
-        /*---------------------- Observation RET ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'RET'" then
+        
+        //PhÃ¤notyp ->5, 0 ,id_2099
+
+        observation->tgt.data as data then
         {
-            //Date of Assessment -> 6, 0, id_2183
-            observation->tgt.data as data then
+            observation.component as component then
             {
-                observation.effectiveDateTime as effectiveDateTime then
+                component.code where "code.coding.code = 'C16977'" then
                 {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2183';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            //PhÃ¤notyp -> 6, 0 ,id_2184
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C16977'" then
+                    component.valueString as string then
                     {
-                        component.valueString as string then
-                        {
-                            observation->data.blockindex = 6;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2184';
-                            string->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                        };
-                    };
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 6, 0, id_2206
-            observation->tgt.data as data then
-            {   
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2206';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2206';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2206';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 6, 0, id_2207
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 6;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2207';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 6, 0, id_2208
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 6;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2208';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 6, 0, id_2209
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 6;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2209';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //RET Exon -> 6, 0, id_2210
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C13231'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 6;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2210';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation ROS1 ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ROS1'" then
-        {
-            //Date of Assessment -> 7, 0, id_2211
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 7;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2211';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            //PhÃ¤notyp -> 7, 0 ,id_2212
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C16977'" then
-                    {
-                        
-                        component.valueString as string then
-                        {
-                            observation->data.blockindex = 7;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2212';
-                            string ->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                        };
-                    };
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 7, 0, id_2241
-
-            observation->tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 7;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2241';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 7;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2241';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 7;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2241';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 7, 0, id_2242
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 7;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2242';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 7, 0, id_2243
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 7;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2243';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 7, 0, id_2244
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 7;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2244';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //ROS1 Exon -> 7, 0, id_2245
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C13231'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 7;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2245';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation NTRK1 ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK1'" then
-        {
-            //Date of Assessment -> 8, 0, id_2540
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 8;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2540';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 8, 0, id_2547
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 8;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2547';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 8;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2547';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 8;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2547';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 8, 0, id_2548
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 8;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2548';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 8, 0, id_2549
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 8;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2549';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 8, 0, id_2550
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 8;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2550';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation NTRK2 ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK2'" then
-        {
-            //Date of Assessment -> 9, 0, id_2592
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 9;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2592';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 9, 0, id_2596
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 9;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2596';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 9;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2596';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 9;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2596';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 9, 0, id_2597
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 9;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2597';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 9, 0, id_2598
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 9;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2598';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 9, 0, id_2599
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 9;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2599';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation NTRK3 ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK3'" then
-        {
-            //Date of Assessment -> 10, 0, id_2584
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 10;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2584';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 10, 0, id_2588
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 10;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2588';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 10;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2588';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 10;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2588';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 10, 0, id_2589
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 10;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2589';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 10, 0, id_2590
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 10;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2590';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 10, 0, id_2591
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 10;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2591';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation FGFR1 ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR1'" then
-        {
-            //Date of Assessment -> 11, 0, id_2576
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 11;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2576';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 11, 0, id_2580
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 11;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2580';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 11;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2580';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 11;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2580';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 11, 0, id_2581
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 11;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2581';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 11, 0, id_2582
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 11;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2582';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 11, 0, id_2583
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 11;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2583';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation FGFR2 ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR2'" then
-        {
-            //Date of Assessment -> 12, 0, id_2568
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 12;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2568';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 12, 0, id_2572
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 12;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2572';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 12;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2572';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 12;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2572';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 12, 0, id_2573
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 12;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2573';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 12, 0, id_2574
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 12;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2574';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 12, 0, id_2575
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 12;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2575';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation FGFR3 ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR3'" then
-        {
-            //Date of Assessment -> 13, 0, id_2560
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 13;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2560';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 13, 0, id_2564
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 13;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2564';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 13;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2564';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 13;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2564';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Fusionspartner -> 13, 0, id_2565
-            observation -> tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 13;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2565';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 13, 0, id_2566
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 13;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2566';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //5' Fusionspartner Exon -> 13, 0, id_2567
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 13;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2567';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-        };
-        /*---------------------- Observation Sonstiges ----------------------- */
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'Sonstiges'" then
-        {
-            //Date of Assessment -> 14, 0, 0, id_2246
-
-            observation->tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime then
-                {
-                    observation->data.blockindex = 14;
-                    observation->data.groupindex = 0;
-                    observation->data.repeatindex = 0;
-                    observation->data.itemid = 'id_2246';
-                    effectiveDateTime->data.values as values, values.value = effectiveDateTime;
-                };
-            };
-
-            /*---------------------NGS Fusion -------------------------------*/
-            //Ergebnis -> 14, 0, 0, id_2254
-
-            observation->tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation->data.blockindex = 14;
-                    observation->data.groupindex = 0;
-                    observation->data.repeatindex = 0;
-                    observation->data.itemid = 'id_2254';
-                    code->data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6577-6'" then
-                {
-                    observation->data.blockindex = 14;
-                    observation->data.groupindex = 0;
-                    observation->data.repeatindex = 0;
-                    observation->data.itemid = 'id_2254';
-                    code->data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA18198-4'" then
-                {
-                    observation->data.blockindex = 14;
-                    observation->data.groupindex = 0;
-                    observation->data.repeatindex = 0;
-                    observation->data.itemid = 'id_2254';
-                    code->data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-            //Erster Fusionspartner -> 14, 0, 0 , id_2255
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '48018-6'" then
-                    {
-                        component.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.coding as coding,
-                            coding.code as code then
-                        {
-                            observation->data.blockindex = 14;
-                            observation->data.groupindex = 0;
-                            observation->data.repeatindex = 0;
-                            observation->data.itemid = 'id_2255';
-                            code->data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Zweiter Fusionspartner -> 14, 0, 0 , id_2256
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C28510'" then
-                    {
-                        component.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.coding as coding,
-                            coding.code as code then
-                        {
-                            observation->data.blockindex = 14;
-                            observation->data.groupindex = 0;
-                            observation->data.repeatindex = 0;
-                            observation->data.itemid = 'id_2256';
-                            code->data.values as values, values.value = code;
-                        };
-                    };
-                };
-            };
-
-            //Anzahl der Fusionsreads -> 14, 0, 0 , id_2257
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = '82121-5'" then
-                    {
-                        component.valueInteger as valueInteger then
-                        {
-                            observation->data.blockindex = 14;
-                            observation->data.groupindex = 0;
-                            observation->data.repeatindex = 0;
-                            observation->data.itemid = 'id_2257';
-                            valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
-                        };
-                    };
-                };
-            };
-
-            //Exon erster Fusionspartner -> 14, 0, 0 , id_2258
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'erster-fusionspartner-exon'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 14;
-                            observation->data.groupindex = 0;
-                            observation->data.repeatindex = 0;
-                            observation->data.itemid = 'id_2258';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-
-            //Exon zweiter Fusionspartner -> 14, 0, 0 , id_2259
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'fusionspartner-exon'" then
-                    {
-                        component.valueString as valueString then
-                        {
-                            observation->data.blockindex = 14;
-                            observation->data.groupindex = 0;
-                            observation->data.repeatindex = 0;
-                            observation->data.itemid = 'id_2259';
-                            valueString->data.values as values, values.value = valueString;
-                        };
-                    };
-                };
-            };
-        };
-        /* ------ Items for all the observation created---------- */
-        entry.resource as observation where "resource is Observation" then
-        {
-            //SOP-Versionsnummer des Standorts -> 2, 0, id_2612
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C48443' and %tgt.operations.data.where(itemid = 'id_2612').exists().not()" then
-                    {
-                        observation->data.blockindex = 2;
+                        observation->data.blockindex = 5;
                         observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2612';
-                        component.valueString as valueString->data.values as values, values.value = valueString;
-                    };
-                };
-            };
-
-            // Standort 
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C25341' and %tgt.operations.data.where(itemid = 'id_2435').exists().not()" then
-                    {
-                        observation->data.blockindex = 2;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2435';
-                        component.valueString as valueString->data.values as values, values.value = valueString;
-                    };
-                };
-            };
-
-            // Assay -> 3, 0, id_2538
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C60819' and %tgt.operations.data.where(itemid = 'id_2538').exists().not()" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2538';
-                        component.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.coding as coding,
-                            coding.code as code->data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Hersteller -> 3, 0, id_2539
-
-            observation->tgt.data as data then
-            {
-                observation.component as component then
-                {
-                    component.code where "code.coding.code = 'C25392' and %tgt.operations.data.where(itemid = 'id_2539').exists().not()" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2539';
-                        component.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.coding as coding,
-                            coding.code as code->data.values as values, values.value = code;
+                        observation->data.itemid = 'id_2099';
+                        string ->data.values as values, values.unit = 'predef', values.value = string;
                     };
                 };
             };
         };
-        /* --------------- ServiceRequest ---------------------- */
-        entry.resource as serviceRequest where "resource is ServiceRequest" then
-        {
-            //Durchfuehrung -> 15, 0, id_2520
 
-            serviceRequest->tgt.data as data then
+        //Ergebnis -> 5, 0, id_2127
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
             {
-                serviceRequest.status as status where "$this.status = 'active'" then
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2127';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2127';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2127';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 5, 0, id_2128
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 5;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2128';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 5, 0, id_2129
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 5;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2129';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 5, 0, id_2130
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 5;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2130';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //ALK Exon -> 5, 0, id_2131
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C13231'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 5;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2131';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation RET ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'RET'" then
+    {
+        //Date of Assessment -> 6, 0, id_2183
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2183';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        //PhÃ¤notyp -> 6, 0 ,id_2184
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C16977'" then
+                {
+                    component.valueString as string then
+                    {
+                        observation->data.blockindex = 6;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2184';
+                        string->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                    };
+                };
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 6, 0, id_2206
+        observation->tgt.data as data then
+        {   
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2206';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2206';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2206';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 6, 0, id_2207
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 6;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2207';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 6, 0, id_2208
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 6;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2208';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 6, 0, id_2209
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 6;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2209';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //RET Exon -> 6, 0, id_2210
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C13231'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 6;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2210';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation ROS1 ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ROS1'" then
+    {
+        //Date of Assessment -> 7, 0, id_2211
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 7;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2211';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        //PhÃ¤notyp -> 7, 0 ,id_2212
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C16977'" then
+                {
+                    
+                    component.valueString as string then
+                    {
+                        observation->data.blockindex = 7;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2212';
+                        string ->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                    };
+                };
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 7, 0, id_2241
+
+        observation->tgt.data as data then
+        {
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 7;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2241';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 7;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2241';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 7;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2241';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 7, 0, id_2242
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 7;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2242';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 7, 0, id_2243
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 7;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2243';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 7, 0, id_2244
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 7;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2244';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //ROS1 Exon -> 7, 0, id_2245
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C13231'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 7;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2245';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation NTRK1 ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK1'" then
+    {
+        //Date of Assessment -> 8, 0, id_2540
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 8;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2540';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 8, 0, id_2547
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 8;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2547';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 8;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2547';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 8;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2547';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 8, 0, id_2548
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 8;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2548';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 8, 0, id_2549
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 8;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2549';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 8, 0, id_2550
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 8;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2550';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation NTRK2 ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK2'" then
+    {
+        //Date of Assessment -> 9, 0, id_2592
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 9;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2592';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 9, 0, id_2596
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 9;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2596';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 9;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2596';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 9;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2596';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 9, 0, id_2597
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 9;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2597';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 9, 0, id_2598
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 9;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2598';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 9, 0, id_2599
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 9;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2599';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation NTRK3 ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK3'" then
+    {
+        //Date of Assessment -> 10, 0, id_2584
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 10;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2584';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 10, 0, id_2588
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 10;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2588';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 10;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2588';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 10;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2588';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 10, 0, id_2589
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 10;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2589';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 10, 0, id_2590
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 10;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2590';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 10, 0, id_2591
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 10;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2591';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation FGFR1 ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR1'" then
+    {
+        //Date of Assessment -> 11, 0, id_2576
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 11;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2576';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 11, 0, id_2580
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 11;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2580';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 11;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2580';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 11;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2580';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 11, 0, id_2581
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 11;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2581';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 11, 0, id_2582
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 11;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2582';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 11, 0, id_2583
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 11;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2583';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation FGFR2 ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR2'" then
+    {
+        //Date of Assessment -> 12, 0, id_2568
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 12;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2568';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 12, 0, id_2572
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 12;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2572';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 12;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2572';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 12;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2572';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 12, 0, id_2573
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 12;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2573';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 12, 0, id_2574
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 12;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2574';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 12, 0, id_2575
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 12;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2575';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation FGFR3 ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR3'" then
+    {
+        //Date of Assessment -> 13, 0, id_2560
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 13;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2560';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 13, 0, id_2564
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 13;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2564';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 13;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2564';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 13;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2564';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Fusionspartner -> 13, 0, id_2565
+        observation -> tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 13;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2565';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 13, 0, id_2566
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 13;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2566';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //5' Fusionspartner Exon -> 13, 0, id_2567
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 13;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2567';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+    };
+    /*---------------------- Observation Sonstiges ----------------------- */
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'Sonstiges'" then
+    {
+        //Date of Assessment -> 14, 0, 0, id_2246
+
+        observation->tgt.data as data then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation->data.blockindex = 14;
+                observation->data.groupindex = 0;
+                observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation->data.itemid = 'id_2246';
+                effectiveDateTime->data.values as values, values.value = effectiveDateTime;
+            };
+        };
+
+        /*---------------------NGS Fusion -------------------------------*/
+        //Ergebnis -> 14, 0, 0, id_2254
+
+        observation->tgt.data as data then
+        {
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6576-8'" then
+            {
+                observation->data.blockindex = 14;
+                observation->data.groupindex = 0;
+                observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation->data.itemid = 'id_2254';
+                code->data.values as values, values.value = 'positiv';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA6577-6'" then
+            {
+                observation->data.blockindex = 14;
+                observation->data.groupindex = 0;
+                observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation->data.itemid = 'id_2254';
+                code->data.values as values, values.value = 'negativ';
+            };
+
+            observation.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code where "code = 'LA18198-4'" then
+            {
+                observation->data.blockindex = 14;
+                observation->data.groupindex = 0;
+                observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation->data.itemid = 'id_2254';
+                code->data.values as values, values.value = 'nicht auswertbar';
+            };
+        };
+
+        //Erster Fusionspartner -> 14, 0, 0 , id_2255
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '48018-6'" then
+                {
+                    component.valueCodeableConcept as valueCodeableConcept,
+                        valueCodeableConcept.coding as coding,
+                        coding.code as code then
+                    {
+                        observation->data.blockindex = 14;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation->data.itemid = 'id_2255';
+                        code->data.values as values, values.value = code;
+                    };
+                };
+            };
+        };
+
+        //Zweiter Fusionspartner -> 14, 0, 0 , id_2256
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C28510'" then
+                {
+                    component.valueCodeableConcept as valueCodeableConcept,
+                        valueCodeableConcept.coding as coding,
+                        coding.code as code then
+                    {
+                        observation->data.blockindex = 14;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation->data.itemid = 'id_2256';
+                        code->data.values as values, values.value = code;
+                    };
+                };
+            };
+        };
+
+        //Anzahl der Fusionsreads -> 14, 0, 0 , id_2257
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = '82121-5'" then
+                {
+                    component.valueInteger as valueInteger then
+                    {
+                        observation->data.blockindex = 14;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation->data.itemid = 'id_2257';
+                        valueInteger->data.values as values, values.unit = 'count', values.value = valueInteger;
+                    };
+                };
+            };
+        };
+
+        //Exon erster Fusionspartner -> 14, 0, 0 , id_2258
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'erster-fusionspartner-exon'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 14;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation->data.itemid = 'id_2258';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+
+        //Exon zweiter Fusionspartner -> 14, 0, 0 , id_2259
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'fusionspartner-exon'" then
+                {
+                    component.valueString as valueString then
+                    {
+                        observation->data.blockindex = 14;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation->data.itemid = 'id_2259';
+                        valueString->data.values as values, values.value = valueString;
+                    };
+                };
+            };
+        };
+    };
+    /* ------ Items for all the observation created---------- */
+    entry.resource as observation where "resource is Observation" then
+    {
+        //SOP-Versionsnummer des Standorts -> 2, 0, id_2612
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C48443' and %tgt.operations.data.where(itemid = 'id_2612').exists().not()" then
+                {
+                    observation->data.blockindex = 2;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2612';
+                    component.valueString as valueString->data.values as values, values.value = valueString;
+                };
+            };
+        };
+
+        // Standort 
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C25341' and %tgt.operations.data.where(itemid = 'id_2435').exists().not()" then
+                {
+                    observation->data.blockindex = 2;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2435';
+                    component.valueString as valueString->data.values as values, values.value = valueString;
+                };
+            };
+        };
+
+        // Assay -> 3, 0, id_2538
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C60819' and %tgt.operations.data.where(itemid = 'id_2538').exists().not()" then
+                {
+                    observation->data.blockindex = 3;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2538';
+                    component.valueCodeableConcept as valueCodeableConcept,
+                        valueCodeableConcept.coding as coding,
+                        coding.code as code->data.values as values, values.value = code;
+                };
+            };
+        };
+
+        //Hersteller -> 3, 0, id_2539
+
+        observation->tgt.data as data then
+        {
+            observation.component as component then
+            {
+                component.code where "code.coding.code = 'C25392' and %tgt.operations.data.where(itemid = 'id_2539').exists().not()" then
+                {
+                    observation->data.blockindex = 3;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2539';
+                    component.valueCodeableConcept as valueCodeableConcept,
+                        valueCodeableConcept.coding as coding,
+                        coding.code as code->data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+    /* --------------- ServiceRequest ---------------------- */
+    entry.resource as serviceRequest where "resource is ServiceRequest" then
+    {
+        //Durchfuehrung -> 15, 0, id_2520
+
+        serviceRequest->tgt.data as data then
+        {
+            serviceRequest.status as status where "$this.status = 'active'" then
+            {
+                serviceRequest->data.blockindex = 15;
+                serviceRequest->data.groupindex = 0;
+                serviceRequest->data.itemid = 'id_2520';
+                status->data.values as values, values.value = 'in Bearbeitung';
+            };
+            serviceRequest.status as status where "$this.status = 'completed'" then
+            {
+                serviceRequest->data.blockindex = 15;
+                serviceRequest->data.groupindex = 0;
+                serviceRequest->data.itemid = 'id_2520';
+                status->data.values as values, values.value = 'abgeschlossen';
+            };
+        };
+
+        //Status des Abschlusses -> 15,0, id_2462
+        serviceRequest->tgt.data as data then
+        {
+            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
+            {
+                statusextension where "$this.url ='status'" then
                 {
                     serviceRequest->data.blockindex = 15;
                     serviceRequest->data.groupindex = 0;
-                    serviceRequest->data.itemid = 'id_2520';
-                    status->data.values as values, values.value = 'in Bearbeitung';
+                    serviceRequest->data.itemid = 'id_2462';
+                    statusextension.valueCodeableConcept as valueCodeableConcept,
+                        valueCodeableConcept.coding as coding,
+                        coding.code as code->data.values as values, values.value = code;
                 };
-                serviceRequest.status as status where "$this.status = 'completed'" then
+            };
+        };
+
+        //Datum des Abschlusses -> 15,0, id_2521
+
+        serviceRequest->tgt.data as data then
+        {
+            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+            {
+                datumextension where "$this.url ='datum'" then
                 {
                     serviceRequest->data.blockindex = 15;
                     serviceRequest->data.groupindex = 0;
-                    serviceRequest->data.itemid = 'id_2520';
-                    status->data.values as values, values.value = 'abgeschlossen';
-                };
-            };
-
-            //Status des Abschlusses -> 15,0, id_2462
-            serviceRequest->tgt.data as data then
-            {
-                serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
-                {
-                    statusextension where "$this.url ='status'" then
-                    {
-                        serviceRequest->data.blockindex = 15;
-                        serviceRequest->data.groupindex = 0;
-                        serviceRequest->data.itemid = 'id_2462';
-                        statusextension.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.coding as coding,
-                            coding.code as code->data.values as values, values.value = code;
-                    };
-                };
-            };
-
-            //Datum des Abschlusses -> 15,0, id_2521
-
-            serviceRequest->tgt.data as data then
-            {
-                serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
-                {
-                    datumextension where "$this.url ='datum'" then
-                    {
-                        serviceRequest->data.blockindex = 15;
-                        serviceRequest->data.groupindex = 0;
-                        serviceRequest->data.itemid = 'id_2521';
-                        datumextension.valueDate as valueDate->data.values as values, values.value = valueDate;
-                    };
+                    serviceRequest->data.itemid = 'id_2521';
+                    datumextension.valueDate as valueDate->data.values as values, values.value = valueDate;
                 };
             };
         };
     };
 }
 /* -------------------------------------- Create Checkboxes for field 2511 -------------------------------------------- */
-group TransformFusionCheckboxes(source src: Bundle, target tgt: BackboneElement)
+group TransformFusionCheckboxes(source entry: BackboneElement, target tgt: BackboneElement)
 {
-    src.entry as entry then
+    // ALK
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ALK'" then
     {
-        // ALK
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ALK'" then
-        {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'ALK';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'ALK';
         };
-        // RET
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'RET'" then
-        {
+    };
+    // RET
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'RET'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'RET';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'RET';
         };
-        // ROS1
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ROS1'" then
-        {
+    };
+    // ROS1
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'ROS1'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'ROS1';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'ROS1';
         };
-        // NTRK1
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK1'" then
-        {
+    };
+    // NTRK1
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK1'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'NTRK1';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'NTRK1';
         };
-        // NTRK2
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK2'" then
-        {
+    };
+    // NTRK2
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK2'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'NTRK2';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'NTRK2';
         };
-        // NTRK3
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK3'" then
-        {
+    };
+    // NTRK3
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'NTRK3'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'NTRK3';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'NTRK3';
         };
-        // FGFR1
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR1'" then
-        {
+    };
+    // FGFR1
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR1'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'FGFR1';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'FGFR1';
         };
-        // FGFR2
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR2'" then
-        {
+    };
+    // FGFR2
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR2'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'FGFR2';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'FGFR2';
         };
-        // FGFR3
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR3'" then
-        {
+    };
+    // FGFR3
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'FGFR3'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'FGFR3';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'FGFR3';
         };
-        // Sonstiges
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'Sonstiges'" then
-        {
+    };
+    // Sonstiges
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'Sonstiges'" then
+    {
 
-            observation->tgt.data as data collate then
+        observation->tgt.data as data collate then
+        {
+            observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
             {
-                observation.status as status where "%tgt.operations.data.where(itemid = 'id_2511').exists().not()" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2511';
-                };
-                observation->data.values as values, values.value = 'Sonstiges';
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2511';
             };
+            observation->data.values as values, values.value = 'Sonstiges';
         };
     };
 }
