@@ -134,27 +134,44 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
         compositionBefund.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
 
         // Diagnostik(en) (Befund.diagnostik)
-        // compositionBefund.section as diagnosticSection, diagnosticSection where "code.coding.code = 'diagnostik'" -> tgt.operations as operations then
-        // {
-        //     let formNummer = evaluate(diagnosticSection, '$this.entry.identifier.value');
+        compositionBefund.section as diagnosticSection, diagnosticSection where "code.coding.code = 'diagnostik'" -> tgt.operations as operations then
+        {
+            let formNummer = evaluate(diagnosticSection, '$this.entry.identifier.value');
 
-        //     // Immunhistochemie (Befund.diagnostik.immunhistochemie)
+            // Immunhistochemie (Befund.diagnostik.immunhistochemie)
+            // TODO: somehow the ServiceRequest.status is also written at 3_0_id_2508 (despite the map saying otherwise)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'immunhistochemie'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-IHC');
 
-        //     // Histologie (Befund.diagnostik.histologie)
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
 
-        //     // Molekularpathologie (Befund.diagnostik.molekularpathologie)
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformImmunhistochemieCTS(entry, operations);
+                    };
+                };
+            };
 
-        //     // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
+            // Histologie (Befund.diagnostik.histologie)
 
-        //     // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
+            // Molekularpathologie (Befund.diagnostik.molekularpathologie)
 
-        //     // Fast Track (Befund.diagnostik.fast-track)
+            // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
 
-        //     // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+            // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
 
-        //     // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
+            // Fast Track (Befund.diagnostik.fast-track)
 
-        // };
+            // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+
+            // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
+
+        };
 
         // Beurteilung (Befund.beurteilung) 
         compositionBefund.section as section, section where "code.coding.code = 'beurteilung'" -> tgt.operations as operations then
