@@ -31,7 +31,7 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
     entry then TransformFastTrackCheckboxes(entry, tgt);
 
     /* ------------------------------ Specimen ---------------------------- */
-    entry.resource as specimen where "resource is Specimen" then
+    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
     {
         //Biopsy-ID -> 27, 0, id_1601
         specimen -> tgt.data as data then
@@ -62,7 +62,7 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
     };
 
     /* -------------------------- DiagnosticReport ------------------------ */
-    entry.resource as diagnosticReport where "resource is DiagnosticReport" then
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" then
     {
         //Befunddatum -> 0, 0, id_1653
         diagnosticReport -> tgt.data as data then
@@ -91,7 +91,7 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
         };                
     };
     /* ---------------------- ObservationHistologie ----------------------- */
-    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C18000'" then
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C18000' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nngm/histologie'" then
     {
         /* -------------------------------- HISTOLOGIE ---------------------------------- */
         //Klassifikation -> klassifikation component -> 1, 0,  id_1658
@@ -112,18 +112,18 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
                     };
                 };
             };
-        };
-        //Lokalisation -> 1, 0, id_2469
-        observation -> tgt.data as data then
-        {
-            observation.bodySite as bodySite where "$this.bodySite.coding.system = 'http://uk-koeln.de/fhir/ValueSet/icd-o-3-bodysite'", 
-            bodySite.coding as coding then
-            {   
-                observation -> data.blockindex = 1;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid     = 'id_2469';
-                bodySite    -> data.values as values, 
-                                    values.value = evaluate(bodySite, 'coding.code + \'\\t\' + coding.display');
+            //Lokalisation -> 1, 0, id_2469
+            observation -> tgt.data as data then
+            {
+                observation.bodySite as bodySite where "$this.bodySite.coding.system = 'urn:oid:2.16.840.1.113883.6.43.1'", 
+                bodySite.coding as coding then
+                {   
+                    observation -> data.blockindex = 1;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid     = 'id_2469';
+                    bodySite    -> data.values as values, 
+                                      values.value = evaluate(bodySite, 'coding.code + \'\\t\' + coding.display');
+                };
             };
         };
         //Grading -> 1, 0, id_2403
@@ -308,7 +308,41 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
             observation.component as component, 
             component.code where "code.coding.code = 'C16977'" then
             {
-                component.valueString as value  then
+                
+                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2056').exists().not()" then
+                    {
+                        vcc.coding as coding where "coding.code = 'C80488'" then
+                        {
+                            observation->data.blockindex = 7;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2056';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C28510'" then
+                        {
+                            observation->data.blockindex = 7;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2056';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C25418'" then
+                        {
+                            observation->data.blockindex = 7;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2056';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                        };
+                    };
+                };
+            };
+            //Ergebnis -> 7, 0, id_2063
+            observation -> tgt.data as data then
+            {
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
                 {
                     observation -> data.blockindex = 7;
                     observation -> data.groupindex = 0;
@@ -380,7 +414,40 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
             observation.component as component, 
             component.code where "code.coding.code = 'C16977'" then
             {
-                component.valueString as value  then
+                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2065').exists().not()" then
+                    {
+                        vcc.coding as coding where "coding.code = 'C80488'" then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2065';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C28510'" then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2065';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C25418'" then
+                        {
+                            observation->data.blockindex = 14;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2065';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                        };
+                    };
+                
+            };
+            //Ergebnis -> 14, 0, id_2072
+            observation -> tgt.data as data then
+            {
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
                 {
                     observation -> data.blockindex = 14;
                     observation -> data.groupindex = 0;
@@ -449,10 +516,43 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
         //Phänotyp: phanotyp component-> 15, 0, id_2074
         observation -> tgt.data as data then
         {
-            observation.component as component, 
-            component.code where "code.coding.code = 'C16977'" then
+
+                observation.component as component then
+                {
+                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2074').exists().not()" then
+                    {
+                        vcc.coding as coding where "coding.code = 'C80488'" then
+                        {
+                            observation->data.blockindex = 15;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2074';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C28510'" then
+                        {
+                            observation->data.blockindex = 15;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2074';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C25418'" then
+                        {
+                            observation->data.blockindex = 15;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2074';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                        };
+                    };
+                };
+            
+            //Ergebnis -> 15, 0, id_2079
+            observation -> tgt.data as data then
             {
-                component.valueString as value  then
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
                 {
                     observation -> data.blockindex = 15;
                     observation -> data.groupindex = 0;
@@ -544,11 +644,35 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
                 valueCodeableConcept.coding as coding,
                 coding.code as code where "code = 'LA6576-8'" then
             {
-                observation -> data.blockindex = 18;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid     = 'id_2088';
-                        code -> data.values as values, 
-                                values.value   = 'positiv';
+                observation.component as component then
+                {
+                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2081').exists().not()" then
+                    {
+                        vcc.coding as coding where "coding.code = 'C80488'" then
+                        {
+                            observation->data.blockindex = 18;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2081';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C28510'" then
+                        {
+                            observation->data.blockindex = 18;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2081';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C25418'" then
+                        {
+                            observation->data.blockindex = 18;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2081';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                        };
+                    };
+                };
             };
 
             observation.valueCodeableConcept as valueCodeableConcept,
@@ -593,10 +717,41 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
         //Phänotyp: phanotyp component-> 19, 0, id_2090
         observation -> tgt.data as data then
         {
-            observation.component as component, 
-            component.code where "code.coding.code = 'C16977'" then
+            observation.component as component then
             {
-                component.valueString as value  then
+                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2090').exists().not()" then
+                    {
+                        vcc.coding as coding where "coding.code = 'C80488'" then
+                        {
+                            observation->data.blockindex = 19;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2090';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C28510'" then
+                        {
+                            observation->data.blockindex = 19;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2090';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C25418'" then
+                        {
+                            observation->data.blockindex = 19;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2090';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                        };
+                    };
+            };
+            //Ergebnis -> 19, 0, id_2097
+            observation -> tgt.data as data then
+            {
+                observation.valueCodeableConcept as valueCodeableConcept,
+                    valueCodeableConcept.coding as coding,
+                    coding.code as code where "code = 'LA6576-8'" then
                 {
                     observation -> data.blockindex = 19;
                     observation -> data.groupindex = 0;
@@ -784,13 +939,33 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
             observation.component as component,
             component.code where "code.coding.code = 'C129474'" then
             {
-                component.valueBoolean as valueBoolean where "value = true" then 
-                {
-                    observation  -> data.blockindex = 6;
-                    observation  -> data.groupindex = 0;
-                    observation  -> data.itemid     = 'id_2141';
-                    valueBoolean -> data.values as values, values.value = 'yes';
-                };
+                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2173').exists().not()" then
+                    {
+                        vcc.coding as coding where "coding.code = 'C80488'" then
+                        {
+                            observation->data.blockindex = 16;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2173';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C28510'" then
+                        {
+                            observation->data.blockindex = 16;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2173';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                        };
+
+                        vcc.coding as coding where "coding.code = 'C25418'" then
+                        {
+                            observation->data.blockindex = 16;
+                            observation->data.groupindex = 0;
+                            observation->data.itemid = 'id_2173';
+                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                        };
+                    };
+
                 component.valueBoolean as valueBoolean where "value = false" then 
                 {
                     observation  -> data.blockindex = 6;
@@ -3137,7 +3312,7 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
                                 Fusion NGS                                  
     ------------------------------------------------------------------------------*/
     /* --------------------- Device NGSPanel Fusion NGS -------------------- */
-    entry.resource as device where "resource is Device" then
+    entry.resource as device where "resource is Device and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device'" then
     {
         //NGS Panel -> 2, 0, id_2513
         device -> tgt.data as data then
@@ -3347,19 +3522,37 @@ group TransformationObservationALKDatePhanotypVorbefund(source observation:Obser
     //Phänotyp: phanotyp component-> 3, 0, id_2099
     observation -> tgt.data as data then
     {
-        observation.component as component, 
+        src.component as component, 
         component.code where "code.coding.code = 'C16977'" then
         {
-            component.valueString as value where "%tgt.data.where(itemid = 'id_2099').exists().not()" then
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2099').exists().not()" then
             {
-                observation -> data.blockindex = 3;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid     = 'id_2099';
-                    value -> data.values as values,
-                        values.value   = value;
-                    value -> data.values as values, 
-                        values.unit    = 'predef', 
-                        values.value   = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C80488'" then
+                {
+                    observation->data.blockindex = 3;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2099';
+                    coding->data.values as values, values.value = 'Expression';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                };
+
+                vcc.coding as coding where "coding.code = 'C28510'" then
+                {
+                    observation->data.blockindex = 3;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2099';
+                    coding->data.values as values, values.value = 'Fusion';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                };
+
+                vcc.coding as coding where "coding.code = 'C25418'" then
+                {
+                    observation->data.blockindex = 3;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2099';
+                    coding->data.values as values, values.value = 'Amplifikation';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                };
             };
         };
     };
@@ -3381,19 +3574,37 @@ group TransformationObservationMETDatePhanotypVorbefund(source observation:Obser
     //Phänotyp: phanotyp component-> 6, 0, id_2133
     observation -> tgt.data as data then
     {
-        observation.component as component, 
+        src.component as component, 
         component.code where "code.coding.code = 'C16977'" then
         {
-            component.valueString as value where "%tgt.data.where(itemid = 'id_2133').exists().not()" then
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2133').exists().not()" then
             {
-                observation   -> data.blockindex = 6;
-                observation   -> data.groupindex = 0;
-                observation   -> data.itemid     = 'id_2133';
-                value -> data.values as values,
-                          values.value   = value;
-                value -> data.values as values, 
-                          values.unit    = 'predef', 
-                          values.value   = 'Amplifikation';
+                vcc.coding as coding where "coding.code = 'C80488'" then
+                {
+                    observation->data.blockindex = 6;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2133';
+                    coding->data.values as values, values.value = 'Expression';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                };
+
+                vcc.coding as coding where "coding.code = 'C28510'" then
+                {
+                    observation->data.blockindex = 6;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2133';
+                    coding->data.values as values, values.value = 'Fusion';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                };
+
+                vcc.coding as coding where "coding.code = 'C25418'" then
+                {
+                    observation->data.blockindex = 6;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2133';
+                    coding->data.values as values, values.value = 'Amplifikation';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                };
             };
         };
     };
@@ -3416,19 +3627,36 @@ group TransformationObservationROS1DatePhanotypVorbefund(source observation:Obse
     //Phänotyp: phanotyp component-> 17, 0, id_2212
     observation -> tgt.data as data then
     {
-        observation.component as component, 
-        component.code where "code.coding.code = 'C16977'" then
+        observation.component as component then
         {
-            component.valueString as value where "%tgt.data.where(itemid = 'id_2212').exists().not()" then
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2212').exists().not()" then
             {
-                observation   -> data.blockindex   = 17;
-                observation   -> data.groupindex   = 0;
-                observation   -> data.itemid       = 'id_2212';
-                value -> data.values as values,
-                            values.value   = value;
-                value -> data.values as values, 
-                            values.unit    = 'predef', 
-                            values.value   = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C80488'" then
+                {
+                    observation->data.blockindex = 17;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2212';
+                    coding->data.values as values, values.value = 'Expression';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                };
+
+                vcc.coding as coding where "coding.code = 'C28510'" then
+                {
+                    observation->data.blockindex = 17;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2212';
+                    coding->data.values as values, values.value = 'Fusion';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                };
+
+                vcc.coding as coding where "coding.code = 'C25418'" then
+                {
+                    observation->data.blockindex = 17;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2212';
+                    coding->data.values as values, values.value = 'Amplifikation';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                };
             };
         };
     };
@@ -3450,19 +3678,37 @@ group TransformationObservationRETDatePhanotypVorbefund(source observation:Obser
     //Phänotyp: phanotyp component-> 20, 0, id_2184
     observation -> tgt.data as data then
     {
-        observation.component as component, 
+        src.component as component, 
         component.code where "code.coding.code = 'C16977'" then
         {
-            component.valueString as value where "%tgt.data.where(itemid = 'id_2184').exists().not()" then
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2184').exists().not()" then
             {
-                observation   -> data.blockindex   = 20;
-                observation   -> data.groupindex   = 0;
-                observation   -> data.itemid       = 'id_2184';
-                value -> data.values as values,
-                            values.value   = value;
-                value -> data.values as values, 
-                            values.unit    = 'predef', 
-                            values.value   = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C80488'" then
+                {
+                    observation->data.blockindex = 20;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2184';
+                    coding->data.values as values, values.value = 'Expression';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                };
+
+                vcc.coding as coding where "coding.code = 'C28510'" then
+                {
+                    observation->data.blockindex = 20;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2184';
+                    coding->data.values as values, values.value = 'Fusion';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                };
+
+                vcc.coding as coding where "coding.code = 'C25418'" then
+                {
+                    observation->data.blockindex = 20;
+                    observation->data.groupindex = 0;
+                    observation->data.itemid = 'id_2184';
+                    coding->data.values as values, values.value = 'Amplifikation';
+                    coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                };
             };
         };
     };

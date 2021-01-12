@@ -244,7 +244,7 @@ group TransformObservation(source operations: BackboneElement, target tgt: Obser
                                                     klassifikation.code = cc('http://ncit.nci.nih.gov', 'C25161'),
                                                     klassifikation.valueCodeableConcept as vcc,
                                                     vcc.coding as coding,
-                                                    coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/histologie-klassifikation', 
+                                                    coding.system = 'urn:oid:2.16.840.1.113883.6.43.1', 
                                                     coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
                                                     coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
@@ -253,7 +253,7 @@ group TransformObservation(source operations: BackboneElement, target tgt: Obser
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2469'" then
         {
             values.value as value -> tgt.bodySite = create('CodeableConcept') as cc, cc.coding as coding, 
-            coding.system = 'http://uk-koeln.de/fhir/ValueSet/icd-o-3-bodysite',
+            coding.system = 'urn:oid:2.16.840.1.113883.6.43.1',
             coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
             coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
@@ -262,7 +262,7 @@ group TransformObservation(source operations: BackboneElement, target tgt: Obser
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2403'" then
         {
             values.value as value -> tgt.valueCodeableConcept = create('CodeableConcept') as cc, cc.coding as coding, 
-            coding.system = 'http://uk-koeln.de/fhir/ValueSet/nngm/grading',
+            coding.system = 'urn:oid:2.16.840.1.113883.15.16',
             coding.code = evaluate(value, '$this.split(\'\\t\').first()'),
             coding.display = evaluate(value, '$this.split(\'\\t\').last()');
         };
@@ -387,7 +387,7 @@ group TransformServiceRequestHistologie(source operations: BackboneElement, targ
             dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
                 
     // code
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nngm/testung-anforderung-code', 'histologie');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'histologie');
 
     // authoredOn
     operations -> tgt.authoredOn as code, 
@@ -408,7 +408,14 @@ group TransformServiceRequestHistologie(source operations: BackboneElement, targ
         // Status
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
         {
-            values.value as value -> tgt.status = cast(value, 'FHIR.code');
+            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            {
+                value -> tgt.status = cast('active', 'FHIR.code');
+            };
+            values.value as value where "$this.value = 'abgeschlossen'" then 
+            {
+                value -> tgt.status = cast('completed', 'FHIR.code');
+            };
         };
 
         // Referenzen
@@ -448,7 +455,7 @@ group TransformHistologieStatusExtension(source operations: BackboneElement, tar
             {
                 value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
                 {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value, value);
+                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
                     value -> statusExtension.url = 'status';
                 };
             };
