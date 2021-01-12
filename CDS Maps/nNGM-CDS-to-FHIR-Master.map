@@ -10,6 +10,9 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 // Stammdaten
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
 
+// Vorbefund
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
+
 // Antrag
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
@@ -134,9 +137,9 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         /* ------------------------------ Composition ---------------------------- */
 
         // Meta
-        src -> compositionAntrag.title = 'Antrag pseudonymisiert';
+        src -> compositionAntrag.title = 'nNGM - Antrag Pseudonymisiert';
         src -> compositionAntrag.id = uuid();
-        src -> compositionAntrag.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert';
+        src -> compositionAntrag.meta as meta, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert';
         src -> compositionAntrag.status = cast('final', 'FHIR.code');
 
         // Identifier i.e. Case ID
@@ -148,7 +151,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionAntrag.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'antrag');
 
         // Category idat or not idat
-        src -> compositionAntrag.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'idat');
+        src -> compositionAntrag.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
 
         // Subject
         src.operations as operations, operations where "crfid = 'SD'", operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
@@ -210,6 +213,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
             src then IncrementFormIndex(src, index);
         };
+        
 
         /* ------------------------------ Increment index ---------------------------- */
         src then IncrementCaseIndex(src, index);
@@ -258,7 +262,7 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         src -> compositionBefund.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
 
         // Title
-        src -> compositionBefund.title = 'Befund pseudonymisiert';
+        src -> compositionBefund.title = 'Molpatho-befund pseudonymisiert';
 
         // Identifier i.e. Case ID
         src -> compositionBefund.identifier = create('Identifier') as FallIdentifier,
@@ -451,6 +455,15 @@ group IncrementCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
     src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
 }
 
+/*  InitMaxIndex: 
+    The main idea is to search through the CDS export and find the highest formIndex to let our loops run until this maximum.
+    To get this maxIndex, we look at the crfid of each form (e.g. 1-AF1, 1-AF2,..2-AF1,..) and try to isolate the number after the letters.
+    This could easily be done by using a regex like \d+-[A-Z]+ in combination with a FHIRPath function like replaceMatches() for all forms.
+    But I wasn't able to get this function working. So I used the following workaround on each form, for instance for Anforderung (AF):
+        1. get the starting position of '-AF', add the length of this string '-AF' to get the starting position of the formIndex
+            if this formIndex is bigger than the current maxIndex, 
+        2. assign it to the maxIndex via evaluate() (therefore we need to create the same substring again)
+*/
 group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
 {
     // Create this let because we can't check on two parameters with the same name in FHIRPath
@@ -564,7 +577,6 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger()');
     };
 }
-
 
 group InitFormIndex(source src: CTS_Transport, target index: RepeatIndex)
 {

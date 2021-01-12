@@ -1,5 +1,9 @@
 // version = 0.1
 /// title = "nNGM: Sonstige Therapie - FHIR to CDS"
+/*
+TODO
+- Repeatindex for the observation is not implemented
+*/
 
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS" = nNGM_Mapping_SonstigeUntersuchungenCDS
@@ -7,11 +11,10 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-
-group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt: BackboneElement, target index: RepeatIndex)
+group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt: BackboneElement)
 {
     //------------------------ Specimen ------------------------
-    entry.resource as specimen where "resource is Specimen" then
+    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
     {
         //Biopsy-ID -> 0, 0, id_1601
         specimen -> tgt.data as data then
@@ -26,7 +29,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
         };                
     };
     //------------------------ DiagnosticReport ------------------------
-    entry.resource as diagnosticReport where "resource is DiagnosticReport" then
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" then
     {
         //Untersuchungs-ID 1, 0, assessment_id
         diagnosticReport -> tgt.data as data then
@@ -42,7 +45,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
         };                
     };
     //------------------------ Organization ------------------------
-    entry.resource as organization where "resource is Organization" then
+    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" then
     {
         //Standort -> 2, 0, id_2435
         organization -> tgt.data as data then
@@ -57,7 +60,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
         };                
     };
     //------------------------ Observation ------------------------
-    entry.resource as observation where "resource is Observation" then
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/weitere-untersuchung'" then
     {
         //NetzwerkZentrum
         //SOP-Versionsnummer des Standorts -> 2, 0, id_2618
@@ -65,7 +68,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
         {
             observation.component as component then 
             {
-                component.code where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2618').exists().not()" then
+                component.code where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2486').exists().not()" then
                 {
                     observation -> data.blockindex = 2;
                     observation -> data.groupindex = 0;
@@ -82,7 +85,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
             {
                 observation -> data.blockindex = 3;
                 observation -> data.groupindex = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.repeatindex = 0;
                 observation -> data.itemid = 'id_2527';
                 effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
             };
@@ -95,7 +98,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
             {
                 observation -> data.blockindex = 3;
                 observation -> data.groupindex = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.repeatindex = 0;
                 observation -> data.itemid = 'id_2026';
                 text -> data.values as values,values.value = text;
             };
@@ -114,7 +117,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
                     {
                         observation -> data.blockindex = 3;
                         observation -> data.groupindex = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation -> data.repeatindex = 0;
                         observation -> data.itemid = 'id_2027';
                         code -> data.values as values, values.value = code;
                     };
@@ -135,7 +138,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
                     {
                         observation -> data.blockindex = 3;
                         observation -> data.groupindex = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation -> data.repeatindex = 0;
                         observation -> data.itemid = 'id_2028';
                         code -> data.values as values, values.value = code;
                     };
@@ -156,7 +159,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
                     {
                         observation -> data.blockindex = 3;
                         observation -> data.groupindex = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                        observation -> data.repeatindex = 0;
                         observation -> data.itemid = 'id_2282';
                         code -> data.values as values, values.value = code;
                     };
@@ -167,47 +170,35 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
         //Phaenotyp -> 3, 0, id_2283
         observation -> tgt.data as data then
         {
-            observation.component as component then
+            observation.component as component, component.code where "code.coding.code = 'C16977'"then
             {
-                component.code where "code.coding.code = 'C16977'"then
+                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2534').exists().not()" then
                 {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "$this.code = 'C80488'" then  
+                    vcc.coding as coding where "coding.code = 'C80488'" then
                     {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid = 'id_2283';
-                        code -> data.values as values, values.value = 'Expression';
+                        observation->data.blockindex = 3;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = 0;
+                        observation->data.itemid = 'id_2283';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
                     };
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "$this.code = 'C28510'" then  
+
+                    vcc.coding as coding where "coding.code = 'C28510'" then
                     {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid = 'id_2283';
-                        code -> data.values as values, values.value = 'Fusion Gene';
+                        observation->data.blockindex = 3;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = 0;
+                        observation->data.itemid = 'id_2283';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
                     };
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "$this.code = 'C25418'" then  
+
+                    vcc.coding as coding where "coding.code = 'C25418'" then
                     {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid = 'id_2283';
-                        code -> data.values as values, values.value = 'Amplification';
-                    };
-                    component.valueString as valueString then  
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid = 'id_2283';
-                        valueString -> data.values as values, values.value = valueString;
+                        observation->data.blockindex = 3;
+                        observation->data.groupindex = 0;
+                        observation->data.repeatindex = 0;
+                        observation->data.itemid = 'id_2283';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
                     };
                 };
             };
@@ -222,7 +213,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
             {
                 observation -> data.blockindex = 3;
                 observation -> data.groupindex = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.repeatindex = 0;
                 observation -> data.itemid = 'id_2031';
                 code -> data.values as values, values.value = 'positiv';
             };
@@ -232,7 +223,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
             {
                 observation -> data.blockindex = 3;
                 observation -> data.groupindex = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.repeatindex = 0;
                 observation -> data.itemid = 'id_2031';
                 code -> data.values as values, values.value = 'negativ';
             };
@@ -242,7 +233,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
             {
                 observation -> data.blockindex = 3;
                 observation -> data.groupindex = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.repeatindex = 0;
                 observation -> data.itemid = 'id_2031';
                 code -> data.values as values, values.value = 'nicht auswertbar';
             };
@@ -250,7 +241,7 @@ group TransformSonstigeUntersuchungCDS(source entry: BackboneElement, target tgt
     };
 
     /* --------------- ServiceRequest ---------------------- */
-    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'sonstige-untersuchungen'" then
+    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'sonstige-untersuchungen' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
     {
         //Durchfuehrung -> 4, 0, id_2520
         serviceRequest -> tgt.data as data then

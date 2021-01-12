@@ -10,7 +10,7 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 group TransformBeurteilungCDS(source entry: BackboneElement, target tgt: BackboneElement, target index: RepeatIndex)
 {
     /* ------------------------------ DiagnosticReport ---------------------------- */
-    entry.resource as diagnosticreport where "resource is DiagnosticReport" then
+    entry.resource as diagnosticreport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/beurteilung'" then
     {
         //Erstelldatum 
         diagnosticreport->tgt.data as data then
@@ -75,7 +75,7 @@ group TransformBeurteilungCDS(source entry: BackboneElement, target tgt: Backbon
     };
 
     /* ------------------------------ ServiceRequest ---------------------------- */
-    entry.resource as serviceRequest where "resource is ServiceRequest" then
+    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'C125009' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
     {
         //Durchfuehrung
         serviceRequest -> tgt.data as data then
@@ -127,7 +127,8 @@ group TransformBeurteilungCDS(source entry: BackboneElement, target tgt: Backbon
                 };
             };
         };
-
+        
+        //Abschluss 
         serviceRequest -> tgt.data as data then
         {
             serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
@@ -138,6 +139,35 @@ group TransformBeurteilungCDS(source entry: BackboneElement, target tgt: Backbon
                     serviceRequest ->  data.groupindex = 0;
                     serviceRequest ->  data.itemid = 'id_2525';
                     datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                };
+            };
+        };
+        
+        //Datum des Abschlusses 
+        serviceRequest -> tgt.data as data then
+        {
+            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+            {
+                datumextension where "$this.url ='datum'" then
+                {
+                    serviceRequest ->  data.blockindex = 1;
+                    serviceRequest ->  data.groupindex = 0;
+                    serviceRequest ->  data.itemid = 'id_2521';
+                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                };
+            };
+        };
+
+        serviceRequest -> tgt.data as data then
+        {
+            serviceRequest.extension as extension then 
+            {
+                extension.valueDateTime as datumversands where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands'" then
+                {
+                    datumversands -> data.blockindex = 1;
+                    datumversands -> data.groupindex = 0;
+                    datumversands -> data.itemid = 'id_2525';
+                    datumversands -> data.values as values, values.value = datumversands;
                 };
             };
         };

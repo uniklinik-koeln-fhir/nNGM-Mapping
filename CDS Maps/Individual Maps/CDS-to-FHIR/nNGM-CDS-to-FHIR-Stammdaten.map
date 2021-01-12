@@ -62,7 +62,7 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
         {
             values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'Patient/\' + $this');
+            values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'Patient/\' + $this'), untersuchung.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = evaluate(composition, '$this.subject.identifier.value');
         };
 
         // Geschlecht -> Gender
@@ -83,7 +83,7 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
                 values.value as value -> tgt.gender as gender, 
                                          gender.extension as other, 
                                          other.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de', 
-                                         other.valueCodeableConcept = cc('http://fhir.de/ValueSet/gender-amtlich-de', 'D', 'divers');
+                                         other.valueCodeableConcept = cc('http://fhir.de/CodeSystem/gender-amtlich-de', 'D', 'divers');
             };
         };
 
@@ -97,12 +97,6 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1124'" then
         {
             values.value as value -> tgt.name as name, name.given = value;
-        };
-
-        // Geburtsdatum -> birthDate
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1126'" then
-        {
-            values.value as value -> tgt.birthdate = dateOp(value, 'dateTime');
         };
 
         // Strasse -> address.line
@@ -129,6 +123,20 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
             values.value as country -> tgt.address as tgtAddress, tgtAddress.country = country;
         };
 
+        // DeceasedBoolean
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1139'" then
+        {
+            values.value as value where "$this.value = 'lebt' or $this.value = 'lost to follow-up'" then
+            {
+                values.value as value -> tgt.deceasedBoolean = cast('false', 'FHIR.boolean');
+            };
+
+            values.value as value where "$this.value = 'tot'" then
+            {
+                values.value as value -> tgt.deceasedBoolean = cast('true', 'FHIR.boolean');
+            };
+        };
+
         // DeceasedDateTime
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1298'" then
         {
@@ -140,7 +148,7 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
         {
             values.value as value -> tgt.extension as infoq, 
                                        infoq.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/izt',
-                                       infoq.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/izt', value);
+                                       infoq.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/izt', value);
         }; 
     };
 }
@@ -200,7 +208,7 @@ group TransformCoverageStammdaten(source operations: BackboneElement, target tgt
         // Typ (GKV/PKV) -> type.coding
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1269'" then
         {
-            values.value as type -> tgt.type = cc('http://fhir.de/ValueSet/versicherungsart-de-basis', type);
+            values.value as type -> tgt.type = cc('http://fhir.de/CodeSystem/versicherungsart-de-basis', type);
         };
 
         // PKV Tarif -> extension:pkvTarifform.valueCodeableConcept
@@ -208,15 +216,15 @@ group TransformCoverageStammdaten(source operations: BackboneElement, target tgt
         {
             values.value as value where "$this.value = 'Basistarif'" -> tgt.extension as pkvTarifform,
                                         pkvTarifform.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
-                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'basis');
+                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/pkv-tarifform', 'basis');
             
             values.value as value where "$this.value = 'Standardtarif'" -> tgt.extension as pkvTarifform,
                                         pkvTarifform.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
-                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'standard');
+                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/pkv-tarifform', 'standard');
             
             values.value as value where "$this.value = 'Vollversichert'" -> tgt.extension as pkvTarifform,
                                         pkvTarifform.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/pkvTarifform',
-                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/nngm/pkv-tarifform', 'voll');
+                                        pkvTarifform.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/pkv-tarifform', 'voll');
         };
 
         // Kooperationsvereinbarung -> Coverage.extension:kooperationsvereinbarung.valueBoolean
@@ -289,7 +297,7 @@ group TransformEpisodeOfCareStammdaten(source operations: BackboneElement, targe
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_episodeOfCare_nngm'" then
         {
             values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as referenceSection, referenceSection.reference = evaluate(value, '\'Patient/\' + $this');
+            values.value as value -> section.entry = create('Reference') as referenceSection, referenceSection.reference = evaluate(value, '\'EpisodeOfCare/\' + $this');
         };
 
         // TODO
@@ -315,7 +323,7 @@ group TransformEpisodeOfCareStammdaten(source operations: BackboneElement, targe
             values.value as value -> tgt.status as status,
                                      status.extension as nngmstatus, 
                                      nngmstatus.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/FollowUpStatus',
-                                     nngmstatus.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/FollowUpStatus', value);
+                                     nngmstatus.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ngnm/FollowUpStatus', value);
         };
    };
 }
@@ -376,7 +384,7 @@ group TransformConsentEinwilligung1aStammdaten(source operations: BackboneElemen
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision collate, 
                                              provision.type = cast('permit', 'FHIR.code');
                                              
-                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/nngm-consent-policy', '1a');                 
             };
 
             values.value as signature where "$this.value = 'no'" then

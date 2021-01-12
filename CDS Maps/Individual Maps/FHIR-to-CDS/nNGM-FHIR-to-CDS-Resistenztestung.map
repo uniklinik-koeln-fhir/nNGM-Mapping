@@ -2,239 +2,233 @@
 /// title = "nNGM: Mapping Resistenztestung CTS"
 /// FHIR -> CTS
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCTS" = nNGM_Mapping_ResistenztestungCTS
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS" = nNGM_Mapping_ResistenztestungCDS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
-group TransformResistenztestungCTS(source src: Bundle, target tgt: BackboneElement)
+group TransformResistenztestungCDS(source entry: BackboneElement, target tgt: BackboneElement)
 {
-    src -> tgt.crfid = '*-RT1';
-    src -> tgt.type = 'save';
-
     // 1, 0, 1434
-    src then TransformResistenztestungCheckboxes(src, tgt);
-
-    src.entry as entry, entry.resource as observations then
+    entry then TransformResistenztestungCheckboxes(entry, tgt);
+    
+    /* ------------------------------ Specimen ---------------------------- */
+    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
     {
-        // EpisodeOfCare
-        src.entry as entry, entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
+        specimen.identifier as identifier then
         {
-            specimen.identifier as identifier then
+            identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer' and %tgt.data.where(itemid = 'id_1601').exists().not()" -> tgt.data as data then
             {
-                identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer' and %tgt.data.where(itemid = 'id_1601').exists().not()" -> tgt.data as data then
-                {
-                    specimen -> data.blockindex = 2;
-                    specimen -> data.groupindex = 0;
-                    specimen -> data.itemid = 'id_1601';
-                    value -> data.values as values, values.value = value, values.unit = 'count';
-                };
+                specimen -> data.blockindex = 2;
+                specimen -> data.groupindex = 0;
+                specimen -> data.itemid = 'id_1601';
+                value -> data.values as values, values.value = value, values.unit = 'count';
             };
         };
+    };
 
-        // Progress/Reizidiv Krebserkrankung Observation
-        observations as observation where "$this.code.coding.code = 'C25630'" then
+    /* ---------------------------- Progress/Reizidiv Krebserkrankung Observation ---------------------------- */
+    entry.resource as observation where "$this.code.coding.code = 'C25630'" then
+    {
+        // Observation.valueBoolean -> 0, 0, 1573
+        observation -> tgt.data as data then
         {
-            // Observation.valueBoolean -> 0, 0, 1573
-            observation -> tgt.data as data then
+            // Rezidiv = True
+            observation.valueBoolean as rezidivprogress where "$this.valueBoolean = true" then
             {
-                // Rezidiv = True
-                observation.valueBoolean as rezidivprogress where "$this.valueBoolean = true" then
-                {
-                    observation -> data.blockindex = 0;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_1573';
-                    observation -> data.values as values, values.value = 'yes';
-                };
-                
-                // Rezidiv = False
-                observation.valueBoolean as rezidivprogress where "$this.valueBoolean = false" then
-                {
-                    observation -> data.blockindex = 0;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_1573';
-                    observation -> data.values as values, values.value = 'no';
-                };
+                observation -> data.blockindex = 0;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1573';
+                observation -> data.values as values, values.value = 'yes';
             };
-
-            // Observation.effectiveDateTime -> 0, 0, 2397
-            observation -> tgt.data as data then
-            {
-                observation.effectiveDateTime as effectiveDateTime where "$this.effectiveDateTime.empty() = false" then
-                {
-                    effectiveDateTime -> data.blockindex = 0;
-                    effectiveDateTime -> data.groupindex = 0;
-                    effectiveDateTime -> data.itemid = 'id_2397';
-                    effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
-                };
-            };
-        };
-
-        // Observation EGFR
-        observations as observation where "$this.code.coding.code = 'C134501'" then
-        {
-            // Observation.effectiveDateTime -> 1, 0, 2502
-            observation then TransformEffectiveDateTimeObservation(observation, tgt);
-
-            // Mutations
-            observation then TransformMutationsCTSResistenztestung(observation, tgt);
-
-            // Therapy components
-            observation.component as components -> tgt.data as data then 
-            {
-                // 1. Therapie
-                components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1441';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
-
-                // 2. Therapie
-                components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1442';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
-
-                // 3. Therapie
-                components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1443';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
-
-                // 4. Therapie
-                components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1444';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
-            };
-        };
-
-        // Observation ALK
-        observations as observation where "$this.code.coding.code = 'C142114'" then
-        {
-            // Observation.effectiveDateTime -> 1, 0, 2502
-            observation then TransformEffectiveDateTimeObservation(observation, tgt);
             
-            // Mutations
-            observation then TransformMutationsCTSResistenztestung(observation, tgt);
-
-            // Therapies and fusionPartner
-            observation.component as components -> tgt.data as data then 
+            // Rezidiv = False
+            observation.valueBoolean as rezidivprogress where "$this.valueBoolean = false" then
             {
-                // Observation.Fusionpartner -> 1, 0, 2504
-                components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_2504';
-                    component.valueString as valueString -> data.values as values, values.value = valueString;
-                };
-
-                // 1. Therapie
-                components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1447';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
-
-                // 2. Therapie
-                components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1448';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
-
-                // 3. Therapie
-                components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1449';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
-
-                // 4. Therapie
-                components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1450';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
+                observation -> data.blockindex = 0;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1573';
+                observation -> data.values as values, values.value = 'no';
             };
         };
 
-        // Observation ROS1
-        observations as observation where "$this.code.coding.code = 'C131071'" then
+        // Observation.effectiveDateTime -> 0, 0, 2397
+        observation -> tgt.data as data then
         {
-            // Observation.effectiveDateTime -> 1, 0, 2502
-            observation then TransformEffectiveDateTimeObservation(observation, tgt);
-
-            // Mutations
-            observation then TransformMutationsCTSResistenztestung(observation, tgt);
-
-            // Therapies and fusionPartner
-            observation.component as components -> tgt.data as data then 
+            observation.effectiveDateTime as effectiveDateTime where "$this.effectiveDateTime.empty() = false" then
             {
-                // Observation.Fusionpartner -> 1, 0, 2506
-                components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_2506';
-                    component.valueString as valueString -> data.values as values, values.value = valueString;
-                };
+                effectiveDateTime -> data.blockindex = 0;
+                effectiveDateTime -> data.groupindex = 0;
+                effectiveDateTime -> data.itemid = 'id_2397';
+                effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
+            };
+        };
+    };
 
-                // 1. Therapie
-                components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1453';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
+    /* ------------------------------ Observation EGFR ---------------------------- */
+    entry.resource as observation where "$this.code.coding.code = 'C134501'" then
+    {
+        // Observation.effectiveDateTime -> 1, 0, 2502
+        observation then TransformEffectiveDateTimeObservation(observation, tgt);
 
-                // 2. Therapie
-                components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1454';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
+        // Mutations
+        observation then TransformMutationsCTSResistenztestung(observation, tgt);
 
-                // 3. Therapie
-                components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1455';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
+        // Therapy components
+        observation.component as components -> tgt.data as data then 
+        {
+            // 1. Therapie
+            components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1441';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
 
-                // 4. Therapie
-                components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
-                {   
-                    component -> data.blockindex = 1;
-                    component -> data.groupindex = 0;
-                    component -> data.itemid = 'id_1456';
-                    component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
-                };
+            // 2. Therapie
+            components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1442';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 3. Therapie
+            components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1443';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 4. Therapie
+            components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1444';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+        };
+    };
+
+    /* ------------------------------ Observation ALK ---------------------------- */
+    entry.resource as observation where "$this.code.coding.code = 'C142114'" then
+    {
+        // Observation.effectiveDateTime -> 1, 0, 2502
+        observation then TransformEffectiveDateTimeObservation(observation, tgt);
+        
+        // Mutations
+        observation then TransformMutationsCTSResistenztestung(observation, tgt);
+
+        // Therapies and fusionPartner
+        observation.component as components -> tgt.data as data then 
+        {
+            // Observation.Fusionpartner -> 1, 0, 2504
+            components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_2504';
+                component.valueString as valueString -> data.values as values, values.value = valueString;
+            };
+
+            // 1. Therapie
+            components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1447';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 2. Therapie
+            components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1448';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 3. Therapie
+            components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1449';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 4. Therapie
+            components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1450';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+        };
+    };
+
+    /* ------------------------------ Observation ROS1 ---------------------------- */
+    entry.resource as observation where "$this.code.coding.code = 'C131071'" then
+    {
+        // Observation.effectiveDateTime -> 1, 0, 2502
+        observation then TransformEffectiveDateTimeObservation(observation, tgt);
+
+        // Mutations
+        observation then TransformMutationsCTSResistenztestung(observation, tgt);
+
+        // Therapies and fusionPartner
+        observation.component as components -> tgt.data as data then 
+        {
+            // Observation.Fusionpartner -> 1, 0, 2506
+            components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_2506';
+                component.valueString as valueString -> data.values as values, values.value = valueString;
+            };
+
+            // 1. Therapie
+            components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1453';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 2. Therapie
+            components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1454';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 3. Therapie
+            components as component where "$this.extension.valueInteger = 3" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1455';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
+            };
+
+            // 4. Therapie
+            components as component where "$this.extension.valueInteger = 4" -> tgt.data as data then
+            {   
+                component -> data.blockindex = 1;
+                component -> data.groupindex = 0;
+                component -> data.itemid = 'id_1456';
+                component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
             };
         };
     };
@@ -306,53 +300,50 @@ group TransformMutationsCTSResistenztestung(source observation: Observation, tar
     };
 }
 
-group TransformResistenztestungCheckboxes(source src: Bundle, target tgt: BackboneElement)
+group TransformResistenztestungCheckboxes(source entry: BackboneElement, target tgt: BackboneElement)
 {
-    src.entry as entry then
+    // EGFR
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C134501'" then
     {
-        // EGFR
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C134501'" then
+        observation -> tgt.data as data collate then
         {
-            observation -> tgt.data as data collate then
+            observation.status as status where "%tgt.data.where(itemid = 'id_1434').exists().not()" then
             {
-                observation.status as status where "%tgt.data.where(itemid = 'id_1434').exists().not()" then
-                {
-                    observation -> data.blockindex = 1;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_1434';
-                };
-                observation -> data.values as values, values.value = 'EGFR';
+                observation -> data.blockindex = 1;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1434';
             };
+            observation -> data.values as values, values.value = 'EGFR';
         };
+    };
 
-        // ALK
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C142114'" then
+    // ALK
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C142114'" then
+    {
+        observation -> tgt.data as data collate then
         {
-            observation -> tgt.data as data collate then
+            observation.status as status where "%tgt.data.where(itemid = 'id_1434').exists().not()" then
             {
-                observation.status as status where "%tgt.data.where(itemid = 'id_1434').exists().not()" then
-                {
-                    observation -> data.blockindex = 1;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_1434';
-                };
-                observation -> data.values as values, values.value = 'ALK';
+                observation -> data.blockindex = 1;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1434';
             };
+            observation -> data.values as values, values.value = 'ALK';
         };
+    };
 
-        // ROS1
-        entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C131071'" then
+    // ROS1
+    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C131071'" then
+    {
+        observation -> tgt.data as data collate then
         {
-            observation -> tgt.data as data collate then
+            observation.status as status where "%tgt.data.where(itemid = 'id_1434').exists().not()" then
             {
-                observation.status as status where "%tgt.data.where(itemid = 'id_1434').exists().not()" then
-                {
-                    observation -> data.blockindex = 1;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_1434';
-                };
-                observation -> data.values as values, values.value = 'ROS1';
+                observation -> data.blockindex = 1;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1434';
             };
+            observation -> data.values as values, values.value = 'ROS1';
         };
     };
 }
