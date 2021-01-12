@@ -26,15 +26,15 @@ uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 
 group TransformBundleSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    operations then CreateMedicationAdministrationSystemischeTherapie(operations, bundle, composition, section);
-    operations then CreatePatientSystemischeTherapie(operations, bundle, composition, section);
-    operations then CreateEpisodeOfCareSystemischeTherapie(operations, bundle, composition, section);
-    operations then CreateObservationEcogSystemischeTherapie(operations, bundle, composition, section);
-    operations then CreateObservationBestResponseSystemischeTherapie(operations, bundle, composition, section);
+    operations then CreateMedicationAdministrationSY(operations, bundle, composition, section);
+    operations then CreatePatientSY(operations, bundle, composition, section);
+    operations then CreateEpisodeOfCareSY(operations, bundle, composition, section);
+    operations then CreateObservationEcogSY(operations, bundle, composition, section);
+    operations then CreateObservationBestResponseSY(operations, bundle, composition, section);
 }
 
 /* ------------------------------ Check if MedicationAdministration needs to be created ---------------------------- */
-group CreateMedicationAdministrationSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+group CreateMedicationAdministrationSY(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     let resourceIsCreated = create('Boolean');
     operations then SetBooleanToFalse(operations, resourceIsCreated);
@@ -65,7 +65,7 @@ group CreateMedicationAdministrationSystemischeTherapie(source operations: Backb
         // if resource is not created yet: call transform
         operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('MedicationAdministration') as medicationAdministration then 
         {
-            operations then TransformMedicationAdministrationSystemischeTherapie(operations, medicationAdministration, composition, section);
+            operations then TransformMedicationAdministrationSY(operations, medicationAdministration, composition, section);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(medicationAdministration, '\'MedicationAdministration/\' + $this.id');
             operations then SetBooleanToTrue(operations, resourceIsCreated);
         };
@@ -73,7 +73,7 @@ group CreateMedicationAdministrationSystemischeTherapie(source operations: Backb
 }
 
 /* ------------------------------ MedicationAdministration ---------------------------- */
-group TransformMedicationAdministrationSystemischeTherapie(source operations: BackboneElement, target tgt: MedicationAdministration, target composition: Composition, target section: BackboneElement)
+group TransformMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration, target composition: Composition, target section: BackboneElement)
 {
     // Profile url
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/MedicationAdministration';
@@ -175,7 +175,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source operations: Ba
                             umgesetzt.valueBoolean = false;
 
                 // Map Grund für die Nichtumsetzung element because it only shows up when 'Nein' is selected
-                operations then MapGrundFurDieNichtumsetzungMedicationAdministration(operations, tgt);
+                operations then MapGrundFurDieNichtumsetzungMedicationAdministrationSY(operations, tgt);
             };
 
             values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
@@ -259,7 +259,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source operations: Ba
                             teilnahme.valueBoolean = true;
                 
                 // Map Studienname element because it only shows up when 'Ja' is selected
-                operations then MapStudiennameMedicationAdministration(operations, tgt);
+                operations then MapStudiennameMedicationAdministrationSY(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Nein'" then
@@ -292,7 +292,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source operations: Ba
         {
             values.value as value where "$this.value = 'yes'" then
             {
-                operations then MapAnderungDesSchemasElementsMedicationAdministration(operations, tgt);
+                operations then MapAnderungDesSchemasElementsMedicationAdministrationSY(operations, tgt);
             };
         };
 
@@ -307,7 +307,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source operations: Ba
                             option.url = 'option',
                             option.valueBoolean = true;
 
-                operations then MapErhaltungstherapieElementMedicationAdministration(operations, tgt);
+                operations then MapErhaltungstherapieElementMedicationAdministrationSY(operations, tgt);
             };
             
             values.value as value where "$this.value = 'Nein'" then
@@ -339,14 +339,14 @@ group TransformMedicationAdministrationSystemischeTherapie(source operations: Ba
             {
                 value -> tgt.status = 'on-hold';
                 value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'nebenwirkungen', 'Pause wegen Nebenwirkungen');
-                operations then MapNebenwirkungenGradMedicationAdministration(operations, tgt);
+                operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Abbruch wegen Progress'" then
             {
                 value -> tgt.status = 'stopped';
                 value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'progress', 'Progress');
-                operations then MapNebenwirkungenGradMedicationAdministration(operations, tgt);
+                operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Ablehnung durch den Patienten'" then
@@ -394,7 +394,7 @@ group TransformMedicationAdministrationSystemischeTherapie(source operations: Ba
 }
 
 /* ------------------------------ MedicationAdministration - Grund für die Nichtumsetzung ---------------------------- */
-group MapGrundFurDieNichtumsetzungMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
+group MapGrundFurDieNichtumsetzungMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
     // Grund für die Nichtumsetzung: supportingInformation.extension:therapieInformationen.extension:nichtumsetzungGrund
     operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2339'" then
@@ -412,7 +412,7 @@ group MapGrundFurDieNichtumsetzungMedicationAdministration(source operations: Ba
 }
 
 /* ------------------------------ MedicationAdministration - Studienname ---------------------------- */
-group MapStudiennameMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
+group MapStudiennameMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
     // Studienname: extension:studientherapie.extension:studie
     operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1244'" then
@@ -431,7 +431,7 @@ group MapStudiennameMedicationAdministration(source operations: BackboneElement,
 }
 
 /* ------------------------------ MedicationAdministration - Elements displayed when Änderung des Schemas is 'Ja' ---------------------------- */
-group MapAnderungDesSchemasElementsMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
+group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
     operations.data as data then
     {
@@ -470,7 +470,7 @@ group MapAnderungDesSchemasElementsMedicationAdministration(source operations: B
 }
 
 /* ------------------------------ MedicationAdministration - Elements displayed when Erhaltungstherapie als Option is 'Ja' ---------------------------- */
-group MapErhaltungstherapieElementMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
+group MapErhaltungstherapieElementMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
     // Für die Erhaltungstherapie verabreichtes Medikament: extension:Erhaltungstherapie.extension:medikament
     operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2342'" then
@@ -490,7 +490,7 @@ group MapErhaltungstherapieElementMedicationAdministration(source operations: Ba
 }
 
 /* ------------------------------ MedicationAdministration - Element displayed when Art des therapieendes is 'Abbruch wegen Nebenwirkungen' or 'Pause wegen Nebenwirkungen' ---------------------------- */
-group MapNebenwirkungenGradMedicationAdministration(source operations: BackboneElement, target tgt: MedicationAdministration)
+group MapNebenwirkungenGradMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
     // Nebenwirkungen Grad III / Grad IV: extension:nebenwirkung
     operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2343'"then
@@ -522,20 +522,20 @@ group MapNebenwirkungenGradMedicationAdministration(source operations: BackboneE
 }
 
 /* ------------------------------ Check if Patient needs to be created ---------------------------- */
-group CreatePatientSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+group CreatePatientSY(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
     {
         operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
         {
-            operations then TransformPatientSystemischeTherapie(operations, patient, composition, section);
+            operations then TransformPatientSY(operations, patient, composition, section);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ Patient ---------------------------- */
-group TransformPatientSystemischeTherapie(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
+group TransformPatientSY(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
 {
     // Profile url
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
@@ -568,20 +568,20 @@ group TransformPatientSystemischeTherapie(source operations: BackboneElement, ta
 }
 
 /* ------------------------------ Check if EpisodeOfCare needs to be created ---------------------------- */
-group CreateEpisodeOfCareSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+group CreateEpisodeOfCareSY(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1545'" then
     {
         operations -> bundle.entry as entry, entry.resource = create('EpisodeOfCare') as episodeOfCare then 
         {
-            operations then TransformEpisodeOfCareSystemischeTherapie(operations, episodeOfCare, composition, section);
+            operations then TransformEpisodeOfCareSY(operations, episodeOfCare, composition, section);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(episodeOfCare, '\'EpisodeOfCare/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ EpisodeOfCare ---------------------------- */
-group TransformEpisodeOfCareSystemischeTherapie(source operations: BackboneElement, target tgt: EpisodeOfCare, target composition: Composition, target section: BackboneElement)
+group TransformEpisodeOfCareSY(source operations: BackboneElement, target tgt: EpisodeOfCare, target composition: Composition, target section: BackboneElement)
 {
     // Profile url
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
@@ -621,20 +621,20 @@ group TransformEpisodeOfCareSystemischeTherapie(source operations: BackboneEleme
 }
 
 /* ------------------------------ Check if Observation ECOG needs to be created ---------------------------- */
-group CreateObservationEcogSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+group CreateObservationEcogSY(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2415'" then
     {
         operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
         {
-            operations then TransformObservationEcogSystemischeTherapie(operations, observation, composition, section);
+            operations then TransformObservationEcogSY(operations, observation, composition, section);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
         };
     };
 }
 
 /* ------------------------------ Observation ECOG ---------------------------- */
-group TransformObservationEcogSystemischeTherapie(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
+group TransformObservationEcogSY(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Profile url
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/ecog';
@@ -701,7 +701,7 @@ group TransformObservationEcogSystemischeTherapie(source operations: BackboneEle
 }
 
 /* ------------------------------ Check if Observation BestResponse needs to be created ---------------------------- */
-group CreateObservationBestResponseSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
+group CreateObservationBestResponseSY(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     let resourceIsCreated = create('Boolean');
     operations then SetBooleanToFalse(operations, resourceIsCreated);
@@ -711,7 +711,7 @@ group CreateObservationBestResponseSystemischeTherapie(source operations: Backbo
     {
         operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('Observation') as observation then 
         {
-            operations then TransformObservationBestResponseSystemischeTherapie(operations, observation, composition, section);
+            operations then TransformObservationBestResponseSY(operations, observation, composition, section);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
             operations then SetBooleanToTrue(operations, resourceIsCreated);
         };
@@ -719,7 +719,7 @@ group CreateObservationBestResponseSystemischeTherapie(source operations: Backbo
 }
 
 /* ------------------------------ Observation BestResponse ---------------------------- */
-group TransformObservationBestResponseSystemischeTherapie(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
+group TransformObservationBestResponseSY(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     // Profile url
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/best-response';
