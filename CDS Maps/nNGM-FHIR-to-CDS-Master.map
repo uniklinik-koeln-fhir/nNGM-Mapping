@@ -10,11 +10,11 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
 
 // Antrag
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
 /*
 // Befund
@@ -40,7 +40,7 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
     src then MapStammdaten(src, tgt);
-    src then MapAntrag(src, tgt);
+    // src then MapAntrag(src, tgt);
 
     /*
     // Befund
@@ -64,16 +64,13 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 
 group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
 {
-        // Patient ID
-        src.entry as srcentry, srcentry.resource as bundle where "resource is Bundle", bundle.entry as entry then
-        {
-            /* ------------------------------- Patient ---------------------------- */
-            entry.resource as patient where "resource is Patient and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM'" then
-            {   
-                patient.identifier as identifier, identifier.value as patId -> tgt.patid = patId;
-            };
-        };
-    
+    // Patient ID
+    src.entry as entry, entry.resource as compositionAntrag where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Stammdaten-pseudonymisiert'" then
+    {
+        // Patid
+        compositionAntrag.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+        src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
+    };
 }
 
 group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
