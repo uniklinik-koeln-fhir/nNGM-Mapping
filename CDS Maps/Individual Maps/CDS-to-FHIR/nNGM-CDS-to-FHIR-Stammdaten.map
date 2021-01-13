@@ -54,7 +54,13 @@ group CreatePatientStammdaten(source operations: BackboneElement, target bundle:
 /* ------------------------------ Patient ---------------------------- */
 group TransformPatientStammdaten(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
 {
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM/pseudonymisiert';
+
+    // Identifier
+    operations -> tgt.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = evaluate(composition, '$this.subject.identifier.value');
+
+    // Birthdate
+    operations -> tgt.birthDate = evaluate(operations, 'today()');
 
     operations.data as data then
     {
@@ -85,42 +91,6 @@ group TransformPatientStammdaten(source operations: BackboneElement, target tgt:
                                          other.url = 'http://fhir.de/StructureDefinition/gender-amtlich-de', 
                                          other.valueCodeableConcept = cc('http://fhir.de/CodeSystem/gender-amtlich-de', 'D', 'divers');
             };
-        };
-
-        // Nachname -> name.family
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1125'" then
-        {
-            values.value as value -> tgt.name as name, name.family = value;
-        };
-
-        // Vorname -> name.given
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1124'" then
-        {
-            values.value as value -> tgt.name as name, name.given = value;
-        };
-
-        // Strasse -> address.line
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1127'" then
-        {
-            values.value as line -> tgt.address as tgtAddress, tgtAddress.line = line;
-        };
-
-        // PLZ -> address.postalcode
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1128'" then
-        {
-            values.value as plz -> tgt.address as tgtAddress, tgtAddress.postalCode = plz;
-        };
-
-        // Wohnort -> address.city
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1129'" then
-        {
-            values.value as city -> tgt.address as tgtAddress, tgtAddress.city = city;
-        };
-
-        // Country
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1280'" then
-        {
-            values.value as country -> tgt.address as tgtAddress, tgtAddress.country = country;
         };
 
         // DeceasedBoolean
@@ -179,7 +149,7 @@ group CreateCoverageStammdaten(source operations: BackboneElement, target bundle
 /* ------------------------------ Coverage ---------------------------- */
 group TransformCoverageStammdaten(source operations: BackboneElement, target tgt: Coverage, target composition: Composition, target section: BackboneElement)
 { 
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM/pseudonymisiert';
 
     // status = active
     operations -> tgt.status = cast('active', 'FHIR.code'); 
@@ -320,6 +290,7 @@ group TransformEpisodeOfCareStammdaten(source operations: BackboneElement, targe
         // NNGM status -> extension:nngmStatus.valueCodeableConcept
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1139'" then
         {
+            values -> tgt.status = cast('active', 'FHIR.code');
             values.value as value -> tgt.status as status,
                                      status.extension as nngmstatus, 
                                      nngmstatus.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/FollowUpStatus',
@@ -392,7 +363,7 @@ group TransformConsentEinwilligung1aStammdaten(source operations: BackboneElemen
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision collate, 
                                              provision.type = cast('deny', 'FHIR.code');
 
-                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1a');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/nngm-consent-policy', '1a');                 
             };
         };
 
@@ -460,7 +431,7 @@ group TransformConsentEinwilligung1bStammdaten(source operations: BackboneElemen
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('permit', 'FHIR.code');
                 
-                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/nngm-consent-policy', '1b');                 
             };
 
             values.value as signature where "$this.value = 'no'" then
@@ -468,7 +439,7 @@ group TransformConsentEinwilligung1bStammdaten(source operations: BackboneElemen
                 values.value as signature -> tgt.provision = create('BackboneElement') as provision2, 
                                              provision2.type = cast('deny', 'FHIR.code');
 
-                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/ValueSet/nngm/nngm-consent-policy', '1b');                 
+                operations -> tgt.policyRule = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/nngm-consent-policy', '1b');                 
             };
         };
 
