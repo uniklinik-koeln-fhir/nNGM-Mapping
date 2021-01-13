@@ -10,9 +10,6 @@ uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
 // Stammdaten
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
 
-// Vorbefund
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
-
 // Antrag
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
@@ -43,10 +40,10 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     src -> tgt.id = uuid();
     src -> tgt.type = 'collection';
 
-    // src then MapStammdaten(src, tgt);
+    src then MapStammdaten(src, tgt);
 
     // TODO
-    // src then MapAntrag(src, tgt);
+    src then MapAntrag(src, tgt);
 
     // TODO
     src then MapBefund(src, tgt);
@@ -246,13 +243,11 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         let maxIndex = evaluate(index, '$this.maxIndex');
 
         /* ------------------------------ Bundle ---------------------------- */
-
         // Meta
         src -> bundleBefund.id = uuid();
         src -> bundleBefund.type = 'transaction';
 
         /* ------------------------------ Composition ---------------------------- */
-
         // Meta
         src -> compositionBefund.id = uuid();
         src -> compositionBefund.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert';
@@ -443,7 +438,6 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
     };
 }
 
-
 // Helper functions
 group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
@@ -453,6 +447,26 @@ group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 group IncrementCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
     src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
+}
+
+group InitFormIndex(source src: CTS_Transport, target index: RepeatIndex)
+{
+    src -> index.formIndex = 1;
+}
+
+group IncrementFormIndex(source src: CTS_Transport, target index: RepeatIndex)
+{
+    src -> index.formIndex = evaluate(index, '$this.formIndex + 1');
+}
+
+group InitSectionIndex(source src: BackboneElement, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = 0;
+}
+
+group IncrementSectionIndex(source src: BackboneElement, target index: RepeatIndex)
+{
+    src -> index.sectionIndex = evaluate(index, '$this.sectionIndex + 1');
 }
 
 /*  InitMaxIndex: 
@@ -576,26 +590,6 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
         operations where "crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger()');
     };
-}
-
-group InitFormIndex(source src: CTS_Transport, target index: RepeatIndex)
-{
-    src -> index.formIndex = 1;
-}
-
-group IncrementFormIndex(source src: CTS_Transport, target index: RepeatIndex)
-{
-    src -> index.formIndex = evaluate(index, '$this.formIndex + 1');
-}
-
-group InitSectionIndex(source src: BackboneElement, target index: RepeatIndex)
-{
-    src -> index.sectionIndex = 0;
-}
-
-group IncrementSectionIndex(source src: BackboneElement, target index: RepeatIndex)
-{
-    src -> index.sectionIndex = evaluate(index, '$this.sectionIndex + 1');
 }
 
 group SetBooleanToFalse(source src: BackboneElement, target boolean: Boolean)
