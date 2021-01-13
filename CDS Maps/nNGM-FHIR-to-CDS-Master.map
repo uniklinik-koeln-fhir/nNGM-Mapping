@@ -184,6 +184,8 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                                     IncrementCaseIndex(src, index);
                     };
                 };
+
+                nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
             };
         };
     };
@@ -420,6 +422,7 @@ group IncrementCaseIndex(source src: Bundle, target index: RepeatIndex)
 // For each form with checkboxes: iterate over the FHIR resources to be listed once again, create 1 data BackboneElement (= checkbox) and add the values accordingly to it 
 group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
 {
+    // Antrag
     // RT
     nestedSection where "code.coding.code = 'resistenztestung'" -> operations.data as data then
     {
@@ -439,6 +442,7 @@ group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElem
         };
     };
 
+    // Befund
     // IHC
     nestedSection where "code.coding.code = 'immunhistochemie'" -> operations.data as data then
     {
@@ -473,7 +477,7 @@ group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElem
             observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
         };    
     };
-    // MP - FISH
+    // FISH
     nestedSection where "code.coding.code = 'molekularpathologie'" -> operations.data as data then
     {
         nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
@@ -521,6 +525,100 @@ group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElem
             observation where "%data.where(itemid = 'id_2512').exists().not()" then
             {
                 observation -> data.blockindex = 3;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2512';
+            };
+            observation where "code.coding.code = 'C158854'" -> data.values as values, values.value = 'BRAF Exon 15';  
+            observation where "code.coding.code = 'C128662'" -> data.values as values, values.value = 'EGFR Exon 19-21';  
+            observation where "code.coding.code = 'C135715'" -> data.values as values, values.value = 'KRAS Exon 2';  
+        };
+    };
+}
+
+group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+{
+    // IHC
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation where "%data.where(itemid = 'id_2508').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2508';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };
+    };
+
+    // MP - here we need to create 2 checkboxes (= 2 data BackboneElements) 
+    // CISH
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+        {
+            observation where "%data.where(itemid = 'id_2509').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2509';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };    
+    };
+    // FISH
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        {
+            observation where "%data.where(itemid = 'id_2510').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2510';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };    
+    };
+    
+    // FS
+    nestedSection where "code.coding.code ='vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+        {
+            observation where "%data.where(itemid = 'id_2511').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2511';
+            };
+            // ensure that "Sonstiges" is added only once
+            observation where "%observation.code.coding.code != 'Sonstiges' or %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            {
+                observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code');  
+            };
+        };
+    };
+
+    // FT
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
+        {
+            observation where "%data.where(itemid = 'id_2512').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
                 observation -> data.groupindex = 0;
                 observation -> data.itemid = 'id_2512';
             };
