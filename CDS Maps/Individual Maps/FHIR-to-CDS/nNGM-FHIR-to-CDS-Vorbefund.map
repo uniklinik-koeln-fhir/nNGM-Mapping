@@ -5,7 +5,7 @@
     [EXTERNES TUMORMATERIAL] Section form 
     - Eingang des Tumormaterials am nNGM-Standort item form doesn't exist in Sea Table. Missing implementation to map in this script.
 
-    Checkboxes are not working, everything is contained in the 'last' checkbox section id_2512
+    - Some IHC Observations seem to have an issue (connected to Fix #70), please check TODOs in there
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS" = nNGM_Mapping_VorbefundCDS
@@ -15,21 +15,6 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneElement, target index: RepeatIndex)
 {
-    // Checkboxes for Immunhistochemie (IHC)
-    entry then TransformImmunhistochemieIHCCheckboxes(entry, tgt);
-
-    //Checkboxes for Chromogenic in-situ-Hybridisierung(CISH)
-    entry then TransformChromogenicinsituHybridisierungCISHCheckboxes(entry, tgt);
-
-    //Checkboxes for Fluoreszenz-in-situ-Hybridisierung (FISH)
-    entry then TransformFluoreszenzinsituHybridisierungFISHCheckboxes(entry, tgt);
-
-    //Checkboxes for Fusion NGS
-    entry then TransformFusionNGSCheckboxes(entry, tgt);
-
-    //Checkboxes for Fast Track
-    entry then TransformFastTrackCheckboxes(entry, tgt);
-
     /* ------------------------------ Specimen ---------------------------- */
     entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
     {
@@ -286,7 +271,6 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
             };
         };
     };
-
     /* --------------------- Observation MIB1 IHC ------------------------ */
     entry.resource as observation where "resource is Observation and resource.code.coding.code = 'MIB1'
                                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
@@ -334,23 +318,6 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
                         observation->data.itemid = 'id_2056';
                         coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
                     };
-                };
-            };
-            //Ergebnis -> 7, 0, id_2063
-            observation -> tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation -> data.blockindex = 7;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid     = 'id_2056';
-                        value   -> data.values as values,
-                                    values.value   = value;
-                        value   -> data.values as values, 
-                                    values.unit    = 'predef', 
-                                    values.value   = 'Expresssion';
                 };
             };
         };
@@ -439,25 +406,7 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
                             observation->data.itemid = 'id_2065';
                             coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
                         };
-                    };
-                
-            };
-            //Ergebnis -> 14, 0, id_2072
-            observation -> tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
-                {
-                    observation -> data.blockindex = 14;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid     = 'id_2065';
-                        value   -> data.values as values,
-                                    values.value   = value;
-                        value   -> data.values as values, 
-                                    values.unit    = 'predef', 
-                                    values.value   = 'Expresssion';
-                };
+                    };           
             };
         };
         //Ergebnis -> 14, 0, id_2072
@@ -516,52 +465,33 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
         //Phänotyp: phanotyp component-> 15, 0, id_2074
         observation -> tgt.data as data then
         {
-
-                observation.component as component then
-                {
-                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2074').exists().not()" then
-                    {
-                        vcc.coding as coding where "coding.code = 'C80488'" then
-                        {
-                            observation->data.blockindex = 15;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2074';
-                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                        };
-
-                        vcc.coding as coding where "coding.code = 'C28510'" then
-                        {
-                            observation->data.blockindex = 15;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2074';
-                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                        };
-
-                        vcc.coding as coding where "coding.code = 'C25418'" then
-                        {
-                            observation->data.blockindex = 15;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2074';
-                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                        };
-                    };
-                };
-            
-            //Ergebnis -> 15, 0, id_2079
-            observation -> tgt.data as data then
+            observation.component as component then
             {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
+                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2074').exists().not()" then
                 {
-                    observation -> data.blockindex = 15;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid     = 'id_2074';
-                        value   -> data.values as values,
-                                    values.value   = value;
-                        value   -> data.values as values, 
-                                    values.unit    = 'predef', 
-                                    values.value   = 'Expresssion';
+                    vcc.coding as coding where "coding.code = 'C80488'" then
+                    {
+                        observation->data.blockindex = 15;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2074';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                    };
+
+                    vcc.coding as coding where "coding.code = 'C28510'" then
+                    {
+                        observation->data.blockindex = 15;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2074';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                    };
+
+                    vcc.coding as coding where "coding.code = 'C25418'" then
+                    {
+                        observation->data.blockindex = 15;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2074';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                    };
                 };
             };
         };
@@ -638,6 +568,7 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
             };
         };
         //Ergebnis -> 18, 0, id_2088
+        // TODO: Check merge history if this is correct. id_2081 is set here as well
         observation -> tgt.data as data then
         {
             observation.valueCodeableConcept as valueCodeableConcept,
@@ -719,48 +650,31 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
         {
             observation.component as component then
             {
-                    component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2090').exists().not()" then
-                    {
-                        vcc.coding as coding where "coding.code = 'C80488'" then
-                        {
-                            observation->data.blockindex = 19;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2090';
-                            coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                        };
-
-                        vcc.coding as coding where "coding.code = 'C28510'" then
-                        {
-                            observation->data.blockindex = 19;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2090';
-                            coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                        };
-
-                        vcc.coding as coding where "coding.code = 'C25418'" then
-                        {
-                            observation->data.blockindex = 19;
-                            observation->data.groupindex = 0;
-                            observation->data.itemid = 'id_2090';
-                            coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                        };
-                    };
-            };
-            //Ergebnis -> 19, 0, id_2097
-            observation -> tgt.data as data then
-            {
-                observation.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA6576-8'" then
+                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2090').exists().not()" then
                 {
-                    observation -> data.blockindex = 19;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid     = 'id_2090';
-                        value   -> data.values as values,
-                                    values.value   = value;
-                        value   -> data.values as values, 
-                                    values.unit    = 'predef', 
-                                    values.value   = 'Expresssion';
+                    vcc.coding as coding where "coding.code = 'C80488'" then
+                    {
+                        observation->data.blockindex = 19;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2090';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                    };
+
+                    vcc.coding as coding where "coding.code = 'C28510'" then
+                    {
+                        observation->data.blockindex = 19;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2090';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                    };
+
+                    vcc.coding as coding where "coding.code = 'C25418'" then
+                    {
+                        observation->data.blockindex = 19;
+                        observation->data.groupindex = 0;
+                        observation->data.itemid = 'id_2090';
+                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+                    };
                 };
             };
         };
@@ -934,6 +848,7 @@ group TransformVorbefundCDS(source entry: BackboneElement, target tgt: BackboneE
             };
         };
         //Expression high-level -> expression-high-level component -> 6, 0, id_2141
+        // TODO: Check merge history if this is correct. id_2173 is set here as well
         observation -> tgt.data as data then
         {
             observation.component as component,
@@ -3522,7 +3437,7 @@ group TransformationObservationALKDatePhanotypVorbefund(source observation:Obser
     //Phänotyp: phanotyp component-> 3, 0, id_2099
     observation -> tgt.data as data then
     {
-        src.component as component, 
+        observation.component as component, 
         component.code where "code.coding.code = 'C16977'" then
         {
             component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2099').exists().not()" then
@@ -3574,7 +3489,7 @@ group TransformationObservationMETDatePhanotypVorbefund(source observation:Obser
     //Phänotyp: phanotyp component-> 6, 0, id_2133
     observation -> tgt.data as data then
     {
-        src.component as component, 
+        observation.component as component, 
         component.code where "code.coding.code = 'C16977'" then
         {
             component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2133').exists().not()" then
@@ -3678,7 +3593,7 @@ group TransformationObservationRETDatePhanotypVorbefund(source observation:Obser
     //Phänotyp: phanotyp component-> 20, 0, id_2184
     observation -> tgt.data as data then
     {
-        src.component as component, 
+        observation.component as component, 
         component.code where "code.coding.code = 'C16977'" then
         {
             component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2184').exists().not()" then
@@ -3764,216 +3679,3 @@ group TransformObservationFastTrackDateAssayHerstellerEGFREXO1921(source observa
         };
     };
 }
-/* ------- Create Checkboxes for field Immunhistochemie (IHC) -------- */
-group TransformImmunhistochemieIHCCheckboxes(source entry: BackboneElement, target tgt: BackboneElement)
-{
-    entry -> tgt.data as data then
-    {
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
-        {
-            observation.status as status where "%tgt.data.where(itemid = 'id_2508').exists().not()" then
-            {
-                observation -> data.blockindex = 2;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2508';
-
-                observation where "%observation.entry.resource.code.coding.where(code = 'BRAF').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'BRAF';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'CK7').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'CK7';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'MIB1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'MIB1';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'Napsin A').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'Napsin A';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'P40').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'P40';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'Synaptophysin').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'Synaptophysin';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'TTF1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'TTF1';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'ALK').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ALK';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'MET').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'MET';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'PD-L1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'PD-L1';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'ROS1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ROS1';
-                };
-            };
-        };
-    };
-}
-/*-- Create Checkboxes for Chromogenic in-situ-Hybridisierung(CISH)---*/
-group TransformChromogenicinsituHybridisierungCISHCheckboxes(source entry: BackboneElement, target tgt: BackboneElement)
-{
-    entry-> tgt.data as data then
-    {
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
-        {
-            observation.status as status where "%tgt.data.where(itemid = 'id_2509').exists().not()" then
-            {
-                observation -> data.blockindex = 2;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2509';
-                
-                observation where "%observation.entry.resource.code.coding.where(code = 'ALK').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ALK';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'MET').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'MET';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'RET').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'RET';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'ROS1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ROS1';
-                };
-            };
-        };
-    };
-}
-/*-- Create Checkboxes for Fluoreszenz-in-situ-Hybridisierung (FISH)-- */
-group TransformFluoreszenzinsituHybridisierungFISHCheckboxes(source entry: BackboneElement, target tgt: BackboneElement)
-{
-    entry-> tgt.data as data then
-    {
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
-        {
-            observation.status as status where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
-            {
-                observation -> data.blockindex = 2;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2510';
-
-                observation where "%observation.entry.resource.code.coding.where(code = 'ALK').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ALK';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'MET').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'MET';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'RET').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'RET';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'ROS1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ROS1';
-                };
-            };
-        };
-    };       
-}
-/*----------------- Create Checkboxes for Fusion NGS ----------------- */
-group TransformFusionNGSCheckboxes(source entry: BackboneElement, target tgt: BackboneElement)
-{
-    entry-> tgt.data as data then
-    {
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
-        {
-            observation.status as status where "%tgt.data.where(itemid = 'id_2511').exists().not()" then
-            {
-                observation -> data.blockindex = 2;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2511';
-
-                observation where "%observation.entry.resource.code.coding.where(code = 'ALK').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ALK';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'RET').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'RET';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'ROS1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'ROS1';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'NTRK1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'NTRK1';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'NTRK2').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'NTRK2';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'NTRK3').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'NTRK3';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'FGFR1').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'FGFR1';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'FGFR2').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'FGFR2';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'FGFR3').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'FGFR3';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'Sonstiges').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'Sonstiges';
-                };
-            };
-        };
-    };
-}
-/*----------------- Create Checkboxes for Fast Track ----------------- */
-group TransformFastTrackCheckboxes(source entry: BackboneElement, target tgt: BackboneElement)
-{
-    entry -> tgt.data as data then
-    {
-        entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
-        {
-            observation.status as status where "%tgt.data.where(itemid = 'id_2512').exists().not()" then
-            {
-                observation -> data.blockindex = 2;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2512';
-                observation where "%observation.entry.resource.code.coding.where(code = 'C158854').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'BRAF Exon 15';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'C128662').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'EGFR Exon 19-21';
-                };
-                observation where "%observation.entry.resource.code.coding.where(code = 'C135715').exists()" then
-                {
-                    observation -> data.values as values, values.value = 'KRAS Exon 2';
-                };
-            };
-        };
-    };
-}
-
