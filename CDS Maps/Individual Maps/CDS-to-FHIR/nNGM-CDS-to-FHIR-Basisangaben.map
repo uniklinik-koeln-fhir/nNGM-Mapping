@@ -297,7 +297,7 @@ group CreateCoverageBasisangaben(source operations: BackboneElement, target bund
 group TransformCoverageBasisangaben(source operations: BackboneElement, target tgt: Coverage, target composition: Composition, target section: BackboneElement)
 { 
     // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Coverage/nNGM/pseudonymisiert';
 
     // status = active
     operations -> tgt.status = cast('active', 'FHIR.code'); 
@@ -321,18 +321,30 @@ group TransformCoverageBasisangaben(source operations: BackboneElement, target t
         // References
         operations -> tgt.beneficiary = create('Reference') as beneficiary, beneficiary.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-        // Reference payor -> Organization
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        // Payor
+        operations -> tgt.payor = create('Reference') as payor then 
         {
-            values.value as value -> tgt.payor = create('Reference') as payor, payor.reference = evaluate(value, '\'Organization/\' + $this');
+            // Reference payor -> Organization
+            data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+            {
+                values.value as value -> payor.reference = evaluate(value, '\'Organization/\' + $this');
+            };
+
+            // Krankenkasse
+            data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'" then
+            {
+                values.value as kkasse -> payor.display = kkasse;
+            };
+
+            // Abrechnungsinformation -> payor.extension:abrechnungsinformation.valueCodeableConcept
+            data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1333'" then
+            {
+                values.value as Abrechnungsinformation -> payor.extension as abrechnungsinformationen,
+                                                            abrechnungsinformationen.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/abrechnungsinformation',
+                                                            abrechnungsinformationen.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/abrechnungsinformation', Abrechnungsinformation);
+            };
         };
 
-        // Krankenkasse
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2459'" then
-        {
-            values.value as kkasse -> tgt.payor as payor, payor.display = kkasse;
-        };
-        
         // Typ   
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1269'" then
         {
@@ -384,14 +396,7 @@ group TransformCoverageBasisangaben(source operations: BackboneElement, target t
 
         // Versichertennummer -> not mapped because this data is likely coming from the Brückenkopf
 
-        // Abrechnungsinformation -> payor.extension:abrechnungsinformation.valueCodeableConcept
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_1333'" then
-        {
-            values.value as Abrechnungsinformation -> tgt.payor = create('Reference') as payor,
-                                                        payor.extension as abrechnungsinformationen,
-                                                        abrechnungsinformationen.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/abrechnungsinformation',
-                                                        abrechnungsinformationen.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/abrechnungsinformation', Abrechnungsinformation);
-        };    
+  
     };
 }
 
