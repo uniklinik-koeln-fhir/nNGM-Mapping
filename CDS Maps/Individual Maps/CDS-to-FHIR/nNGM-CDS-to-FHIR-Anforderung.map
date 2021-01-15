@@ -14,7 +14,6 @@ uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
     - creation of specimen is currently commented out (with uuid_specimen_nngm_blut / _block)
     - reference to created specimen is currently commented out (in the other transform-groups)
     - deal with biopsy-ID
-    - authoredOn isn't in profile for Specimen and Observation but in ServiceRequest?
 */
 
 group TransformBundleAnforderung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target biopsieSection: BackboneElement)
@@ -84,7 +83,7 @@ group TransformGewebeDiagnostikServiceRequestAnforderung(source operations: Back
     // subject, which is obligatory element on Simplifier, with a Patient
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    // status, which is obligatory element on Simplifier, with an absent extension
+    // status, which is obligatory element on Simplifier
     operations -> tgt.status = cast('active', 'FHIR.code');
 
     // intent, which is obligatory element on Simplifier
@@ -264,13 +263,14 @@ group TransformBlutDiagnostikServiceRequestAnforderung(source operations: Backbo
     // subject, which is obligatory element on Simplifier, with a Patient
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    // status, which is obligatory element on Simplifier, with an absent extension
-    operations -> tgt.status as status, status.extension as dataAbsentReason, 
-                                                     dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                                                     dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // status, which is obligatory element on Simplifier
+    operations -> tgt.status = cast('active', 'FHIR.code');
 
     // intent, which is obligatory element on Simplifier
     operations -> tgt.intent = cast('proposal', 'FHIR.code');
+
+    // code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/anforderung-code', 'Liquid Biopsy');
 
     // Access data
     operations.data as data then
@@ -488,8 +488,6 @@ group TransformBlutDiagnostikSpecimenAnforderung(source operations: BackboneElem
 
     // subject, which is obligatory element on Simplifier, with a Patient
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-    // Mandatory element
-    // operations -> tgt.authoredOn = evaluate(operations, 'now()');
 
     // type, which is obligatory element on Simplifier, with no fixed value
     operations ->  tgt.type as type,
@@ -663,12 +661,23 @@ group TransformObservationBlutDiagnostikAnforderung(source operations: BackboneE
         };
 
         // Histologie des vorbefunds - valueCodeableConcept
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" then 
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" -> tgt.valueCodeableConcept as vcc, vcc.coding as coding then 
         {
-            values.value as valuecc ->  tgt.valueCodeableConcept as vcc, vcc.coding as coding collate,
-                         coding.system = 'urn:oid:2.16.840.1.113883.6.43.1',
-                         coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()'),
-                         coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
+            // use CodeSystem http://ncit.nci.nih.gov
+            values.value as valuecc where "value = 'CUP'" then
+            {
+                operations -> coding.system = 'http://ncit.nci.nih.gov';
+                operations -> coding.code = 'C3812';
+                operations -> coding.display = 'CUP';
+            };
+
+            // use CodeSystem urn:oid:2.16.840.1.113883.6.43.1	
+            values.value as valuecc where "value != 'CUP'" then
+            {
+                operations -> coding.system = 'urn:oid:2.16.840.1.113883.6.43.1';
+                operations -> coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()');
+                operations -> coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
+            };                    
         };
 
         // Referenzen
