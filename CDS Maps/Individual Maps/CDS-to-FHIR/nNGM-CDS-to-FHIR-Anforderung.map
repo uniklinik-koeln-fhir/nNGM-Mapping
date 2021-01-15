@@ -602,8 +602,8 @@ group TransformObservationGewebediagnostikAnforderung(source operations: Backbon
     // profile with profile URL
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histo-vorbefund';
     
-    // Mandatory Element
-    // operations -> tgt.authoredOn = evaluate(operations, 'now()');
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Obligatory fields
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -656,7 +656,7 @@ group TransformObservationBlutDiagnostikAnforderung(source operations: BackboneE
     operations.data as data then
     {
         // ID + Composition insert
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_specimen_nngm_blut'" then
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histoVorbefund_blut'" then
         {
             values.value as value -> tgt.id = value;
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
@@ -708,10 +708,6 @@ group TransformOrganizationGewebediagnostikAnforderung(source operations: Backbo
 {
     // Mapped profile with profile URL
     operations -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
-
-    operations ->  tgt.address as address,
-            address.use = 'work',
-            address.type = 'postal';
     
     // Access data 
     operations.data as data then
@@ -732,7 +728,7 @@ group TransformOrganizationGewebediagnostikAnforderung(source operations: Backbo
         // address.text
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1562'" then
         {
-            values.value as value -> tgt.address as address, address.text = value;
+            values.value as value -> tgt.address as address, address.use = 'work', address.type = 'postal',  address.text = value;
         };
     };
 }
