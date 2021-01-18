@@ -110,9 +110,29 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 
                 nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
-                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    // we need to differentiate between Gewebe- and Blutdiagnostik which could only be done via the ServiceRequest
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is ServiceRequest" then
                     {
-                        nestedSection then TransformAnforderungCDS(entry, operations);
+                        // Gewebediagnostik
+                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen, Organization)
+                        entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then
+                        {
+                            let gewebeBlut = 'Gewebe';
+                            nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.requester.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                        };
+
+                        // Blutdiagnostik (Liquid Biopsy)
+                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen)
+                        entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
+                        {
+                            let gewebeBlut = 'Blut';
+                            nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                        };
                     };
                 };
             };
