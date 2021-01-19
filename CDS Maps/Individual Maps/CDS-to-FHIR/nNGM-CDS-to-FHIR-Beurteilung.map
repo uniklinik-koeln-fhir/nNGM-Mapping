@@ -64,15 +64,22 @@ group TransformDiagnosticReportBeurteilung(source operations: BackboneElement, t
 
         // Erstelldatum
         data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'bu_creation_date'" then
-         {
-            values.value as date -> tgt.effectiveDateTime = dateOp(date, 'dateTime');
-         };
+        {
+        values.value as date -> tgt.effectiveDateTime = dateOp(date, 'dateTime');
+        };
 
 		// Status
         data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'bu_version'" then
-         {   
-            values.value as code -> tgt.status = code; //cc('', code);
-         };   
+        {   
+            values.value as value where "$this.value = 'final'" then 
+            {
+                value -> tgt.status = 'final';
+            };
+            values.value as value where "$this.value = 'vorl\u00e4ufig'" then 
+            {
+                value -> tgt.status = 'preliminary';
+            };
+        };   
 
         // Klinische Information 
         data.values as values where "blockindex = 0 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'id_1352'" then
@@ -86,14 +93,16 @@ group TransformDiagnosticReportBeurteilung(source operations: BackboneElement, t
             values.value as signature where "$this.value = 'Ja'" then
             {
                 values.value as value -> tgt.conclusionCode as conclusioncode,
-                                        conclusioncode.extension as empfehlung, 
+                                        conclusioncode.extension as empfehlung,
+                                        empfehlung.url = 'http://uk-koeln.de/fhir/Extension/nNGM/beurteilung-empfehlung-systemische-therapie', 
                                         empfehlung.valueBoolean = true;
             };
 
             values.value as signature where "$this.value = 'Nein'" then
             {
                 values.value as value -> tgt.conclusionCode as conclusioncode,
-                                        conclusioncode.extension as empfehlung, 
+                                        conclusioncode.extension as empfehlung,
+                                        empfehlung.url = 'http://uk-koeln.de/fhir/Extension/nNGM/beurteilung-empfehlung-systemische-therapie', 
                                         empfehlung.valueBoolean = false;
             };
         }; 
@@ -137,9 +146,7 @@ group TransformServiceRequestBeurteilung(source operations: BackboneElement, tar
 
     // Category
     operations -> tgt.category as category, 
-                category.coding as coding, 
-                coding.system as system, 
-                system.extension as dataAbsentReason, 
+                category.extension as dataAbsentReason, 
                 dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
                 dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
@@ -224,8 +231,8 @@ group TransformBeurteilungStatusExtension(source operations: BackboneElement, ta
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2525'" then
         {   
             values.value as datumversands -> tgt.extension as datumVersands,
-                                              datumVersands.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands',
-                                              datumVersands.value = dateOp(datumversands, 'dateTime');
+                                              datumVersands.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/versandDatum',
+                                              datumVersands.valueDate = dateOp(datumversands, 'dateTime');
         };
     };
 }
