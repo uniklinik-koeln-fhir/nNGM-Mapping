@@ -1,0 +1,204 @@
+/* Map a Variant Call Format (VCF) file to FHIR based on the Clinical Genmoics Implementation Guide (http://hl7.org/fhir/uv/genomics-reporting/) */
+/// version = 0.1
+
+/* 
+TODO
+position start/stop doesnt have appropriate codesystem
+position stop not implemented
+quantity.code = '{reads}/{base}' is not accepted by vonk serializer see https://ucum.org/trac/ticket/5776#no1
+
+ref-sequence-assembley: HG19 -> GRCh37, HG38 -> GRCh38 and more?
+*/
+
+
+map "http://vonk.fire.ly/fhir/StructureMap/nNGM_NGS_LUNGPANEL_FHIR" = "nNGM NGS LUNG PANEL FHIR"
+
+uses "http://vonk.fire.ly/fhir/StructureDefinition/VCF" as source
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
+uses "http://hl7.org/fhir/StructureDefinition/Device" as target
+
+group MapVCF(source src: VCF, target bundle: Bundle)
+{
+    src -> bundle.id = uuid();
+    src -> bundle.type = 'transaction';
+    
+    src.records as records -> bundle.entry as entry,
+                              entry.resource = create('Observation') as obs then MapVariantMeta(records, obs), 
+                                                                                 MapVCFRequiredHeader(src, obs),
+                                                                                 MapVCFRequiredBody(records, obs),
+                                                                                 MapVCFOptionalBody(records, obs),
+                                                                                 MapTransactionMeta(records, entry);
+    /*
+    src -> bundle.entry as entry, 
+                                entry.request as request, 
+                                request.method = 'POST', 
+                                request.url = 'Device', 
+                                entry.resource = create('Device') as dev then MapVCFDevice(src, dev);
+    */
+}
+
+group MapTransactionMeta(source records : BackboneElement, target entry: BackboneElement)
+{
+    records -> entry.request as request collate, request.method = 'PUT';
+    records -> entry.request as request collate, request.url = evaluate(entry, '\'Observation?identifier=http://uk-koeln.de/fhir/CodeSystem/nNGM/ClinicalDocumentationSuiteImportIdentifier|\'+ ($this.resource as Observation).identifier[2].value' );
+}
+
+group MapVariantMeta(source records: BackboneElement, target obs : Observation)
+{
+    //Mandatory Fhir Profile elements
+    records -> obs.meta as meta, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel';
+    records -> obs.id = uuid();
+    records -> obs.status = 'final';
+    records -> obs.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
+    records -> obs.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8');
+    records -> obs.method = cc('http://ncit.nci.nih.gov', 'C101293');
+
+    // Requires read of CSQ[6]
+    records -> obs.code = cc('http://loinc.org', '69548-6');
+   
+    records.sample as sample, sample.sampleId as sampleId  then 
+    {
+
+        sampleId where "%obs.identifier.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/MolPathoFileMaker/Untersuchungs-ID').exists().not()" -> obs.identifier = create('Identifier') as identifier, 
+                                     identifier.value = evaluate(records, '$this[0].sample[0].sampleId[0].split(\'_\')[2].split(\'-\')[0]'),
+                                     identifier.system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/MolPathoFileMaker/Untersuchungs-ID';
+
+        sampleId where "%obs.identifier.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/MolPathoFileMaker/PathoProJournalnummer').exists().not()" -> obs.identifier = create('Identifier') as identifier, 
+                                     identifier.value = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0]'),
+                                     identifier.system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/MolPathoFileMaker/PathoProJournalnummer';
+
+        // Placeholder
+        sampleId where "%obs.identifier.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/ClinicalDocumentationSuiteImportIdentifier').exists().not()" -> obs.identifier = create('Identifier') as identifier, 
+                                     identifier.value = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0] + \'-\' + $index.toString()'),
+                                     identifier.system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/ClinicalDocumentationSuiteImportIdentifier';
+    };
+}
+
+group MapVCFRequiredHeader(source src: VCF, target obs : Observation)
+{
+    // ##reference -> component:ref-sequence-assembly
+    src.header as header, header.optional as optional, optional.value as reference where "$this.name = 'reference'" then 
+    {
+        reference where "$this = 'HG19'" then 
+        {
+            reference -> obs.component = create('BackboneElement') as component,
+                                    component.code = cc('http://loinc.org', '62374-4'),
+                                    component.value = cc('http://loinc.org', 'GRCh37');
+        };
+
+        reference where "$this = 'HG38'" then 
+        {
+            reference -> obs.component = create('BackboneElement') as component,
+                                    component.code = cc('http://loinc.org', '62374-4'),
+                                    component.value = cc('http://loinc.org', 'GRCh38');
+        };
+
+    };
+}
+
+group MapVCFRequiredBody(source records: BackboneElement, target obs : Observation)
+{
+    // #CHROM -> component:cytogenetic-location
+    records.chrom as chrom ->  obs.component = create('BackboneElement') as component,
+                                                           component.code = cc('http://loinc.org', '48001-2'),
+                                                           component.value = cc(chrom);
+
+   // POS -> component:exact-start-end
+    records.pos as pos ->  obs.component = create('BackboneElement') as component,
+                                           component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'),
+                                           component.valueRange as range, 
+                                           range.low = create('Quantity') as quantity, 
+                                           quantity.value = pos;
+
+    // REF -> component:ref-allele
+    records.ref as ref ->  obs.component = create('BackboneElement') as component,
+                                           component.code = cc('http://loinc.org', '69547-8'),
+                                           component.value = ref; 
+
+    // ALT -> component:alt-allele
+    records.alt as alt ->  obs.component = create('BackboneElement') as component,
+                                           component.code = cc('http://loinc.org', '69551-0'),
+                                           component.value = alt;
+                                                                           
+}
+
+group MapVCFOptionalBody(source records: BackboneElement, target obs : Observation)
+{   
+    // INFO.TN (Gen) -> component:gene-studied
+    records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                          component.code = cc('http://loinc.org', '48018-6'),
+                                                                          component.value = create('CodeableConcept') as cc, 
+                                                                          cc.coding as coding, 
+                                                                          coding.system = 'http://www.genenames.org/geneId', 
+                                                                          coding.code = evaluate(value, '$this.split(\'|\')[3]');
+    
+    // INFO.TN (Exon) -> component:exon based on https://simplifier.net/nngm-molpatho-form/ngspanel
+    records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                          component.code = cc('http://ncit.nci.nih.gov', 'C13231'),
+                                                                          component.valueInteger = evaluate(value, '$this.split(\'|\')[8].split(\'/\').first()');
+
+    // INFO.CcD -> component:dna-chg
+    records.info as ccd, ccd.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                          component.code = cc('http://loinc.org', '48004-6'),
+                                                                          component.value = create('CodeableConcept') as cc, 
+                                                                          cc.coding as coding, 
+                                                                          coding.system = 'http://varnomen.hgvs.org',
+                                                                          component.value = evaluate(value, '$this.split(\'|\')[9].split(\':\').last()');
+
+    // INFO.CP -> component:amino-acid-chg
+    records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                       component.code = cc('http://loinc.org', '48005-3'),
+                                                                       component.value = create('CodeableConcept') as cc, 
+                                                                       cc.coding as coding, 
+                                                                       coding.system = 'http://varnomen.hgvs.org',
+                                                                       component.value = evaluate(value, '$this.split(\'|\')[10].split(\':\').last()');
+    
+    // FORMAT.ID=AF -> component:sample-allelic-frequency
+    records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'AF'" ->  obs.component = create('BackboneElement') as component,
+                                                                                                                 component.code = cc('http://loinc.org', '81258-6'),
+                                                                                                                 component.value = create('Quantity') as quantity, 
+                                                                                                                                   quantity.value = value,
+                                                                                                                                   quantity.unit = 'decimal',
+                                                                                                                                   quantity.code = '{decimal}',
+                                                                                                                                   quantity.system = 'http://unitsofmeasure.org';
+
+    //INFO.FEATURE -> component:transcript-ref-seq
+    records.info as cp, cp.value as value where "$this.name = 'CSQ'" -> obs.component = create('BackboneElement') as component,
+                                                                       component.code = cc('http://loinc.org', '51958-7'),
+                                                                       component.value = create('CodeableConcept') as cc, 
+                                                                       cc.coding as coding, 
+                                                                       coding.system = 'http://www.ncbi.nlm.nih.gov/refseq',
+                                                                       component.value = evaluate(value, '$this.split(\'|\')[6]');
+    
+
+    // FORMAT.ID=DP -> component:allelic-read-depth
+    records.sample as sample, sample.genotype as genotype, genotype.value as value where "$this.name = 'DP'" -> obs.component = create('BackboneElement') as component,
+                                                                                                                component.code = cc('http://loinc.org', '82121-5'),
+                                                                                                                component.value = create('Quantity') as quantity, 
+                                                                                                                                   quantity.value = value,
+                                                                                                                                   quantity.unit = 'reads per base pair',
+                                                                                                                                   quantity.code = '{reads}/{base}',
+                                                                                                                                   quantity.system = 'http://unitsofmeasure.org';
+
+}
+
+group MapVCFDevice(source src: VCF, target dev : Device)
+{
+    src -> dev.meta as meta, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device/nNGM/ngs-panel';
+    
+    // Fileformat -> version.value
+    src.header as header, header.optional as optional, optional.value as ff where "$this.name = 'fileformat'" then
+    {
+        ff -> dev.version = create('BackboneElement') as version,
+        version.value = ff;
+    };
+
+    // Source -> deviceName.name
+    src.header as header, header.optional as optional, optional.value as sr where "$this.name = 'source'" then
+    {
+        sr -> dev.deviceName = create('BackboneElement') as dn,
+        dn.type = cast('other', 'FHIR.code'),
+        dn.name = sr;
+    };
+}
