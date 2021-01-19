@@ -19,7 +19,7 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
 // Befund
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
@@ -44,7 +44,7 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
-    //src then MapStammdaten(src, tgt);
+    src then MapStammdaten(src, tgt);
     src then MapAntrag(src, tgt);
 
     //src then MapBefund(src, tgt);
@@ -110,9 +110,29 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 
                 nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
-                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    // we need to differentiate between Gewebe- and Blutdiagnostik which could only be done via the ServiceRequest
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is ServiceRequest" then
                     {
-                        nestedSection then TransformAnforderungCDS(entry, operations);
+                        // Gewebediagnostik
+                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen, Organization)
+                        entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then
+                        {
+                            let gewebeBlut = 'Gewebe';
+                            nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.requester.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                        };
+
+                        // Blutdiagnostik (Liquid Biopsy)
+                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen)
+                        entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
+                        {
+                            let gewebeBlut = 'Blut';
+                            nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                        };
                     };
                 };
             };
@@ -155,35 +175,35 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                 nestedSection then TransformCheckboxes(src, nestedSection, operations);
             };
 
-            // Vorbefund (Antrag.biopsie.vorbefund)
-            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
-            {
-                let crfidLeft = append(fallNummer, '-VB');
-                let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
-                src then InitSectionIndex(src, index); // used for NGS Lung Panel
-                src then InitCaseIndex(src, index);  // used for Fusion NGS
+            // // Vorbefund (Antrag.biopsie.vorbefund)
+            // biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            // {
+            //     let crfidLeft = append(fallNummer, '-VB');
+            //     let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
+            //     src then InitSectionIndex(src, index); // used for NGS Lung Panel
+            //     src then InitCaseIndex(src, index);  // used for Fusion NGS
 
-                nestedSection -> tgt.version = '1.0';
-                nestedSection -> operations.type = 'save';
-                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+            //     nestedSection -> tgt.version = '1.0';
+            //     nestedSection -> operations.type = 'save';
+            //     nestedSection -> operations.crfid = append(crfidLeft, formNummer);
 
-                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
-                {
-                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
-                    {
-                        nestedSection then TransformVorbefundCDS(entry, operations, index);
+            //     nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+            //     {
+            //         src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+            //         {
+            //             nestedSection then TransformVorbefundCDS(entry, operations, index);
 
-                        entry where "resource is Observation 
-                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
-                                    IncrementSectionIndex(src, index);
-                        entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
-                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
-                                    IncrementCaseIndex(src, index);
-                    };
-                };
+            //             entry where "resource is Observation 
+            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+            //                         IncrementSectionIndex(src, index);
+            //             entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
+            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+            //                         IncrementCaseIndex(src, index);
+            //         };
+            //     };
 
-                nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
-            };
+            //     nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
+            // };
         };
     };
 }

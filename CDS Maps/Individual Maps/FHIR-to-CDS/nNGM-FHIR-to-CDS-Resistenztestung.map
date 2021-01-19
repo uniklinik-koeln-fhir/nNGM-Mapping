@@ -7,25 +7,30 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS" = nN
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
+/* 
+    TODO
+    - creation of Specimen is currently commented out 
+*/
+
 group TransformResistenztestungCDS(source entry: BackboneElement, target tgt: BackboneElement)
 {    
-    /* ------------------------------ Specimen ---------------------------- */
-    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
-    {
-        specimen.identifier as identifier then
-        {
-            identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer' and %tgt.data.where(itemid = 'id_1601').exists().not()" -> tgt.data as data then
-            {
-                specimen -> data.blockindex = 2;
-                specimen -> data.groupindex = 0;
-                specimen -> data.itemid = 'id_1601';
-                value -> data.values as values, values.value = value, values.unit = 'count';
-            };
-        };
-    };
+    // /* ------------------------------ Specimen ---------------------------- */
+    // entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
+    // {
+    //     specimen.identifier as identifier then
+    //     {
+    //         identifier.value as value where "$this.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer' and %tgt.data.where(itemid = 'id_1601').exists().not()" -> tgt.data as data then
+    //         {
+    //             specimen -> data.blockindex = 2;
+    //             specimen -> data.groupindex = 0;
+    //             specimen -> data.itemid = 'id_1601';
+    //             value -> data.values as values, values.value = value, values.unit = 'count';
+    //         };
+    //     };
+    // };
 
     /* ---------------------------- Progress/Reizidiv Krebserkrankung Observation ---------------------------- */
-    entry.resource as observation where "$this.code.coding.code = 'C25630'" then
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/progress-relapse'" then
     {
         // Observation.valueBoolean -> 0, 0, 1573
         observation -> tgt.data as data then
@@ -63,16 +68,16 @@ group TransformResistenztestungCDS(source entry: BackboneElement, target tgt: Ba
     };
 
     /* ------------------------------ Observation EGFR ---------------------------- */
-    entry.resource as observation where "$this.code.coding.code = 'C134501'" then
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tki-resistenz-egfr'" then
     {
         // Observation.effectiveDateTime -> 1, 0, 2502
         observation then TransformEffectiveDateTimeObservation(observation, tgt);
 
         // Mutations
-        observation then TransformMutationsCTSResistenztestung(observation, tgt);
+        observation then TransformMutationsCDSResistenztestung(observation, tgt);
 
-        // Therapy components
-        observation.component as components -> tgt.data as data then 
+        // Therapien
+        observation.component as components, components where "$this.code.coding.code = 'C62721'" then
         {
             // 1. Therapie
             components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
@@ -113,35 +118,35 @@ group TransformResistenztestungCDS(source entry: BackboneElement, target tgt: Ba
     };
 
     /* ------------------------------ Observation ALK ---------------------------- */
-    entry.resource as observation where "$this.code.coding.code = 'C142114'" then
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tki-resistenz-alk'" then
     {
         // Observation.effectiveDateTime -> 1, 0, 2502
         observation then TransformEffectiveDateTimeObservation(observation, tgt);
         
         // Mutations
-        observation then TransformMutationsCTSResistenztestung(observation, tgt);
+        observation then TransformMutationsCDSResistenztestung(observation, tgt);
 
-        // Therapies and fusionPartner
-        observation.component as components -> tgt.data as data then 
-        {
-            // Observation.Fusionpartner -> 1, 0, 2504
-            components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
-            {   
-                component -> data.blockindex = 1;
-                component -> data.groupindex = 0;
-                component -> data.itemid = 'id_2504';
-                component.valueString as valueString -> data.values as values, values.value = valueString;
-            };
+        // Observation.Fusionpartner -> 1, 0, 2504
+        observation.component as components, components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
+        {   
+            component -> data.blockindex = 1;
+            component -> data.groupindex = 0;
+            component -> data.itemid = 'id_2504';
+            component.valueString as valueString -> data.values as values, values.value = valueString;
+        };
 
+        // Therapien
+        observation.component as components, components where "$this.code.coding.code = 'C62721'" then
+        {   
             // 1. Therapie
             components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
-            {   
+            {
                 component -> data.blockindex = 1;
                 component -> data.groupindex = 0;
                 component -> data.itemid = 'id_1447';
                 component.valueCodeableConcept as valueCodeableConcept, valueCodeableConcept.text as text -> data.values as values, values.value = text;
             };
-
+            
             // 2. Therapie
             components as component where "$this.extension.valueInteger = 2" -> tgt.data as data then
             {   
@@ -172,26 +177,26 @@ group TransformResistenztestungCDS(source entry: BackboneElement, target tgt: Ba
     };
 
     /* ------------------------------ Observation ROS1 ---------------------------- */
-    entry.resource as observation where "$this.code.coding.code = 'C131071'" then
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tki-resistenz-ros1'" then
     {
         // Observation.effectiveDateTime -> 1, 0, 2502
         observation then TransformEffectiveDateTimeObservation(observation, tgt);
 
         // Mutations
-        observation then TransformMutationsCTSResistenztestung(observation, tgt);
+        observation then TransformMutationsCDSResistenztestung(observation, tgt);
 
-        // Therapies and fusionPartner
-        observation.component as components -> tgt.data as data then 
+        // Observation.Fusionpartner -> 1, 0, 2506
+        observation.component as components, components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
+        {   
+            component -> data.blockindex = 1;
+            component -> data.groupindex = 0;
+            component -> data.itemid = 'id_2506';
+            component.valueString as valueString -> data.values as values, values.value = valueString;
+        };
+
+        // Therapien
+        observation.component as components, components where "$this.code.coding.code = 'C62721'" then
         {
-            // Observation.Fusionpartner -> 1, 0, 2506
-            components as component where "$this.code.coding.code = 'C28510'" -> tgt.data as data then
-            {   
-                component -> data.blockindex = 1;
-                component -> data.groupindex = 0;
-                component -> data.itemid = 'id_2506';
-                component.valueString as valueString -> data.values as values, values.value = valueString;
-            };
-
             // 1. Therapie
             components as component where "$this.extension.valueInteger = 1" -> tgt.data as data then
             {   
@@ -245,7 +250,7 @@ group TransformEffectiveDateTimeObservation(source observation: Observation, tar
     };
 }
 
-group TransformMutationsCTSResistenztestung(source observation: Observation, target tgt: BackboneElement)
+group TransformMutationsCDSResistenztestung(source observation: Observation, target tgt: BackboneElement)
 {
     observation then
     {
