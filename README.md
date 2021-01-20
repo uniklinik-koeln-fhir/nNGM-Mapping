@@ -1,1 +1,3 @@
-This repository contains the CTS to FHIR and FHIR to CTS mapping that cover the nNGM forms. 
+This repository contains the CDS to FHIR and FHIR to CDS maps that cover the nNGM forms. 
+
+Run the 'deploy-and-test.ps1' Powershell script to get your Vonk server up and running.
