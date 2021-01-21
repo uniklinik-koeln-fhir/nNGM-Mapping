@@ -106,22 +106,6 @@ group TransformObservationTNM(source operations: BackboneElement, target tgt: Ob
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tumorstadium';
     operations -> tgt.status = 'final';
     operations -> tgt.category = cc('http://hl7.org/fhir/observation-category', 'survey');
-    
-    //operations -> tgt.code as topLevelCode, topLevelCode.coding as coding, coding.system = 'http://loinc.org', coding.code as code, code.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Code
-    operations.data as data, data.values as valuesprafix where "blockindex = 1 and groupindex = 0 and itemid = 'id_2493'" -> tgt.code as topLevelCode, topLevelCode.coding as coding, coding.system = 'http://loinc.org' then
-    {
-        valuesprafix.value as value where "value = 'c - klinisch gesichert'" then 
-        {
-            value -> coding.code = '75620-5', coding.display = 'TNM clinical staging before treatment panel';
-        };
-
-        valuesprafix.value as value where "value = 'p - histopathologisch gesichert'" then 
-        {
-            value -> coding.code = '75621-3', coding.display = 'TNM pathologic staging after surgery panel';
-        };
-    };
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -192,20 +176,16 @@ group TransformObservationTNM(source operations: BackboneElement, target tgt: Ob
            values.value as value -> tgt.effectiveDateTime = dateOp(value, 'date');
         };
 
-        // Prafix
+        // Praefix -> code
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1379'" then
         {
             values.value as value where "value = 'r - Rezidiv'" then
             {
-              value -> tgt.component = create('BackboneElement') as r,
-              r.code =  cc('http://loinc.org', '21983-2'),
-              r.valueBoolean = cast(true, 'FHIR.boolean');
+                value -> tgt.code = cc('21983-2', 'http://loinc.org', 'Recurrence type first episode Cancer');
             };
-            values.value as value where "value ='y - Zustand nach Therapie'" then
+            values.value as value where "value = 'y - Zustand nach Therapie'" then
             {
-              value -> tgt.component = create('BackboneElement') as y,
-              y.code =  cc('http://loinc.org', '59479-6'),
-              y.valueBoolean = cast(true, 'FHIR.boolean');
+                value -> tgt.code = cc('59479-6', '	http://loinc.org', 'Collaborative staging post treatment extension Cancer');
             };
         };
         
@@ -240,6 +220,8 @@ group TransformObservationTNM(source operations: BackboneElement, target tgt: Ob
                             praefixcpu.valueCodeableConcept as vcc,
                             vcc.text = 'T-praefix slice',
                             vcc.coding = c('urn:oid:2.16.840.1.113883.15.16',value);
+
+                            valuesprafix then AddTnmArtExtension(valuesprafix, T);
                         };
                     };
                 };
@@ -294,6 +276,8 @@ group TransformObservationTNM(source operations: BackboneElement, target tgt: Ob
                             praefixcpu.valueCodeableConcept as vcc,
                             vcc.coding = c('urn:oid:2.16.840.1.113883.15.16' , value),
                             vcc.text = 'N-praefix slice';
+
+                            valuesprafix then AddTnmArtExtension(valuesprafix, N);
                         };
                     };
                 };
@@ -334,10 +318,28 @@ group TransformObservationTNM(source operations: BackboneElement, target tgt: Ob
                             praefixcpu.valueCodeableConcept as vcc,
                             vcc.coding = c('urn:oid:2.16.840.1.113883.15.16' , value),
                             vcc.text = 'M-praefix slice';
+
+                            valuesprafix then AddTnmArtExtension(valuesprafix, M);
                         };
                     };
                 };
             };
+        };
+    };
+}
+
+group AddTnmArtExtension(source valuespraefix: BackboneElement, target tgt: BackboneElement) 
+{
+    valuespraefix -> tgt.extension as tnmart, tnmart.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nngm/tnm-art' then
+    {
+        valuespraefix.value as value where "value = 'c - klinisch gesichert' or value = 'u - Ultraschalldiagnostik'" then 
+        {
+            valuespraefix -> tnmart.valueCodeableConcept = cc('75620-5', 'http://loinc.org', 'TNM clinical staging before treatment panel');
+        };
+
+        valuespraefix.value as value where "value = 'p - histopathologisch gesichert'" then 
+        {
+            valuespraefix -> tnmart.valueCodeableConcept = cc('75621-3', 'http://loinc.org', 'TNM pathologic staging after surgery panel');
         };
     };
 }
