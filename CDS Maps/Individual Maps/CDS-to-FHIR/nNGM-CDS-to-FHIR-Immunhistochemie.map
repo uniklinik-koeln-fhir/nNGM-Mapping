@@ -3,11 +3,10 @@
 
 /*
 TODO
-    - Observations are missing a coding each?
-    - DiagnosticReport is missing a code
+    - ServiceRequest: which code to use? ValueSet?
+    - DiagnosticReport: no code set, no status set but expected
+    - Observation: PD-L1.valueCodeableConcept (id_2180) is mapped as 'auswertbar' -> positiv and 'nicht auswertbar' -> 'nicht auswertbar'
     - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
-
-    id_2180 PD-L1 missing post/neg -> auswertbar cc not working
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieFHIR" = ImmunhistochemieFHIR
@@ -23,9 +22,9 @@ group TransformBundleImmunhistochemie(source operations: BackboneElement, target
 {
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'immunhistochemie', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'immunhistochemie') then
     {
-        // operations then CreateServiceRequestIHC(operations, bundle, composition, section);
+        operations then CreateServiceRequestIHC(operations, bundle, composition, section);
         // operations then CreateSpecimenIHC(operations, bundle, composition, section);
-        // operations then CreateDiagnosticReportIHC(operations, bundle, composition, section);
+        operations then CreateDiagnosticReportIHC(operations, bundle, composition, section);
         operations then CreateObservationIHC(operations, bundle, composition, section);
     };
 }
@@ -70,7 +69,10 @@ group TransformServiceRequestIHC(source operations: BackboneElement, target tgt:
                 dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Code
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'immunhistochemie');
+    operations -> tgt.code as code,
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -234,9 +236,16 @@ group TransformDiagnosticReportIHC(source operations: BackboneElement, target tg
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     // fixed status
-    operations -> tgt.status = 'active';
+    operations -> tgt.status as status,
+                    status.extension as dataAbsentReason, 
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    // TODO: code is missing
+    // code
+    operations -> tgt.code as code, 
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -483,25 +492,7 @@ group TransformObservationBRAFIHC(source operations: BackboneElement, target tgt
         // Ergebnis
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -637,25 +628,7 @@ group TransformObservationCK7IHC(source operations: BackboneElement, target tgt:
         // Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -792,25 +765,7 @@ group TransformObservationMIB1IHC(source operations: BackboneElement, target tgt
         // Ergebnis
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2063'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -946,25 +901,7 @@ group TransformObservationNAPSINAIHC(source operations: BackboneElement, target 
         // Ergebnis
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2072'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -1100,25 +1037,7 @@ group TransformObservationP40IHC(source operations: BackboneElement, target tgt:
         // Ergebnis
         data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'id_2079'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -1254,25 +1173,7 @@ group TransformObservationSynaptophysinIHC(source operations: BackboneElement, t
         // Ergebnis
         data.values as values where "blockindex = 9 and groupindex = 0 and itemid = 'id_2088'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
         
         // Referenzen
@@ -1408,25 +1309,7 @@ group TransformObservationTTF1IHC(source operations: BackboneElement, target tgt
         // Ergebnis
         data.values as values where "blockindex = 10 and groupindex = 0 and itemid = 'id_2097'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -1563,25 +1446,7 @@ group TTransformObservationALKIHC(source operations: BackboneElement, target tgt
         // Ergebnis
         data.values as values where "blockindex = 11 and groupindex = 0 and itemid = 'id_2106'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
         
         // Referenzen
@@ -1717,25 +1582,7 @@ group TransformObservationMETIHC(source operations: BackboneElement, target tgt:
         // Ergebnis
         data.values as values where "blockindex = 12 and groupindex = 0 and itemid = 'id_2139'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
         
 
@@ -1905,12 +1752,12 @@ group TransformObservationPDL1IHC(source operations: BackboneElement, target tgt
         {
             values.value where "$this.value = 'auswertbar'" then 
             {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', 'positiv', 'positiv');
             };
 
-            values.value as ergebnis where "$this.value = 'nicht auswertbar'" then 
+            values.value where "$this.value = 'nicht auswertbar'" then 
             {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
+                values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
             };
         };
         
@@ -2068,25 +1915,7 @@ group TransTransformObservationROS1IHC(source operations: BackboneElement, targe
         // Ergebnis
         data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2219'" then
         {
-            values.value where "$this.value = 'positiv'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value where "$this.value = 'negativ'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
-
-            values.value where "$this.value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
     
         // Referenzen
