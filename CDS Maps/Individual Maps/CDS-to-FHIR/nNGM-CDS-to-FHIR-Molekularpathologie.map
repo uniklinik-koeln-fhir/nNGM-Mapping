@@ -9,8 +9,6 @@ TODO
     - Modify MET CISH instance of ergebnis to facilitate difference between 
         positiv (high-level amplification)
         positiv (moderate-level amplification) 
-
-    - In the seatable the episode of care section is replaced with the diagnosticreport?
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR" = nNGM_Mapping_MolekularphatologieFHIR
@@ -20,7 +18,7 @@ group TransformBundleMolekularpathologie(source operations: BackboneElement, tar
 {
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'molekularpathologie', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie') then
     {
-        operations then CreateSpecimenMP(operations, bundle, composition, section);
+        // operations then CreateSpecimenMP(operations, bundle, composition, section);
         operations then CreateDiagnosticReportMP(operations, bundle, composition, section);
         operations then CreateOrganizationMP(operations, bundle, composition, section);
         operations then CreateServiceRequestMP(operations, bundle, composition, section);
@@ -97,7 +95,10 @@ group TransformDiagnosticReportMP(source operations: BackboneElement, target tgt
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     // fixed status
-    operations -> tgt.status = 'active';
+    operations -> tgt.status as status,
+                    status.extension as dataAbsentReason, 
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // code
     operations -> tgt.code as code, 
@@ -161,7 +162,7 @@ group CreateOrganizationMP(source operations: BackboneElement, target bundle: Bu
 group TransformOrganizationMP(source operations: BackboneElement, target tgt: Organization, target composition: Composition, target section: BackboneElement) 
 {
     // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
     // Access data
     operations.data as data then 
@@ -206,14 +207,14 @@ group TransformServiceRequestMP(source operations: BackboneElement, target tgt: 
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
 
-    // status extensions
-    operations then TransformMPStatusExtension(operations, tgt);
-
     // Intent
     operations -> tgt.intent = cast('proposal', 'FHIR.code');
  
     // Code
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie');
+    operations -> tgt.code as code,
+                code.extension as dataAbsentReason, 
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Category
     operations -> tgt.category as cat, 
@@ -241,17 +242,19 @@ group TransformServiceRequestMP(source operations: BackboneElement, target tgt: 
             values.value as value -> tgt.id = value;
             values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
         };
+        // status extensions
+        operations then TransformMPStatusExtension(operations, tgt);
 
         //Durchfuehrung
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
         {
             values.value as value where "$this.value = 'in Bearbeitung'" then 
             {
-                value -> tgt.status = 'active' collate;
+                value -> tgt.status = 'active';
             };
             values.value as value where "$this.value = 'abgeschlossen'" then 
             {
-                value -> tgt.status = 'completed' collate;
+                value -> tgt.status = 'completed';
             };
         };
 
@@ -1426,7 +1429,7 @@ group MapPercentageValueMP(source src: string, target tgt: Quantity)
 {
     src -> tgt.value = src,
             tgt.system = 'http://unitsofmeasure.org',
-            tgt.unit = 'percentage',
+            tgt.unit = '%',
             tgt.code = '%';
 }
 
@@ -1583,8 +1586,7 @@ group MapROS1PhaenotypMP(source operations: BackboneElement, target tgt: Observa
 //Codes
 group MapCodeMP(source operations: BackboneElement, source name: string, target tgt: Observation)
 {
-    //ALK code
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'ALK');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', name);
 }
 
 // Reference
