@@ -224,7 +224,7 @@ group CreateDeviceNGSLungPanel(source operations: BackboneElement, target bundle
 /* ------------------------------ Device ------------------------------ */
 group TransformDeviceNGSLungPanel(source operations: BackboneElement, target tgt: Device, target composition: Composition, target section: BackboneElement)
 {
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device/nNGM/ngs-panel';
     
     // Access data
     operations.data as data then
@@ -249,11 +249,7 @@ group TransformDeviceNGSLungPanel(source operations: BackboneElement, target tgt
         {
             values.value as value -> tgt.deviceName = create('BackboneElement') as deviceName then 
             {
-                value -> deviceName.name = value,
-                         deviceName.type as type,
-                         type.extension as dataAbsentReason, 
-                         dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                         dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+                value -> deviceName.type = 'other', deviceName.name = value;
             };
         };
         //Hersteller
@@ -319,7 +315,10 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
     };
 
     // code : Item required on simplifier
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes','NGS Panel');
+    operations -> tgt.code as code,
+                    code.extension as dataAbsentReason,
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -576,7 +575,10 @@ group TransformServiceRequestNGSLungPanel(source operations: BackboneElement, ta
                 dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // code : Item required on simplifier
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'ngs-lung-panel');
+    operations -> tgt.code as code,
+                    code.extension as dataAbsentReason, 
+                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
     
     // Subjekt
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
