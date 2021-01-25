@@ -305,13 +305,22 @@ group CreateEpisodeOfCareStrahlentherapie(source operations: BackboneElement, ta
 /* ------------------------------ EpisodeOfCare ---------------------------- */
 group TransformEpisodeOfCareStrahlentherapie(source operations: BackboneElement, target tgt: EpisodeOfCare, target composition: Composition, target section: BackboneElement)
 {
+    // Profile url
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
-    
-    // Status
+
+    // Identifier.system and Identifier.value: items required on simplifier
+    operations ->  tgt.identifier = create('Identifier') as nngmFallnummer,
+                    nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
+                    nngmFallnummer.value as value,
+                    value.extension as dataAbsentReason,
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Status: item required on simplifier
     operations -> tgt.status = 'active';
 
     // Patient
-    operations -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+    operations -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Access data
     operations.data as data then
@@ -322,21 +331,6 @@ group TransformEpisodeOfCareStrahlentherapie(source operations: BackboneElement,
             values.value as value -> tgt.id = value;
             values.value as value -> section.entry = create('Reference') as episodeOfCare, episodeOfCare.reference = evaluate(value, '\'EpisodeOfCare/\' + $this');
         };
-
-        // nngmFallnummer
-        // TODO: which number should be used here?
-        operations -> tgt.identifier = create('Identifier') as nngmFallnummer,
-                                                                nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
-                                                                nngmFallnummer.value as value,
-                                                                value.extension as dataAbsentReason, 
-                                                                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                                                                dataAbsentReason.valueCode = cast('unknown', 'FHIR.code');
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
-        // {
-        //     values.value as id -> tgt.identifier = create('identifier') as nngmFallnummer,
-        //                                                                     nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
-        //                                                                     nngmFallnummer.value  = id;
-        // };
 
         //Datum Progress
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1543'" then
