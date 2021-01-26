@@ -42,7 +42,6 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
 
     src then MapStammdaten(src, tgt);
 
-    // TODO
     src then MapAntrag(src, tgt);
 
     // TODO
@@ -55,9 +54,9 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
     // src then MapTNM(src, tgt);
 }
 
+/* ------------------------------ Stammdaten ---------------------------- */
 group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
 {
-    /* ------------------------------ Stammdaten ---------------------------- */
     src.operations as operations, operations where "crfid = 'SD' and type = 'save'" ->
         tgt.entry as entry,
         entry.resource = create('Bundle') as bundleStammdaten,
@@ -104,14 +103,11 @@ group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
     };
 }
 
-
-
-// TODO
+/* ------------------------------ Antrag ---------------------------- */
 group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 {
     let index = create('RepeatIndex');
 
-    /* ------------------------------ Antrag ---------------------------- */
     src then InitCaseIndex(src, index); // Reset caseIndex
     src then InitMaxIndexAntrag(src, index); // Reset maxIndex
 
@@ -174,10 +170,8 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         {
             src then TransformBundleBasisangaben(operations, bundleAntrag, compositionAntrag);
         };
-        
 
-        // Biopsie(n) (Antrag.biopsie)
-        // create 1 biopsieSection per biopsie (in the CDS)
+        // Biopsie(n) (Antrag.biopsie) (Create one biopsy section per biopsie)
         src then InitFormIndex(src, index); // the formIndex indicates which biopsie (an thus which biopsieSection) should be created
         src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionAntrag.section = create('BackboneElement') as biopsieSection then
         {
@@ -216,13 +210,10 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
             src then IncrementFormIndex(src, index);
         };
-        
-        
 
         /* ------------------------------ Increment index ---------------------------- */
         src then IncrementCaseIndex(src, index);
         src then InitMaxIndexAntrag(src, index); // Reset maxIndex
-        //src -> tgt.id = evaluate(index, '$this.formIndex');
     };
 }
 
