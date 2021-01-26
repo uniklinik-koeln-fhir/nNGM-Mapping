@@ -2,6 +2,11 @@
 /// title = "nNGM: nNGMv09c - FHIR to CTS"
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_FHIR_to_CDS" = nNGM_FHIR_to_CDS
+/* TODO
+    - The repeatindex gets mapped to an array with 1 element of integer in the CTS_Transport but should be just unsigned int.  
+    [BEFUND]
+    - LP: Currently the data for Panel Gen Forschung Observation gets the same repeatindex as the Observation. Is this correct?
+*/
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
@@ -10,24 +15,24 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenCDS"
 
 // Antrag
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
-/*
 // Befund
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCTS"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCTS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCDS"
 
+/*
 // Operation
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS"
@@ -40,20 +45,11 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
 
     src then MapStammdaten(src, tgt);
-    // src then MapAntrag(src, tgt);
+    src then MapAntrag(src, tgt);
+
+    //src then MapBefund(src, tgt);
 
     /*
-    // Befund
-    src -> tgt.operations as operations then TransformFastTrackCTS(src, operations);
-    src -> tgt.operations as operations then TransformHistologieCTS(src, operations);
-    src -> tgt.operations as operations then TransformSonstigeUntersuchungCTS(src, operations);
-    src -> tgt.operations as operations then TransformImmunhistochemieCTS(src, operations);
-    src -> tgt.operations as operations then TransformBeurteilungCTS(src, operations);
-    src -> tgt.operations as operations then TransformNGSLungPanelCTS(src, operations);
-    src -> tgt.operations as operations then TransformLiquidBiopsyCTS(src, operations);
-    src -> tgt.operations as operations then TransformFusionNGSCTS(src, operations);
-    src -> tgt.operations as operations then TransformMolekularpathologieCTS(src, operations);
-
     // Operation
     src -> tgt.operations as operations then TransformStrahlentherapieCTS(src, operations);
     src -> tgt.operations as operations then TransformSonstigeTherapieCTS(src, operations);
@@ -114,9 +110,29 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
 
                 nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
                 {
-                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    // we need to differentiate between Gewebe- and Blutdiagnostik which could only be done via the ServiceRequest
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is ServiceRequest" then
                     {
-                        nestedSection then TransformAnforderungCDS(entry, operations);
+                        // Gewebediagnostik
+                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen, Organization)
+                        entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then
+                        {
+                            let gewebeBlut = 'Gewebe';
+                            nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.requester.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                        };
+
+                        // Blutdiagnostik (Liquid Biopsy)
+                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen)
+                        entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
+                        {
+                            let gewebeBlut = 'Blut';
+                            nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                        };
                     };
                 };
             };
@@ -155,15 +171,81 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                         nestedSection then TransformResistenztestungCDS(entry, operations);
                     };
                 };
+
+                nestedSection then TransformCheckboxes(src, nestedSection, operations);
             };
 
-            // Vorbefund (Antrag.biopsie.vorbefund)
-            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            // // Vorbefund (Antrag.biopsie.vorbefund)
+            // biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            // {
+            //     let crfidLeft = append(fallNummer, '-VB');
+            //     let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
+            //     src then InitSectionIndex(src, index); // used for NGS Lung Panel
+            //     src then InitCaseIndex(src, index);  // used for Fusion NGS
+
+            //     nestedSection -> tgt.version = '1.0';
+            //     nestedSection -> operations.type = 'save';
+            //     nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+            //     nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+            //     {
+            //         src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+            //         {
+            //             nestedSection then TransformVorbefundCDS(entry, operations, index);
+
+            //             entry where "resource is Observation 
+            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+            //                         IncrementSectionIndex(src, index);
+            //             entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
+            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+            //                         IncrementCaseIndex(src, index);
+            //         };
+            //     };
+
+            //     nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
+            // };
+        };
+    };
+}
+
+group MapBefund(source src: Bundle, target tgt: CTS_Transport)
+{
+    src.entry as entry, entry.resource as compositionBefund where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert'", 
+                                            compositionBefund.identifier as identifier, identifier.value as fallNummer then
+    {
+        // Patid
+        compositionBefund.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
+
+        
+        // Diagnostik(en) (Befund.diagnostik)
+        compositionBefund.section as diagnosticSection, diagnosticSection where "code.coding.code = 'diagnostik'" -> tgt.operations as operations then
+        {
+            let formNummer = evaluate(diagnosticSection, '$this.entry.identifier.value');
+
+            // Immunhistochemie (Befund.diagnostik.immunhistochemie)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'immunhistochemie'" -> tgt.operations as operations then
             {
-                let crfidLeft = append(fallNummer, '-VB');
-                let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
-                src then InitSectionIndex(src, index); // used for NGS Lung Panel
-                src then InitCaseIndex(src, index);  // used for Fusion NGS
+                let crfidLeft = append(fallNummer, '-IHC');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);              
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformImmunhistochemieCDS(entry, operations);
+                    };
+                };
+
+                nestedSection then TransformCheckboxes(src, nestedSection, operations);
+            };
+
+            // Histologie (Befund.diagnostik.histologie)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'histologie'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-HL');
 
                 nestedSection -> tgt.version = '1.0';
                 nestedSection -> operations.type = 'save';
@@ -173,18 +255,163 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                 {
                     src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
                     {
-                        nestedSection then TransformVorbefundCDS(entry, operations, index);
+                        nestedSection then TransformHistologieCDS(entry, operations);
+                    };
+                };
+            };
+
+            // Molekularpathologie (Befund.diagnostik.molekularpathologie)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'molekularpathologie'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-MP');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformMolekularpathologieCDS(entry, operations);
+                    };
+                };
+
+                nestedSection then TransformCheckboxes(src, nestedSection, operations);
+            };
+
+            // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'ngs-lung-panel'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-LP');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index); 
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformNGSLungPanelCDS(entry, operations, index);
 
                         entry where "resource is Observation 
                                     and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
                                     IncrementSectionIndex(src, index);
+                    };
+                };
+            };
+
+            // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'fusion-ngs'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-FS');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index); 
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformFusionNGSCDS(entry, operations, index);
+
                         entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
                                     and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
-                                    IncrementCaseIndex(src, index);
+                                    IncrementSectionIndex(src, index);
+                    };
+                };
+
+                nestedSection then TransformCheckboxes(src, nestedSection, operations);
+            };
+
+            // Fast Track (Befund.diagnostik.fast-track)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'fast-track'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-FT');
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformFastTrackCDS(entry, operations);
+                    };
+                };
+
+                nestedSection then TransformCheckboxes(src, nestedSection, operations);
+            };
+
+            // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'sonstige-untersuchungen'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-SU');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index);
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformSonstigeUntersuchungCDS(entry, operations, index);
+                        entry where "resource is Observation" then IncrementSectionIndex(src, index);
+                    };
+                };
+            };
+
+            // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.code = 'liquid-biopsy'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-LB');
+                let index = create('RepeatIndex'); // repeatindex needed for Observation
+                src then InitSectionIndex(src, index);
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformLiquidBiopsyCDS(entry, operations, index);
+                        entry where "resource is Observation" then IncrementSectionIndex(src, index);
                     };
                 };
             };
         };
+
+        // Beurteilung (Befund.beurteilung) 
+        compositionBefund.section as section, section where "code.coding.code = 'beurteilung'" -> tgt.operations as operations then
+        {
+            let index = create('RepeatIndex'); // repeatindex needed for DiagnosticReport
+            src then InitSectionIndex(src, index); 
+
+            section -> tgt.version = '1.0';
+            section -> operations.type = 'save';
+            section -> operations.crfid = evaluate(fallNummer, '$this + \'-BU\'');
+
+            section.entry as sectionEntry, sectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    section then TransformBeurteilungCDS(entry, operations, index);
+                    entry.resource where "resource is DiagnosticReport" then IncrementSectionIndex(src, index);
+                };
+            };
+        }; 
     };
 }
 
@@ -207,4 +434,214 @@ group IncrementSectionIndex(source src: Bundle, target index: RepeatIndex)
 group IncrementCaseIndex(source src: Bundle, target index: RepeatIndex)
 {
     src -> index.caseIndex = evaluate(index, '$this.caseIndex + 1');
+}
+
+// For each form with checkboxes: iterate over the FHIR resources to be listed once again, create 1 data BackboneElement (= checkbox) and add the values accordingly to it 
+group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+{
+    // Antrag
+    // RT
+    nestedSection where "code.coding.code = 'resistenztestung'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile.contains('http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/tki-resistenz')" then
+        {
+            observation where "%data.where(itemid = 'id_1434').exists().not()" then
+            {
+                observation -> data.blockindex = 1;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_1434';
+            };
+            observation where "code.coding.code = 'C134501'" -> data.values as values, values.value = 'EGFR';  
+            observation where "code.coding.code = 'C142114'" -> data.values as values, values.value = 'ALK';  
+            observation where "code.coding.code = 'C131071'" -> data.values as values, values.value = 'ROS1';  
+        };
+    };
+
+    // Befund
+    // IHC
+    nestedSection where "code.coding.code = 'immunhistochemie'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation where "%data.where(itemid = 'id_2508').exists().not()" then
+            {
+                observation -> data.blockindex = 3;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2508';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };
+    };
+
+    // MP - here we need to create 2 checkboxes (= 2 data BackboneElements) 
+    // CISH
+    nestedSection where "code.coding.code = 'molekularpathologie'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+        {
+            observation where "%data.where(itemid = 'id_2509').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2509';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };    
+    };
+    // FISH
+    nestedSection where "code.coding.code = 'molekularpathologie'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        {
+            observation where "%data.where(itemid = 'id_2510').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2510';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };    
+    };
+
+    // FS
+    nestedSection where "code.coding.code ='fusion-ngs'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+        {
+            observation where "%data.where(itemid = 'id_2511').exists().not()" then
+            {
+                observation -> data.blockindex = 4;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2511';
+            };
+            // ensure that "Sonstiges" is added only once
+            observation where "%observation.code.coding.code != 'Sonstiges' or %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            {
+                observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code');  
+            };
+        };
+    };
+
+    // FT
+    nestedSection where "code.coding.code = 'fast-track'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
+        {
+            observation where "%data.where(itemid = 'id_2512').exists().not()" then
+            {
+                observation -> data.blockindex = 3;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2512';
+            };
+            observation where "code.coding.code = 'C158854'" -> data.values as values, values.value = 'BRAF Exon 15';  
+            observation where "code.coding.code = 'C128662'" -> data.values as values, values.value = 'EGFR Exon 19-21';  
+            observation where "code.coding.code = 'C135715'" -> data.values as values, values.value = 'KRAS Exon 2';  
+        };
+    };
+}
+
+group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+{
+    // IHC
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc'" then
+        {
+            observation where "%data.where(itemid = 'id_2508').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2508';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };
+    };
+
+    // MP - here we need to create 2 checkboxes (= 2 data BackboneElements) 
+    // CISH
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'" then
+        {
+            observation where "%data.where(itemid = 'id_2509').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2509';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };    
+    };
+    // FISH
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'" then
+        {
+            observation where "%data.where(itemid = 'id_2510').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2510';
+            };
+            observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code'); 
+        };    
+    };
+    
+    // FS
+    nestedSection where "code.coding.code ='vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference, 
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+        {
+            observation where "%data.where(itemid = 'id_2511').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2511';
+            };
+            // ensure that "Sonstiges" is added only once
+            observation where "%observation.code.coding.code != 'Sonstiges' or %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            {
+                observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code');  
+            };
+        };
+    };
+
+    // FT
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
+        {
+            observation where "%data.where(itemid = 'id_2512').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2512';
+            };
+            observation where "code.coding.code = 'C158854'" -> data.values as values, values.value = 'BRAF Exon 15';  
+            observation where "code.coding.code = 'C128662'" -> data.values as values, values.value = 'EGFR Exon 19-21';  
+            observation where "code.coding.code = 'C135715'" -> data.values as values, values.value = 'KRAS Exon 2';  
+        };
+    };
 }

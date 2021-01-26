@@ -9,19 +9,12 @@ uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
 
-/*
-    TODO
-    - creation of specimen is currently commented out (with uuid_specimen_nngm_blut / _block)
-    - reference to created specimen is currently commented out (in the other transform-groups)
-    - deal with biopsy-ID
-*/
-
 group TransformBundleAnforderung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target biopsieSection: BackboneElement)
 {
     operations -> biopsieSection.section = create('BackboneElement') as section, section.title = 'anforderung', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'anforderung') then
     {
         operations then CreateServiceRequestAnforderung(operations, bundle, composition, section);
-        // operations then CreateSpecimenAnforderung(operations, bundle, composition, section);
+        operations then CreateSpecimenAnforderung(operations, bundle, composition, section);
         operations then CreateObservationAnforderung(operations, bundle, composition, section);
         operations then CreateOrganizationAnforderung(operations, bundle, composition, section);
     };
@@ -83,14 +76,11 @@ group TransformGewebeDiagnostikServiceRequestAnforderung(source operations: Back
     // subject, which is obligatory element on Simplifier, with a Patient
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    // status, which is obligatory element on Simplifier, with an absent extension
+    // status, which is obligatory element on Simplifier
     operations -> tgt.status = cast('active', 'FHIR.code');
 
     // intent, which is obligatory element on Simplifier
     operations -> tgt.intent = cast('proposal', 'FHIR.code');
-
-    // code, which is obligatory element on Simplifier, using system and code values
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C18202');
 
     // Access data
     operations.data as data then
@@ -107,7 +97,7 @@ group TransformGewebeDiagnostikServiceRequestAnforderung(source operations: Back
         {
             values.value as value where "$this.value = 'Gewebediagnostik'" then
             {
-                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C12801', value);
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C12801', 'Tissue');
             };
         };
         
@@ -115,44 +105,47 @@ group TransformGewebeDiagnostikServiceRequestAnforderung(source operations: Back
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2473'" then
         {
             values.value as value -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/anforderung-code', value);
-        };
 
-        // orderDetail
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2474'" then
-        {
-            values.value as value where "$this.value = 'PD-L1'" then
+            // orderDetail - set only if "Einzeluntersuchung" selected
+            values.value as value where "value = 'Einzeluntersuchung'" then
             {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C128554', value);
-            };
+                operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2474'" then
+                {
+                    values.value as value where "$this.value = 'PD-L1'" then
+                    {
+                        value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C128554', 'PD-L1 Positive');
+                    };
 
-            values.value as value where "$this.value = 'ALK'" then
-            {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C38184', value);
-            };
-            
-            values.value as value where "$this.value = 'MET1'" then
-            {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C148329', value);
-            };
+                    values.value as value where "$this.value = 'ALK'" then
+                    {
+                        value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C38184', 'ALK Gene');
+                    };
+                    
+                    values.value as value where "$this.value = 'MET1'" then
+                    {
+                        value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C18325', 'MET Gene');
+                    };
 
-            values.value as value where "$this.value = 'ROS1'" then
-            {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C18399', value);
-            };
+                    values.value as value where "$this.value = 'ROS1'" then
+                    {
+                        value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C18399', 'ROS1 Gene');
+                    };
 
-            values.value as value where "$this.value = 'BRAF'" then
-            {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C18363', value);
-            };
+                    values.value as value where "$this.value = 'BRAF'" then
+                    {
+                        value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C18363', 'BRAF Gene');
+                    };
 
-            values.value as value where "$this.value = 'EGFR'" then
-            {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C17757', value);
-            };
+                    values.value as value where "$this.value = 'EGFR'" then
+                    {
+                        value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C17757', 'EGFR Gene');
+                    };
 
-            values.value as value where "$this.value = 'KRAS'" then
-            {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C25785', value);
+                    values.value as value where "$this.value = 'KRAS'" then
+                    {
+                        value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C25785', 'KRAS Gene');
+                    };
+                };
             };
         };
 
@@ -203,7 +196,7 @@ group TransformGewebeDiagnostikServiceRequestAnforderung(source operations: Back
             values.value where "%tgt.doNotPerform = true" then
             {
                 values.value as value -> tgt.extension as wiederholung, 
-                                        wiederholung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/wiederholung', 
+                                        wiederholung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/wiederholungAnforderung', 
                                         wiederholung.valueInteger = cast(value, 'FHIR.integer');
             };
         };
@@ -250,10 +243,10 @@ group TransformGewebeDiagnostikServiceRequestAnforderung(source operations: Back
         };
 
         // Specimen
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm_block'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm_block'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 
@@ -266,13 +259,14 @@ group TransformBlutDiagnostikServiceRequestAnforderung(source operations: Backbo
     // subject, which is obligatory element on Simplifier, with a Patient
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    // status, which is obligatory element on Simplifier, with an absent extension
-    operations -> tgt.status as status, status.extension as dataAbsentReason, 
-                                                     dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                                                     dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // status, which is obligatory element on Simplifier
+    operations -> tgt.status = cast('active', 'FHIR.code');
 
     // intent, which is obligatory element on Simplifier
     operations -> tgt.intent = cast('proposal', 'FHIR.code');
+
+    // code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/anforderung-code', 'Liquid Biopsy');
 
     // Access data
     operations.data as data then
@@ -289,7 +283,7 @@ group TransformBlutDiagnostikServiceRequestAnforderung(source operations: Backbo
         {
             values.value as value where "$this.value = 'Blutdiagnostik (Liquid Biopsy)'" then
             {
-                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C12434', value);
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C12434', 'Blood');
             };
         };
 
@@ -298,12 +292,12 @@ group TransformBlutDiagnostikServiceRequestAnforderung(source operations: Backbo
         {
             values.value as value where "$this.value = 'Primärmutation' or $this.value = 'Prim\u00e4rmutation'" then
             {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C16885', value);
+                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C16885', 'Mutation');
             };
 
             values.value as value where "$this.value = 'Resistenztestung'" then
             {
-                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C19391', value);
+                value -> tgt.orderDetail = cc('http://ncit.nci.nih.gov', 'C19391', 'Resistance');
             };
         };
 
@@ -353,55 +347,50 @@ group TransformBlutDiagnostikServiceRequestAnforderung(source operations: Backbo
         };
 
         // Specimen
-        // data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_specimen_nngm_blut'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_specimen_nngm_blut'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 
 /* ------------------------------ Check whether Specimen needs to be created ---------------------------- */
 group CreateSpecimenAnforderung(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    operations.data as data then
+    // Check whether observation should be created
+    let resourceShouldBeCreated = create('Boolean');
+
+    // Resource elements displayed just when "Gewebediagnostik" was selected
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Gewebediagnostik'
+                                or blockindex = 1 and groupindex = 0 and itemid ='id_1551'
+                                or blockindex = 1 and groupindex = 0 and itemid = 'id_1589'" then
     {
-        // Check whether observation should be created
-        let resourceShouldBeCreated = create('Boolean');
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
 
-        // Resource elements displayed just when "Gewebediagnostik" was selected
-        operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Gewebediagnostik'
-                                    or blockindex = 1 and groupindex = 0 and itemid ='id_1551'
-                                    or blockindex = 1 and groupindex = 0 and itemid = 'id_1589'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
-        {
-            operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-        };
-
-        // Create resource if bool set to true
-        operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformGewebeDiagnostikSpecimenAnforderung(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-        };
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
+    {
+        operations then TransformGewebeDiagnostikSpecimenAnforderung(operations, specimen, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
+    };
 
 
-        // Resource elements displayed just when "Blutdiagnostik" was selected
-        operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Blutdiagnostik (Liquid Biopsy)'
-                                    or blockindex = 2 and groupindex = 0 and itemid ='id_2316'
-                                    or blockindex = 2 and groupindex = 0 and itemid = 'id_2320'
-                                    or blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
-        {
-            operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-        };
+    // Resource elements displayed just when "Blutdiagnostik" was selected
+    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1368' and values.value = 'Blutdiagnostik (Liquid Biopsy)'
+                                or blockindex = 2 and groupindex = 0 and itemid ='id_2316'
+                                or blockindex = 2 and groupindex = 0 and itemid = 'id_2320'" then
+    {
+        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
+    };
 
-        // Create resource if bool set to true
-        operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformBlutDiagnostikSpecimenAnforderung(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-        };
+    // Create resource if bool set to true
+    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
+    {
+        operations then TransformBlutDiagnostikSpecimenAnforderung(operations, specimen, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
     };
 }
 
@@ -461,7 +450,7 @@ group TransformGewebeDiagnostikSpecimenAnforderung(source operations: BackboneEl
             {
                 values.value as za -> tgt.extension as entnahmeKontext, 
                                     entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
+                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable', 'Not Applicable');
             };
         };
 
@@ -472,13 +461,13 @@ group TransformGewebeDiagnostikSpecimenAnforderung(source operations: BackboneEl
             values.value as value -> tgt.request = create('Reference') as request, request.reference = evaluate(value, '\'ServiceRequest/\' + $this');
         };
 
-        // //Identifier:biopsieID.value
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
-        // {
-        //     values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
-        //                               identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
-        //                               identifier.value = value;
-        // };
+        //Identifier:biopsieID.value
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
+        {
+            values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
+                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
+                                      identifier.value = value;
+        };
     };
 }
 
@@ -490,8 +479,6 @@ group TransformBlutDiagnostikSpecimenAnforderung(source operations: BackboneElem
 
     // subject, which is obligatory element on Simplifier, with a Patient
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-    // Mandatory element
-    src -> tgt.authoredOn = evaluate(src, 'now()');
 
     // type, which is obligatory element on Simplifier, with no fixed value
     operations ->  tgt.type as type,
@@ -539,7 +526,7 @@ group TransformBlutDiagnostikSpecimenAnforderung(source operations: BackboneElem
             {
                 values.value as za -> tgt.extension as entnahmeKontext, 
                                     entnahmeKontext.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/aufenthaltsart', 
-                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/v3-NullFlavor', 'UNK', 'unknown');
+                                    entnahmeKontext.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable', 'Not Applicable');
             };
         };
 
@@ -550,13 +537,13 @@ group TransformBlutDiagnostikSpecimenAnforderung(source operations: BackboneElem
             values.value as value -> tgt.request = create('Reference') as request, request.reference = evaluate(value, '\'ServiceRequest/\' + $this');
         };
 
-        // //Identifier:biopsieID.value
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
-        // {
-        //     values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
-        //                               identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
-        //                               identifier.value = value;
-        // };
+        //Identifier:biopsieID.value
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2457'" then
+        {
+            values.value as value ->  tgt.identifier = create('Identifier') as identifier, 
+                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 
+                                      identifier.value = value;
+        };
     };
 }
 
@@ -604,13 +591,13 @@ group TransformObservationGewebediagnostikAnforderung(source operations: Backbon
     // profile with profile URL
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histo-vorbefund';
     
-    src -> tgt.authoredOn = evaluate(src, 'now()');
-    // Mandatory Element
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Obligatory fields
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
     operations -> tgt.status = cast('final', 'FHIR.code');
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
+    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165', 'Cancer Histology');
 
     // Access data
     operations.data as data then
@@ -633,10 +620,10 @@ group TransformObservationGewebediagnostikAnforderung(source operations: Backbon
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm_block'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm_block'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 
@@ -651,34 +638,45 @@ group TransformObservationBlutDiagnostikAnforderung(source operations: BackboneE
 
     // Obligatory fields
     operations -> tgt.status = cast('final', 'FHIR.code');
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165');
+    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C19165', 'Cancer Histology');
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
 
     // Access data
     operations.data as data then
     {
         // ID + Composition insert
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_specimen_nngm_blut'" then
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histoVorbefund_blut'" then
         {
             values.value as value -> tgt.id = value;
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
         // Histologie des vorbefunds - valueCodeableConcept
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" then 
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2319'" -> tgt.valueCodeableConcept as vcc, vcc.coding as coding then 
         {
-            values.value as valuecc ->  tgt.valueCodeableConcept as vcc, vcc.coding as coding collate,
-                         coding.system = 'urn:oid:2.16.840.1.113883.6.43.1',
-                         coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()'),
-                         coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
+            // use CodeSystem http://ncit.nci.nih.gov
+            values.value as valuecc where "value = 'CUP'" then
+            {
+                operations -> coding.system = 'http://ncit.nci.nih.gov';
+                operations -> coding.code = 'C3812';
+                operations -> coding.display = 'Carcinoma of Unknown Primary';
+            };
+
+            // use CodeSystem urn:oid:2.16.840.1.113883.6.43.1	
+            values.value as valuecc where "value != 'CUP'" then
+            {
+                operations -> coding.system = 'urn:oid:2.16.840.1.113883.6.43.1';
+                operations -> coding.code = evaluate(valuecc, '$this.split(\'\\t\').first()');
+                operations -> coding.display = evaluate(valuecc, '$this.split(\'\\t\').last()');
+            };                    
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_specimen_nngm_blut'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_specimen_nngm_blut'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 
@@ -710,10 +708,6 @@ group TransformOrganizationGewebediagnostikAnforderung(source operations: Backbo
 {
     // Mapped profile with profile URL
     operations -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
-
-    operations ->  tgt.address as address,
-            address.use = 'work',
-            address.type = 'postal';
     
     // Access data 
     operations.data as data then
@@ -734,7 +728,7 @@ group TransformOrganizationGewebediagnostikAnforderung(source operations: Backbo
         // address.text
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1562'" then
         {
-            values.value as value -> tgt.address as address, address.text = value;
+            values.value as value -> tgt.address as address, address.use = 'work', address.type = 'postal',  address.text = value;
         };
     };
 }
