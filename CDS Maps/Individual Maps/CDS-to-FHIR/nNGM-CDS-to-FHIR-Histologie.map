@@ -11,9 +11,7 @@ uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
 /*
     TODO
-    - creation of specimen is currently commented out (with uuid_specimen_nngm3)
-    - reference to created specimen is currently commented out (in the other 3 transform-groups)
-    - same for biopsy-Id
+    - a (new) Specimen is created but not set as referenced anywhere, needs clarification what to do with this "EXTERNES TUMORMATERIAL"
 */
 
 
@@ -22,10 +20,9 @@ group TransformBundleHistologie(source operations: BackboneElement, target bundl
 {
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'histologie', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'histologie') then
     {
-        // operations then CreateSpecimenHistologie(operations, bundle, composition, section);
+        operations then CreateSpecimenHistologie(operations, bundle, composition, section);
         operations then CreateDiagnosticReportHistologie(operations, bundle, composition, section);
         operations then CreateObservationHistologie(operations, bundle, composition, section);
-        operations then CreateServiceRequestHistologie(operations, bundle, composition, section);
     };
 }
 
@@ -36,8 +33,7 @@ group CreateSpecimenHistologie(source operations: BackboneElement, target bundle
     let resourceShouldBeCreated = create('Boolean');
     operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
 
-    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'
-                                or blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'
                                 or blockindex = 0 and groupindex = 0 and itemid = 'id_2516'
                                 or blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
     {
@@ -52,6 +48,7 @@ group CreateSpecimenHistologie(source operations: BackboneElement, target bundle
     };
 }
 
+// TODO: remove and set references in passed ServiceRequest
 /* ------------------------------ Specimen ---------------------------- */
 group TransformSpecimenHistologie(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
 {
@@ -69,12 +66,6 @@ group TransformSpecimenHistologie(source operations: BackboneElement, target tgt
             values.value as value -> tgt.id = value;
             values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         };
- 
-        // Biopsy-ID -> biopsyId.value
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
-        // {
-        //     values.value as value -> tgt.identifier = create('Identifier') as biopsieId, biopsieId.system = cast('http://uk-koeln.de/NamingSystem/nNGM/biopsienummer', 'FHIR.uri'), biopsieId.value = value;
-        // };
 
         // Eingang des Tumormaterials in der Pathologie -> receivedTime
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2515'" then
@@ -107,17 +98,10 @@ group CreateDiagnosticReportHistologie(source operations: BackboneElement, targe
     let resourceShouldBeCreated = create('Boolean');
     operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
 
-    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id' or 
-                                                        blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
-    {
-        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-    };
-
-    // Create resource if bool set to true
-    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticReport then 
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" -> bundle.entry as entry, entry.resource = create('DiagnosticReport') as diagnosticReport then 
     {
         operations then TransformDiagnosticReportHistologie(operations, diagnosticReport, composition, section);
-        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticReport, '\'DiagnosticReport/\' + $this.id');
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(diagnosticReport, '\'DiagnosticReport/\' + $this.id');    
     };
 }
 
@@ -170,15 +154,6 @@ group TransformDiagnosticReportHistologie(source operations: BackboneElement, ta
                                                           befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
                                                           befundNummer.value = id;
         };
-
-        // Pathologie-Fall-ID 
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'extern_patho_case_id'" then
-        {
-            values.value as id -> tgt.identifier = create('Identifier') as externePathoBefundNummer,
-                                                          externePathoBefundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/externePathoBefundnummer',
-                                                          externePathoBefundNummer.value = id;
-        };
-
     };
 }
 
@@ -221,8 +196,8 @@ group TransformObservationHistologie(source operations: BackboneElement, target 
     // Code
     operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C18000');
 
-    //status
-    operations -> tgt.status = 'final';
+    // Status and Extension
+    operations then TransformHistologieStatusAndExtension(operations, tgt);
 
     // Access data 
     operations.data as data then 
@@ -341,28 +316,6 @@ group TMapPercentageValueHistologie(source src: string, target tgt: Quantity)
             tgt.code = '%';
 }
 
-/* ------------------------------ Check if ServiceRequest is required ---------------------------- */
-group CreateServiceRequestHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    // Check whether observation should be created
-    let resourceShouldBeCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceShouldBeCreated);
-
-    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'
-                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
-                                or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
-    {
-        operations then SetBooleanToTrue(operations, resourceShouldBeCreated);
-    };
-
-    // Create resource if bool set to true
-    operations where "%resourceShouldBeCreated.valueBoolean = true" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then
-    {
-        operations then TransformServiceRequestHistologie(operations, serviceRequest, composition, section);
-        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-    };
-}
-
 /* ------------------------------ ServiceRequest ---------------------------- */
 group TransformServiceRequestHistologie(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
 {
@@ -405,19 +358,6 @@ group TransformServiceRequestHistologie(source operations: BackboneElement, targ
             values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
         };
 
-        // Status
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
-            {
-                value -> tgt.status = cast('active', 'FHIR.code');
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = cast('completed', 'FHIR.code');
-            };
-        };
-
         // Referenzen
         // Observation
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
@@ -437,41 +377,40 @@ group TransformServiceRequestHistologie(source operations: BackboneElement, targ
         //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
         // };
     };
-
-    
-
-    operations then TransformHistologieStatusExtension(operations, tgt);
 }
 
-/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
-group TransformHistologieStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
+group TransformHistologieStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
 {
-    operations.data as data then
+    // Durchführung
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
     {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
+        values.value as value where "$this.value = 'in Bearbeitung'" then 
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
-                    value -> statusExtension.url = 'status';
-                };
-            };
+            value -> tgt.status = 'registered';
         };
-
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+        values.value as value where "$this.value = 'abgeschlossen'" then 
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
-                {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
-                };
-            };
+            value -> tgt.status = 'final';
+        };
+    };
+
+    // Abschluss
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+        {
+            value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
+            value -> statusExtension.url = 'status';
+        };
+    };
+
+    //Datum des Abschlusses
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+        {
+            value -> datumExtension.valueDate = dateOp(value, 'date');
+            value -> datumExtension.url = 'datum';
         };
     };
 }

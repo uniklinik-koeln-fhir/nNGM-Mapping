@@ -3,9 +3,6 @@
 
 /*
 TODO
-    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
-    - ServiceRequest.code may need to be updated to code form current valueset
-
     - Modify MET CISH instance of ergebnis to facilitate difference between 
         positiv (high-level amplification)
         positiv (moderate-level amplification) 
@@ -18,62 +15,10 @@ group TransformBundleMolekularpathologie(source operations: BackboneElement, tar
 {
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'molekularpathologie', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie') then
     {
-        // operations then CreateSpecimenMP(operations, bundle, composition, section);
         operations then CreateDiagnosticReportMP(operations, bundle, composition, section);
         operations then CreateOrganizationMP(operations, bundle, composition, section);
-        operations then CreateServiceRequestMP(operations, bundle, composition, section);
         operations then CreateObservationMP(operations, bundle, composition, section);
     };    
-}
-
-/*-----------------Specimen-----------------------*/
-group CreateSpecimenMP(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformSpecimenMP(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-        };    
-    };
-}
-
-group TransformSpecimenMP(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
-{
-    // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-    
-    // Type
-    operations -> tgt.type = create('Type') as type,
-                    type.coding as coding,
-                    coding.system = 'http://snomed.info/sct', 
-                    coding.version = 'http://snomed.info/sct/900000000000207008',
-                    coding.code as code, 
-                    code.extension as dataAbsentReason, 
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Patient reference
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Access data
-    operations.data as data then 
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        };
-
-        // Referenzen
-        // Request
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-    };
 }
 
 /*-----------------DiagnosticReport-----------------------*/
@@ -182,26 +127,7 @@ group TransformOrganizationMP(source operations: BackboneElement, target tgt: Or
     };
 }
 
-/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
-group CreateServiceRequestMP(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    let resourceIsCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceIsCreated);
-
-    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'
-                                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2462'
-                                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
-    {
-        // if resource is not created yet: call transform
-        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
-        {
-            operations then TransformServiceRequestMP(operations, serviceRequest, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-            operations then SetBooleanToTrue(operations, resourceIsCreated);
-        };
-    }; 
-}
-
+// TODO: remove and set references in passed ServiceRequest
 /* -------------------------------------- Service Request -------------------------------------------- */
 group TransformServiceRequestMP(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
 {
@@ -242,8 +168,6 @@ group TransformServiceRequestMP(source operations: BackboneElement, target tgt: 
             values.value as value -> tgt.id = value;
             values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
         };
-        // status extensions
-        operations then TransformMPStatusExtension(operations, tgt);
 
         //Durchfuehrung
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
@@ -286,39 +210,6 @@ group TransformServiceRequestMP(source operations: BackboneElement, target tgt: 
         // {
         //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         // };
-    };
-}
-
-/* -------------------------------------- Create double extensions for Fast Track --------------------------------------------*/
-group TransformMPStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
-{
-    operations.data as data then
-    {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
-                    value -> statusExtension.url = 'status';
-                };
-            };
-        };
-
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
-            {
-                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
-                {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
-                };
-            };
-        };
     };
 }
 
@@ -390,8 +281,8 @@ group TransformALKCISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -489,8 +380,8 @@ group TransformALKFISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -598,8 +489,8 @@ group TransformMETCISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -722,8 +613,8 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -957,8 +848,8 @@ group TransformRETCISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -1057,8 +948,8 @@ group TransformRETFISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -1167,8 +1058,8 @@ group TransformROS1CISHObservationMP(source operations: BackboneElement, target 
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -1277,8 +1168,8 @@ group TransformROS1FISHObservationMP(source operations: BackboneElement, target 
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -1384,6 +1275,41 @@ group TransformROS1FISHObservationMP(source operations: BackboneElement, target 
 /*------------------Functionality--------------------------------*/
 /*---------------------------------------------------------------*/
 
+group TransformMPStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
+{
+    // Durchführung
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
+    {
+        values.value as value where "$this.value = 'in Bearbeitung'" then 
+        {
+            value -> tgt.status = 'registered';
+        };
+        values.value as value where "$this.value = 'abgeschlossen'" then 
+        {
+            value -> tgt.status = 'final';
+        };
+    };
+    
+    // Abschluss
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+        {
+            value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
+            value -> statusExtension.url = 'status';
+        };
+    };
+
+    // Datum des Abschlusses
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+        {
+            value -> datumExtension.valueDate = dateOp(value, 'date');
+            value -> datumExtension.url = 'datum';
+        };
+    };
+}
 
 group MapDateOfAssessmentMP(source operations: BackboneElement, source name: string, target tgt: Observation)
 {

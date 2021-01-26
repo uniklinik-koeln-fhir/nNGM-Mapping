@@ -3,14 +3,11 @@
 
 /*
 TODO  
-    - references to observations (connected to repeatindex) are not correct in DiagnosticReport and ServiceRequest due to the repeatindex being +1 off
-
     Observation
     - SOP: component doesn't exist in simplifier profile
     - "Position Start" and "Position Stop" component doesn't exist in simplifier profile
     - ValueRange not working using collate, slowing down map execution using function call, displaying separate arrays without using collate
     - where does the uuid_ngsPanel_research go?
-    - organization may need to be set as reference (performer) in DiagnosticReport, Observation
     - some information in Observation are either missing in simplifier, the mapping table or the map itself like the SOP component
     - clarify what uuid_ngsPanel_research is meant for
     - deal with repeatindex being off by +1
@@ -32,59 +29,12 @@ group TransformBundleNGSLungPanel(source operations: BackboneElement, target bun
 {
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'ngs-lung-panel', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'ngs-lung-panel') then
     {
-        // operations then CreateSpecimenNGSLungPanel(operations, bundle, composition, section);
         operations then CreateOrganizationNGSLungPanel(operations, bundle, composition, section);
         operations then CreateDeviceNGSLungPanel(operations, bundle, composition, section);
 
         // there may be more than 1 instance of Observation, thus an index is needed to reference (and create) the correct observation
         operations then CreateDiagnosticReportNGSLungPanel(operations, bundle, composition, section, index);
         operations then CreateObservationNGSPanel(operations, bundle, composition, section, index);
-        operations then CreateServiceRequestNGSLungPanel(operations, bundle, composition, section, index);
-    };
-}
-
-/* ------------------------------ Specimen ---------------------------- */
-group CreateSpecimenNGSLungPanel(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformSpecimenNGSLungPanel(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-        };
-    };
-}
-
-/* ------------------------------ Specimen ---------------------------- */
-group TransformSpecimenNGSLungPanel(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // Type : Item required on simplifier
-    operations -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system  = 'http://snomed.info/sct',
-                                                                            snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                                            snomedGlobalPatientSet.code    = 'UNKNOWN';
-
-    // Subject 
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Access data
-    operations.data as data then
-    {      
-        // ID + Composition insert
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        };
-
-        // Referenzen
-        // Request
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
     };
 }
 
@@ -110,7 +60,6 @@ group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     //status: Item required on simplifier
-    // TODO: has binding on http://uk-koeln.de/fhir/ValueSet/beurteilungStatus
     operations ->  tgt.status as status, 
                     status.extension as dataAbsentReason, 
                     dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
@@ -304,8 +253,8 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel';
 
-    // Status : Item required on simplifier
-    operations ->  tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformNGSLungPanelStatusAndExtension(operations, tgt);
 
     //FISH category
     operations -> tgt.category as category then
@@ -536,26 +485,9 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
     };
 }
 
-/* -------------------------- ServiceRequest -------------------------- */ 
-group CreateServiceRequestNGSLungPanel(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
-{
-    let resourceIsCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceIsCreated);
 
-    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid ='id_2520'
-                                                        or blockindex = 5 and groupindex = 0 and itemid ='id_2462'
-                                                        or blockindex = 5 and groupindex = 0 and itemid ='id_2521'" then
-    {
-        // if resource is not created yet: call transform
-        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
-        {
-            operations then TransformServiceRequestNGSLungPanel(operations, serviceRequest, composition, section, index);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-            operations then SetBooleanToTrue(operations, resourceIsCreated);
-        };
-    }; 
-}
 
+// TODO: remove and set references in passed ServiceRequest
 group TransformServiceRequestNGSLungPanel(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {   
     // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
@@ -645,50 +577,38 @@ group TransformServiceRequestNGSLungPanel(source operations: BackboneElement, ta
     operations then TransformNGSLungPanelExtension(operations, tgt);
 }
 
-/* ------------ Create double extensions for NGSLungPanel -------------- */
-group TransformNGSLungPanelExtension(source operations: BackboneElement, target tgt: ServiceRequest)
+group TransformNGSLungPanelStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
 {
-    operations.data as data then
+    // Durchführung
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2520'" then
     {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2462' and values.isother.exists().not()" then
+        values.value as value where "$this.value = 'in Bearbeitung'" then 
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
-                    value -> statusExtension.url = 'status';
-                };
-            };
+            value -> tgt.status = 'registered';
         };
-        // Status des Abschlusses
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2462' and values.isother = true" then
+        values.value as value where "$this.value = 'abgeschlossen'" then 
         {
-            values.value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                values.value as value where "$this.isother = true" then
-                {
-                    value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                    {
-                        value -> statusExtension.valueString = value;
-                        value -> statusExtension.url = 'status';
-                    };
-                };
-            };
+            value -> tgt.status = 'final';
         };
+    };
+    
+    // Abschluss
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2462'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+        {
+            value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
+            value -> statusExtension.url = 'status';
+        };
+    };
 
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2521'" then
+    // Datum des Abschlusses
+    operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2521'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
-                {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
-                };
-            };
+            value -> datumExtension.valueDate = dateOp(value, 'date');
+            value -> datumExtension.url = 'datum';
         };
     };
 }
