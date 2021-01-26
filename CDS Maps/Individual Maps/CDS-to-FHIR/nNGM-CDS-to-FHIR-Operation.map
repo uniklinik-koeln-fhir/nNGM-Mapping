@@ -52,10 +52,7 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/OP';
 
     // Status
-    operations -> tgt.status as status,
-                    status.extension as dataAbsentReason,
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+    operations -> tgt.status as status = cast(status, 'FHIR.code');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -64,7 +61,8 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
     operations -> tgt.code as code, code.coding = c('http://ncit.nci.nih.gov', 'C15329');
 
     // Category 
-    operations -> tgt.category as category,
+    operations -> tgt.category as categorycc,
+                categorycc.coding as category,
                 category.extension as dataAbsentReason,
                 dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
                 dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
@@ -96,32 +94,32 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
         {
             values.value where "$this.value = 'Kurativ'" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'K');
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/cancer-base/adt/intention-op', 'K');
             };
 
             values.value where "$this.value = 'Palliativ'" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'P');
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/cancer-base/adt/intention-op', 'P');
             };
             
             values.value where "$this.value = 'Diagnostisch'" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'D');
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/cancer-base/adt/intention-op', 'D');
             };
 
             values.value where "$this.value = 'Revision\/Komplikation' or $this.value = 'Revision/Komplikation'" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'R');
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/cancer-base/adt/intention-op', 'R');
             };
 
             values.value where "$this.value = 'Sonstiges'" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'S');
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/cancer-base/adt/intention-op', 'S');
             };
 
             values.value where "$this.value = 'N\/A' or $this.value = 'N/A'" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'X');
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/cancer-base/adt/intention-op', 'X');
             };
         };
 
@@ -155,7 +153,7 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
 
             values.value as value where "$this.value != 'N/A' and $this.value != 'N\/A' and $this.value != 'other'" then 
             {
-                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/OperationLokalisation', value);
+                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/ValueSet/nNGM/OperationLokalisationUNK', value);
             };
 
             values.value as value where "$this.isother = true" then 
@@ -169,7 +167,7 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
         {
             values.value as value where "$this.isother.exists()" then 
             {
-                value -> tgt.bodySite as bodySite, bodySite.text = value;
+                value -> tgt.bodySite as bodySite collate, bodySite.text = value;
             };
         };
 
