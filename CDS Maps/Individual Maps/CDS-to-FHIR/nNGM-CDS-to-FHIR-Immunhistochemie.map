@@ -3,10 +3,9 @@
 
 /*
 TODO
-    - ServiceRequest: which code to use? ValueSet?
     - DiagnosticReport: no code set, no status set but expected
     - Observation: PD-L1.valueCodeableConcept (id_2180) is mapped as 'auswertbar' -> positiv and 'nicht auswertbar' -> 'nicht auswertbar'
-    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
+    - Specimen (reference of uuid_specimen_nngm4) is commented out
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieFHIR" = ImmunhistochemieFHIR
@@ -22,197 +21,8 @@ group TransformBundleImmunhistochemie(source operations: BackboneElement, target
 {
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'immunhistochemie', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'immunhistochemie') then
     {
-        operations then CreateServiceRequestIHC(operations, bundle, composition, section);
-        // operations then CreateSpecimenIHC(operations, bundle, composition, section);
         operations then CreateDiagnosticReportIHC(operations, bundle, composition, section);
         operations then CreateObservationIHC(operations, bundle, composition, section);
-    };
-}
-
-/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
-group CreateServiceRequestIHC(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    let resourceIsCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceIsCreated);
-
-    operations.data as data, data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'
-                                                        or blockindex = 15 and groupindex = 0 and itemid = 'id_2462'
-                                                        or blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-    {
-        // if resource is not created yet: call transform
-        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
-        {
-            operations then TransformServiceRequestIHC(operations, serviceRequest, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-            operations then SetBooleanToTrue(operations, resourceIsCreated);
-        };
-    }; 
-}
-
-/* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestIHC(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // Status Extension
-    operations then TransformIHCStatusExtension(operations, tgt);
-
-    // Intent
-    operations -> tgt.intent = cast('proposal', 'FHIR.code');
- 
-    // Category
-    operations -> tgt.category as cat, 
-                cat.coding as coding, 
-                coding.code as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Code
-    operations -> tgt.code as code,
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Subject
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // AuthoredOn
-    operations -> tgt.authoredOn as ao, 
-                ao.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-
-        //Status der Untersuchungen
-        //Durchfuehrung
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
-            {
-                value -> tgt.status = 'active';
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = 'completed';
-            };
-        };
-
-        // Referenzen
-        // DiagnosticReport
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
-        };
-
-        // Organization
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
-        {
-            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
-        };
-
-        // Observations
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2508'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservationIHC(operations, value, reference);
-        };
-
-        // Specimen
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
-    };
-}
-
-/* -------------------------------------- Create double extensions for Fast Track -------------------------------------------- */
-group TransformIHCStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
-{
-    operations.data as data then
-    {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2462'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/ValueSet/NNGM/statusAbschluss',value);
-                    value -> statusExtension.url = 'status';
-                };
-            };
-        };
-
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
-                {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
-                };
-            };
-        };
-    };
-}
-
-/*-----------------Specimen-----------------------*/
-group CreateSpecimenIHC(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformSpecimenIHC(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-        };
-    };
-}
-
-group TransformSpecimenIHC(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
-{
-    // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // fixed status
-    operations -> tgt.type = create('BackboneElement') as cc, cc.coding as type,
-                      type.system = 'http://snomed.info/sct', 
-                      type.version = 'http://snomed.info/sct/900000000000207008',
-                      type.code as code, 
-                      code.extension as dataAbsentReason, 
-                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Patient reference
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Access data
-    operations.data as data then 
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        };
-
-        // Referenzen
-        // Request
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
     };
 }
 
@@ -267,19 +77,18 @@ group TransformDiagnosticReportIHC(source operations: BackboneElement, target tg
                                      identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer', 
                                      identifier.value = value;
         };
-
-        // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
         
-        // Observations
+        // Reference Observations
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2508'" then
         {
             values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationIHC(operations, value, reference);
         };
+
+        // Reference Specimen
+        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
     };
 }
 
@@ -372,8 +181,8 @@ group TransformObservationBRAFIHC(source operations: BackboneElement, target tgt
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -508,8 +317,8 @@ group TransformObservationCK7IHC(source operations: BackboneElement, target tgt:
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -644,8 +453,8 @@ group TransformObservationMIB1IHC(source operations: BackboneElement, target tgt
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -781,8 +590,8 @@ group TransformObservationNAPSINAIHC(source operations: BackboneElement, target 
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -917,8 +726,8 @@ group TransformObservationP40IHC(source operations: BackboneElement, target tgt:
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -1053,8 +862,8 @@ group TransformObservationSynaptophysinIHC(source operations: BackboneElement, t
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -1189,8 +998,8 @@ group TransformObservationTTF1IHC(source operations: BackboneElement, target tgt
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -1325,8 +1134,8 @@ group TTransformObservationALKIHC(source operations: BackboneElement, target tgt
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -1462,8 +1271,8 @@ group TransformObservationMETIHC(source operations: BackboneElement, target tgt:
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
     
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -1630,8 +1439,8 @@ group TransformObservationPDL1IHC(source operations: BackboneElement, target tgt
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -1795,8 +1604,8 @@ group TransTransformObservationROS1IHC(source operations: BackboneElement, targe
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ihc';
 
-    // Status
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformIHCStatusAndExtension(operations, tgt);
 
     //IHC category
     operations then MapIHCCategory(operations, tgt);
@@ -1928,6 +1737,42 @@ group TransTransformObservationROS1IHC(source operations: BackboneElement, targe
 }
 
 /*-----------------HELPERS----------------------------*/
+group TransformIHCStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
+{
+    // Durchführung
+    operations.data as data, data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2520'" then
+    {
+        values.value as value where "$this.value = 'in Bearbeitung'" then 
+        {
+            value -> tgt.status = 'registered';
+        };
+        values.value as value where "$this.value = 'abgeschlossen'" then 
+        {
+            value -> tgt.status = 'final';
+        };
+    };
+
+    // Abschluss
+    operations.data as data, data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2462'" then
+    {
+        values.value as value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+        {
+            value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value);
+            value -> statusExtension.url = 'status';
+        };
+    };
+
+    // Datum des Abschlusses
+    operations.data as data, data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2521'" then
+    {
+        values.value as value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+        {
+            value -> datumExtension.valueDate = dateOp(value, 'date');
+            value -> datumExtension.url = 'datum';
+        };
+    };
+}
+
 group MapPercentageValueIHC(source src: string, target tgt: Quantity)
 {
     src -> tgt.value = src,
@@ -1935,7 +1780,6 @@ group MapPercentageValueIHC(source src: string, target tgt: Quantity)
             tgt.unit = '%',
             tgt.code = '%';
 }
-
 
 group MapIHCCategory(source operation: BackboneElement, target tgt: Observation)
 {
