@@ -8,7 +8,6 @@ TODO
     - "Position Start" and "Position Stop" component doesn't exist in simplifier profile
     - ValueRange not working using collate, slowing down map execution using function call, displaying separate arrays without using collate
     - where does the uuid_ngsPanel_research go?
-    - some information in Observation are either missing in simplifier, the mapping table or the map itself like the SOP component
     - clarify what uuid_ngsPanel_research is meant for
     - deal with repeatindex being off by +1
 
@@ -59,17 +58,11 @@ group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, 
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
-    //status: Item required on simplifier
-    operations ->  tgt.status as status, 
-                    status.extension as dataAbsentReason, 
-                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // status
+    operations -> tgt.status = 'final';
 
-    //code: Item required on simplifier
-    operations ->  tgt.code as code, 
-                    code.extension as dataAbsentReason, 
-                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // code
+    operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
     
     // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -264,10 +257,7 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
     };
 
     // code : Item required on simplifier
-    operations -> tgt.code as code,
-                    code.extension as dataAbsentReason,
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'NGS Panel'); 
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -485,97 +475,6 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
     };
 }
 
-
-
-// TODO: remove and set references in passed ServiceRequest
-group TransformServiceRequestNGSLungPanel(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
-{   
-    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
-    operations then InitSectionIndex(operations, index); // (re)set index to 0
-    
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // intent : Item required on simplifier
-    operations -> tgt.intent = 'proposal';
-
-    // category : Item required on simplifier
-    operations -> tgt.category as category, 
-                category.coding as coding, 
-                coding.system as system, 
-                system.extension as dataAbsentReason, 
-                dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // code : Item required on simplifier
-    operations -> tgt.code as code,
-                    code.extension as dataAbsentReason, 
-                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-    
-    // Subjekt
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // authoredOn : Item required on simplifier
-    operations ->  tgt.authoredOn as authoredOn, 
-                    authoredOn.extension as dataAbsentReason, 
-                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-
-        /*----------------Durchfuehrung------------*/
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid ='id_2520'" then
-        {   
-            values.value as durchfuerung where "$this.value = 'in Bearbeitung'" then
-            {
-                durchfuerung -> tgt.status = 'active'; 
-            };
-            values.value as durchfuerung where "$this.value = 'abgeschlossen'" then
-            {
-                durchfuerung -> tgt.status = 'completed'; 
-            };
-        };   
-
-        // Referenzen
-        // DiagnosticReport
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
-        };
-
-        // Organization
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
-        {
-            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
-        };
-
-        // Observations
-        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
-        {
-            values.value as value where "unit.exists().not()" then // to not use the unit = _research uuid value element
-            {
-                values.value as value -> tgt.reasonReference = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-                operations then IncrementSectionIndex(operations, index);
-            };
-        };
-
-        // Specimen
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
-    };
-    // Extensions
-    operations then TransformNGSLungPanelExtension(operations, tgt);
-}
 
 group TransformNGSLungPanelStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
 {

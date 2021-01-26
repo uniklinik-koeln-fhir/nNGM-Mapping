@@ -4,7 +4,6 @@
 /*
 TODO
     - repeatindex is off by +1 thus there are always 1 too many observation referenced in DiagnosticReport and ServiceRequest
-    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR" = nNGM_Mapping_SonstigeUntersuchungenFHIR
@@ -21,61 +20,10 @@ group TransformBundleSonstigeUntersuchungen(source operations: BackboneElement, 
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'sonstige-untersuchungen', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'sonstige-untersuchungen') then
     {        
         operations then CreateOrganizationSonstigeUntersuchungen(operations, bundle, composition, section);
-        // operations then CreateSpecimenSonstigeUntersuchungen(operations, bundle, composition, section);
         
         // there may be more than 1 instance of Observation, thus an index is needed to reference (and create) the correct observation
         operations then CreateDiagnosticReportSonstigeUntersuchungen(operations, bundle, composition, section, index);
-        operations then CreateServiceRequestSonstigeUntersuchungen(operations, bundle, composition, section, index);
         operations then CreateObservationSonstigeUntersuchungen(operations, bundle, composition, section, index);
-    };
-}
-
-/*-----------------Specimen-----------------------*/
-group CreateSpecimenSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1601'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformSpecimenIHC(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-        };
-    };
-}
-
-group TransformSpecimenSonstigeUntersuchungen(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
-{
-    // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-
-    // fixed status
-    operations -> tgt.type = create('BackboneElement') as cc, cc.coding as type,
-                      type.system = 'http://snomed.info/sct', 
-                      type.version = 'http://snomed.info/sct/900000000000207008',
-                      type.code as code, 
-                      code.extension as dataAbsentReason, 
-                      dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                      dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Patient reference
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Access data
-    operations.data as data then 
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        };
-
-        // Referenzen
-        // Request
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
     };
 }
 
@@ -101,17 +49,11 @@ group TransformDiagnosticReportSonstigeUntersuchungen(source operations: Backbon
     // Metadata
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
-    // Status
-    operations ->  tgt.status as status, 
-            status.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // status
+    operations -> tgt.status = 'final';
 
-    // Code
-    operations ->  tgt.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // code
+    operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
 
     // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -221,12 +163,10 @@ group TransformObservationSonstigeUntersuchungen(source operations: BackboneElem
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/weitere-untersuchung';
     
-    operations ->  tgt.status = 'final';
+    // Status and Extensions
+    operations then TransformSonstigeUntersuchungenStatusAndExtension(operations, tgt);
     
-    operations -> tgt.method as method,
-            method.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.code = cc('http://loinc.org', '69548-6');
 
     // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -360,139 +300,45 @@ group TransformObservationSonstigeUntersuchungen(source operations: BackboneElem
     };
 }
 
-/* -------------------------------------- Check if ServiceRequest needs to be created -------------------------------------------- */
-group CreateServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+group TransformSonstigeUntersuchungenStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
 {
-    let resourceIsCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceIsCreated);
-
-    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'
-                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_2462'
-                                                        or blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
+    // Durchführung
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
     {
-        // if resource is not created yet: call transform
-        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
+        values.value as value where "$this.value = 'in Bearbeitung'" then 
         {
-            operations then TransformServiceRequestSonstigeUntersuchungen(operations, serviceRequest, composition, section, index);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-            operations then SetBooleanToTrue(operations, resourceIsCreated);
+            value -> tgt.status = 'registered';
         };
-    }; 
-}
+        values.value as value where "$this.value = 'abgeschlossen'" then 
+        {
+            value -> tgt.status = 'final';
+        };
+    };
 
-/* -------------------------------------- ServiceRequest -------------------------------------------- */
-group TransformServiceRequestSonstigeUntersuchungen(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
-{
-    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
-    operations then InitSectionIndex(operations, index); // (re)set index to 0
-
-    // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // intent
-    operations -> tgt.intent = 'proposal';
-
-    // Subject
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Category
-    operations -> tgt.category as category, 
-            category.coding as coding,
-            coding.code as code,
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Code 
-    operations -> tgt.code as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // authoredOn
-    operations -> tgt.authoredOn as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');    
-
-    // Access data    
-    operations.data as data then
+    // Abschluss
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
     {
-        // References
-        // ID
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
+        values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
         {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as anforderungTestung, anforderungTestung.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-
-        // Organization
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
-        {
-            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
-        };
-
-        // Reference Observations
-        data.values as values where "blockindex = 3 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_weitereUntersuchung'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(value, '\'Observation/\' + $this');
-            operations then IncrementSectionIndex(operations, index);
-        };
-
-        // Reference Specimen
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
-
-        //Status der Untersuchungen
-        //Durchfuehrung
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
+            value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
             {
-                value -> tgt.status = 'active';
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = 'completed';
+                value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
+                value -> statusExtension.url = 'status';
             };
         };
     };
 
-    // Extensions
-    operations then TransformSonstigeUntersuchungenStatusExtension(operations, tgt);
-}
-
-/* -------------------------------------- Create double extensions for Status -------------------------------------------- */
-group TransformSonstigeUntersuchungenStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
-{
-    operations.data as data then
+    // Datum des Abschlusses
+    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
     {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2462'" then
+        values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
         {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
+            value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
             {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
-                    value -> statusExtension.url = 'status';
-                };
-            };
-        };
-
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
-            {
-                value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
-                {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
-                };
+                value -> datumExtension.valueDate = dateOp(value, 'date');
+                value -> datumExtension.url = 'datum';
             };
         };
     };
+};
 }

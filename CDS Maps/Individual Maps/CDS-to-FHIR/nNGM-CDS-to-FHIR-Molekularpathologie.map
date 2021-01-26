@@ -39,17 +39,11 @@ group TransformDiagnosticReportMP(source operations: BackboneElement, target tgt
     // Metadata
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
-    // fixed status
-    operations -> tgt.status as status,
-                    status.extension as dataAbsentReason, 
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // status
+    operations -> tgt.status = 'final';
 
     // code
-    operations -> tgt.code as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
 
     // Patient reference
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -124,92 +118,6 @@ group TransformOrganizationMP(source operations: BackboneElement, target tgt: Or
         {
             values.value as value -> tgt.name = value;
         };
-    };
-}
-
-// TODO: remove and set references in passed ServiceRequest
-/* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestMP(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // Intent
-    operations -> tgt.intent = cast('proposal', 'FHIR.code');
- 
-    // Code
-    operations -> tgt.code as code,
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Category
-    operations -> tgt.category as cat, 
-                cat.coding as coding, 
-                coding.code as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Subject
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // AuthoredOn
-    operations -> tgt.authoredOn as ao, 
-                ao.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-
-        //Durchfuehrung
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
-            {
-                value -> tgt.status = 'active';
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = 'completed';
-            };
-        };
-
-        // Referenzen
-        // Requester
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
-        {
-            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
-        };
-
-        // DiagnosticReport
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
-        };
-
-        // Observations CISH and FISH
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2509'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservationCISHMP(operations, value, reference);
-        };
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2510'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservationFISHMP(operations, value, reference);
-        };
-
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
     };
 }
 

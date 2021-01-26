@@ -3,8 +3,6 @@
 
 /*
 TODO
-    - DiagnosticReport: no code set, no status set but expected
-    - Observation: PD-L1.valueCodeableConcept (id_2180) is mapped as 'auswertbar' -> positiv and 'nicht auswertbar' -> 'nicht auswertbar'
     - Specimen (reference of uuid_specimen_nngm4) is commented out
 */
 
@@ -45,17 +43,12 @@ group TransformDiagnosticReportIHC(source operations: BackboneElement, target tg
     // Metadata
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
-    // fixed status
-    operations -> tgt.status as status,
-                    status.extension as dataAbsentReason, 
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // status
+    operations -> tgt.status = 'final';
 
     // code
-    operations -> tgt.code as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
+    
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -1559,15 +1552,7 @@ group TransformObservationPDL1IHC(source operations: BackboneElement, target tgt
         // Ergebnis
         data.values as values where "blockindex = 13 and groupindex = 0 and itemid = 'id_2180'" then
         {
-            values.value where "$this.value = 'auswertbar'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', 'positiv', 'positiv');
-            };
-
-            values.value where "$this.value = 'nicht auswertbar'" then 
-            {
-                values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
         
 

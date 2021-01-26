@@ -45,15 +45,11 @@ group TransformDiagnosticReportFastTrack(source operations: BackboneElement, tar
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
     
-    operations ->  tgt.status as status, 
-                status.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // status
+    operations -> tgt.status = 'final';
 
-    operations ->  tgt.code as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // code
+    operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
       
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -520,92 +516,6 @@ group TransformObservationKRASExon2FastTrack(source operations: BackboneElement,
         // {
         //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         // }; 
-    };
-}
-
-
-// TODO: remove and set references in passed ServiceRequest
-/* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestFastTrack(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // Status Extensions
-
-    // Intent
-    operations -> tgt.intent = cast('proposal', 'FHIR.code');
-
-    // Subject
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Category
-    operations -> tgt.category as category, 
-                category.coding as coding,
-                coding.code as code,
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Code 
-    operations -> tgt.code as code,
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // authoredOn
-    operations -> tgt.authoredOn as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-
-        //Status der Untersuchungen
-        //Durchfuehrung
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
-            {
-                value -> tgt.status = 'active';
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = 'completed';
-            };
-        };
-
-        // Referenzen
-        // DiagnosticReport
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
-        };
-
-         // Organization
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
-        {
-            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
-        };
-
-        // Observations
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2512'" then
-        {
-            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrack(operations, value, reference);
-        };
-
-        // Specimen
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
     };
 }
 
