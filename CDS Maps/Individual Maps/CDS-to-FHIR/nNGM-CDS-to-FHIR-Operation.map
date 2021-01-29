@@ -4,7 +4,7 @@
 /*
 TODO
     - Need to add reference to newly created patient?
-    - Resectionsstatus should be inside same scope as resectionsart
+    - Resectionsstatus not mapping: should be inside same extension[] scope as resectionsart, currently not possible due to collate bug
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieFHIR" = nNGM_Mapping_OperationTherapieFHIR
@@ -64,9 +64,18 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
     // Category 
     operations -> tgt.category as categorycc,
                 categorycc.coding as category,
-                category.extension as dataAbsentReason,
+                category.system as system,
+                system.extension as dataAbsentReason,
                 dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
                 dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+
+    operations -> tgt.category as categorycc,
+                categorycc.coding as category,
+                category.code as code,
+                code.extension as dataAbsentReason,
+                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+
 
     // Access data
     operations.data as data then
@@ -130,7 +139,7 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value as value where "$this.value = 'N\/A' or $this.value = 'N/A'" then 
             {
                 value ->    tgt.code as code, 
-                            code.extension = create('BackboneElement') as artDesEingriffs,
+                            code.extension  as artDesEingriffs,
                             artDesEingriffs.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/art-des-eingriffs',
                             artDesEingriffs.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
             };
@@ -138,7 +147,7 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value as value where "$this.value != 'N\/A' and $this.value != 'N/A'" then 
             {
                 value ->    tgt.code as code, 
-                            code.extension = create('BackboneElement') as artDesEingriffs,
+                            code.extension as artDesEingriffs,
                             artDesEingriffs.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/art-des-eingriffs',
                             artDesEingriffs.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ngnm/OperationArtDesEingriffs', value);
             };
@@ -198,9 +207,9 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
             {
                 value ->    tgt.code as code,
-                            code.extension = create('BackboneElement') as resektion,
+                            code.extension as resektion,
                             resektion.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/resektion',
-                            resektion.extension = create('BackboneElement') as resektionsart,
+                            resektion.extension as resektionsart,
                             resektionsart.url = 'resektionsart',
                             resektionsart.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/OperationArtResektion', 'unknown');
             };
@@ -208,22 +217,23 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value as value where "$this.value != 'N/A' and $this.value != 'N\/A'" then
             {
                 value ->    tgt.code as code,
-                            code.extension = create('BackboneElement') as resektion,
+                            code.extension as resektion,
                             resektion.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/resektion',
-                            resektion.extension = create('BackboneElement') as resektionsart,
+                            resektion.extension as resektionsart,
                             resektionsart.url = 'resektionsart',
                             resektionsart.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/OperationArtResektion', value);
             };
         };
 
+        /*
         // Resektionsstatus - code.extension:resektion.extension:resektionsstatus
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1353'" then
         {
             values.value where "$this.value = 'R0'" then
             {
                 values.value as value ->    tgt.code as code,
-                                            code.extension as resektion,
-                                            resektion.extension as resektionsstatus collate,
+                                            code.extension as resektion collate,
+                                            resektion.extension as resektionsstatus,
                                             resektionsstatus.url = 'resektionsstatus',
                                             resektionsstatus.valueCodeableConcept = cc('http://loinc.org', 'LA26542-3');
             };
@@ -240,7 +250,7 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value where "$this.value = 'R2'" then
             {
                 values.value as value ->    tgt.code as code,
-                                            code.extension as resektion ,
+                                            code.extension as resektion collate,
                                             resektion.extension as resektionsstatus collate,
                                             resektionsstatus.url = 'resektionsstatus',
                                             resektionsstatus.valueCodeableConcept = cc('http://loinc.org', 'LA26544-9');
@@ -249,13 +259,14 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value where "$this.value = 'RX'" then
             {
                 values.value as value ->    tgt.code as code,
-                                            code.extension as resektion ,
+                                            code.extension as resektion collate,
                                             resektion.extension as resektionsstatus collate,
                                             resektionsstatus.url = 'resektionsstatus',
                                             resektionsstatus.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
             };
 
         };
+        */
 
         // Lymphadenektomie - extension:lymphadenektomie
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1362'" then
