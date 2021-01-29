@@ -3,14 +3,7 @@
 
 /*
 TODO  
-    Observation
-    - SOP: component doesn't exist in simplifier profile
-    - "Position Start" and "Position Stop" component doesn't exist in simplifier profile
-    - ValueRange not working using collate, slowing down map execution using function call, displaying separate arrays without using collate
-    - where does the uuid_ngsPanel_research go?
-    - clarify what uuid_ngsPanel_research is meant for
     - deal with repeatindex being off by +1
-
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelFHIR" = nNGM_Mapping_NGSLungPanelFHIR
@@ -21,7 +14,6 @@ uses "http://hl7.org/fhir/StructureDefinition/DiagnosticReport" as target
 uses "http://hl7.org/fhir/StructureDefinition/Organization" as target
 uses "http://hl7.org/fhir/StructureDefinition/Device" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
-uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
 
 group TransformBundleNGSLungPanel(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target diagnosticSection: BackboneElement, target index: RepeatIndex)
@@ -53,9 +45,6 @@ group CreateDiagnosticReportNGSLungPanel(source operations: BackboneElement, tar
 /* -------------------------- DiagnosticReport ------------------------ */
 group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
-    operations then InitSectionIndex(operations, index); // (re)set index to 0
-
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     // status
@@ -93,6 +82,7 @@ group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, 
         // };
 
         // Observations
+        operations then InitSectionIndex(operations, index); // (re)set index to 0
         data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
         {
             values.value as value where "unit.exists().not()" then // to not use the unit = _research uuid value element
@@ -100,7 +90,13 @@ group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, 
                 values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
                 operations then IncrementSectionIndex(operations, index);
             };
-            
+        };
+
+        operations then InitSectionIndex(operations, index); // (re)set index to 0
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel_research'" then
+        {
+            values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+            operations then IncrementSectionIndex(operations, index);
         };
 
         // Organization
@@ -218,7 +214,6 @@ group CreateObservationNGSPanel(source operations: BackboneElement, target bundl
 {
     // since there can be more than 1 instance of the NGS Lung Panel we need an index to assign the corresponding data to each observation
     operations then InitSectionIndex(operations, index); // (re)set index to 0
-
     operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 4 and groupindex = 0 and itemid ='id_1159'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_1160'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_35'
@@ -228,8 +223,18 @@ group CreateObservationNGSPanel(source operations: BackboneElement, target bundl
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='ngs_panel_reftranscript'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='ngs_panel_coverage'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_47'
-                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_48'
-                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_41'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_48')" then
+    {
+        operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
+        {
+            operations then TransformObservationNGSLungPanel(operations, observation, composition, section, index);
+            // operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
+        };
+        operations then IncrementSectionIndex(operations, index);
+    };
+
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+    operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 4 and groupindex = 0 and itemid ='id_41'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_42'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_43'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_44'
@@ -240,14 +245,15 @@ group CreateObservationNGSPanel(source operations: BackboneElement, target bundl
     {
         operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
         {
-            operations then TransformObservationNGSLungPanel(operations, observation, composition, section, index);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
+            operations then TransformObservationNGSLungPanelResearch(operations, observation, composition, section, index);
+            // operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
         };
         operations then IncrementSectionIndex(operations, index);
     };
 }
 
 /* ----------------------- Observation NGS Panel ---------------------- */
+/* ---------------------- Panel-Gen ---------------------- */
 group TransformObservationNGSLungPanel(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel';
@@ -262,18 +268,13 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
                                                                     coding.code = 'laboratory';                                                    
     };
 
-    // code : Item required on simplifier
+    // Code
     operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'NGS Panel'); 
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    operations -> tgt.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.extension as dataAbsentReason,
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Method : Item required on simplifier
+    // Method
     operations -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
 
     // Access data
@@ -286,7 +287,6 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
             {
                 values.value as value -> tgt.id = value;
                 values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-       
             };
         };
 
@@ -383,6 +383,72 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
         {
             values.value as value -> tgt.note = create('Annotation') as annotation, annotation.text = value;
         };
+
+        // Referenzen
+        // Specimen
+        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
+        // {
+        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        // };
+
+        // Device
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_device'" then
+        {
+            values.value as value -> tgt.device = create('Reference') as device, device.reference = evaluate(value, '\'Device/\' + $this');
+        };
+
+        // Organization
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
+    };
+}
+
+/* ---------------------- Panel-Gen Forschung ---------------------- */
+group TransformObservationNGSLungPanelResearch(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+{
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel';
+
+    // Status and Extension
+    operations then TransformNGSLungPanelStatusAndExtension(operations, tgt);
+
+    //FISH category
+    operations -> tgt.category as category then
+    {
+        operations -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
+                                                                    coding.code = 'laboratory';                                                    
+    };
+
+    // Code
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'NGS Panel'); 
+
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
+    // Method
+    operations -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
+
+    // Access data
+    operations.data as data then
+    {
+        // ID + Composition insert
+        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel_research'" then
+        {
+            values.value as value -> tgt.id = value;
+            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        // SOP-Versionsnummer des Standorts
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2616'" then
+        {
+            values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
+            {
+                sop -> componentSop.valueString = sop;
+                sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
+            };
+        };
+
         /* ------------------- Panel-Gen Forschung -------------------- */
         //Genome build -> ref-sequence-assembly
         data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_41'" then
@@ -403,27 +469,22 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
             };
         };
 
-        //TODO
-        //Position Start (1-basiert) -> exact-start-end.low
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_43'" then
+        //Position Start/Stop -> exact-start-end.low/high
+        data.values as values where "%tgt.component.code.where(coding.code = '81254-5').exists().not()
+                                    and blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and (itemid = 'id_43' or itemid = 'id_44')" then
         {
-            values.value as value where "%tgt.component.valueRange.low.exists().not()" then
+            values -> tgt.component = create('BackboneElement') as component, component.code = cc('http://loinc.org', '81254-5'), component.valueRange as valueRange then
             {
-                value -> tgt.component = create('BackboneElement') as component, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.low = create('Quantity') as qty then
+                //Position Start (1-basiert) -> exact-start-end.low
+                operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'id_43'" then
                 {
-                    value -> qty.value = value;
+                    values.value as value -> valueRange.low = create('Quantity') as qty, qty.value = value;
                 };
-            };
-        };
-        //TODO
-        //Position Stop (1-basiert) -> exact-start-end.high
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_44'" then
-        {
-            values.value as value where "%tgt.component.valueRange.high.exists().not()" then
-            {
-                value -> tgt.component = create('BackboneElement') as component, component.code = cc('http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes', 'exact-start-end'), component.valueRange as valueRange collate, valueRange.high = create('Quantity') as qty then
+
+                //Position Stop (1-basiert) -> exact-start-end.high
+                operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'id_44'" then
                 {
-                    value -> qty.value = value;
+                    values.value as value -> valueRange.high = create('Quantity') as qty, qty.value = value;
                 };
             };
         };
@@ -486,7 +547,6 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
         };
     };
 }
-
 
 group TransformNGSLungPanelStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
 {
