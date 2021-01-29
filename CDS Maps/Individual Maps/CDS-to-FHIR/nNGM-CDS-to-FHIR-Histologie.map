@@ -9,11 +9,6 @@ uses "http://hl7.org/fhir/StructureDefinition/Specimen" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 uses "http://hl7.org/fhir/StructureDefinition/ServiceRequest" as target
 
-/*
-    TODO
-    - a (new) Specimen is created but not set as referenced anywhere, needs clarification what to do with this "EXTERNES TUMORMATERIAL"
-*/
-
 
 /* ------------------------------ Bundle ---------------------------- */
 group TransformBundleHistologie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target diagnosticSection: BackboneElement)
@@ -130,10 +125,10 @@ group TransformDiagnosticReportHistologie(source operations: BackboneElement, ta
         operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
         // Reference Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
 
         // Reference Observations
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
@@ -235,10 +230,10 @@ group TransformObservationHistologie(source operations: BackboneElement, target 
         };
 
         // Reference Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
 
         //Wachstumsmuster bei Adenokarzinom lepidisch -> component:wachtumsmusterBeiAdenokarzinomLepidisch.valueQuantity
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1286'" then
@@ -309,69 +304,6 @@ group TMapPercentageValueHistologie(source src: string, target tgt: Quantity)
             tgt.system = 'http://unitsofmeasure.org',
             tgt.unit = 'percentage',
             tgt.code = '%';
-}
-
-/* ------------------------------ ServiceRequest ---------------------------- */
-group TransformServiceRequestHistologie(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
-{
-    // Resource information
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // intent
-    operations -> tgt.intent = 'proposal';
-
-    // Subject
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Category
-    operations -> tgt.category as category, 
-            category.coding as coding,
-            coding.code as code,
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-                
-    // code
-    operations -> tgt.code as code,
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // authoredOn
-    operations -> tgt.authoredOn as code, 
-            code.extension as dataAbsentReason, 
-            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-            dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access Data
-    operations.data as data then 
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-
-        // Referenzen
-        // Observation
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-        };
-
-        // Diagnostic Report
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_befund'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
-        };
-
-        // Reference Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as result, result.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
-    };
 }
 
 group TransformHistologieStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
