@@ -292,6 +292,7 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
             src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save' and data.exists()" then
             {
                 src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund, diagnosticSection);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
             };
 
             // Histologie (Befund.diagnostik.histologie)
@@ -702,4 +703,46 @@ group SetBooleanToFalse(source src: BackboneElement, target boolean: Boolean)
 group SetBooleanToTrue(source src: BackboneElement, target boolean: Boolean)
 {
     src -> boolean.valueBoolean = true;
+}
+
+// Get the Specimen referenced in composition:antrag.section:biopsy.section:anforderung and set reference to it
+group SetReferenceToAnforderungSpecimen(source src: Bundle, source bundleBefund: Bundle, target compositionBefund: Composition, target diagnosticSection: BackboneElement)
+{
+    // find antragComposition according to fallnummer (of current compositionBefund)
+    src.entry as srcEntry, srcEntry.resource as bundle, bundle.entry as bundleEntry, 
+        bundleEntry.resource as antragComposition, antragComposition where "meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert' 
+                                                    and identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer' 
+                                                                        and value = %compositionBefund.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer').value)" then
+    {
+        // find biopsySection according to formularId (of current diagnosticSection)
+        antragComposition.section as biopsySection, biopsySection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'biopsie')
+                                                                            and entry.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId' 
+                                                                                and value = %diagnosticSection.entry.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId').value)" then
+        {
+            // find anforderungSection
+            biopsySection.section as anforderungSection, anforderungSection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'anforderung')" then
+            {
+                // get reference of Specimen
+                anforderungSection.entry as entry, entry.reference as specimenReference where "reference.contains('Specimen')" then
+                {
+                    // get last added nestedSection
+                    diagnosticSection.section as currentSection where "section.last()" then
+                    {
+                        // get all Observations from this section
+                        currentSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as observation where "resource is Observation and resource.id = %sectionReference.split(\'/\').last()" then
+                        {
+                            // create Reference and set to Specimen
+                            src then CreateReferenceToSpecimen(specimenReference, observation);
+                        }; 
+                    };
+                };
+            };
+        };
+    };
+}
+
+// create Reference and set to Specimen
+group CreateReferenceToSpecimen(source specimenReference: string, target observation: Observation)
+{
+    specimenReference -> observation.specimen = create('Reference') as specimen, specimen.reference = evaluate(specimenReference, '\'Specimen/\' + $this.split(\'/\').last()');
 }
