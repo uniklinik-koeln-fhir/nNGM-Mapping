@@ -1,8 +1,8 @@
 /// version = 0.1
 /// title = "nNGM: nNGMv09c - FHIR to CTS"
 
-// TODO: InitMaxIndexBefund
-// TODO: Test formularID therapie
+// TODO: InitMaxIndexTherapie necessary without case id and only a form id?
+// TODO: Author triggered n times for each author in the export format 
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_CdsToFhir_Master" = nNGM_Mapping_CdsToFhir_Master
 
@@ -106,7 +106,6 @@ group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
         operations then TransformBundleStammdaten(operations, bundleStammdaten, compositionStammdaten);
     };
 }
-
 
 
 // TODO
@@ -376,6 +375,8 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 
     /* ------------------------------ Therapien ---------------------------- */
     src then InitCaseIndex(src, index); // Reset index
+    src then InitMaxIndexTherapie(src, index); // Reset maxIndex
+    
     src ->
     // Add a transaction bundle to the collection bundle
     tgt.entry as entry,
@@ -415,83 +416,96 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
         // Request
         src -> entryTherapie.request as request, request.method = 'PUT', request.url = evaluate(compositionTherapie, '\'Composition/\' + $this.id');
 
-
         // Date
         src.operations as operations, operations.timestamp as timestamp -> compositionTherapie.date = dateOp(timestamp, 'dateTime');
 
         // Author
-        src.operations as operations, operations.editor as author -> compositionTherapie.author = create('Reference') as subject, subject.reference = author;
+        src.operations as operations, operations.editor as author -> compositionTherapie.author as author, author.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
 
         /* ------------------------------ Section ---------------------------- */
 
-        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'therapie') then
+        // Operation
+        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'operation') then
         {
-            /* ------------------------------ Therapie ---------------------------- */
 
-            // Operation
+            
             src then InitFormIndex(src, index);
             src.operations as operations, operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleOperationTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
                 
-                // Read out and parse form index into extension specific for therapy forms
-                src -> sectionTherapie.extension = create('Extension') as formularIdExtension, 
-                       formularIdExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/formularId', 
-                       formularIdExtension.valueIdentifier = create('Identifier') as formularId,
-                       formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       formularId.value = evaluate(index, '$this.formIndex.toString()');
+                // Read out and parse form index into identifier section
+                src -> sectionTherapie.entry = create('Entry') as entryFormularId,
+                       entryFormularId.display = 'operation', 
+                       entryFormularId.identifier as identifier,
+                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                       identifier.value = evaluate(index, '$this.formIndex.toString()');
                 
                 src then IncrementFormIndex(src, index);                
             };
+        };
 
-            // SystemischeTherapie
+        // SystemischeTherapie
+        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'systemischeTherapie') then
+        {
+            
             src then InitFormIndex(src, index);
             src.operations as operations, operations where "crfid = 'SY' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleSystemischeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
 
-                // Read out and parse form index into extension specific for therapy forms
-                src -> sectionTherapie.extension = create('Extension') as formularIdExtension, 
-                       formularIdExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/formularId', 
-                       formularIdExtension.valueIdentifier = create('Identifier') as formularId,
-                       formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       formularId.value = evaluate(index, '$this.formIndex.toString()');
+                // Read out and parse form index into identifier section
+                src -> sectionTherapie.entry = create('Entry') as entryFormularId, 
+                       entryFormularId.display = 'systemischeTherapie',
+                       entryFormularId.identifier as identifier,
+                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                       identifier.value = evaluate(index, '$this.formIndex.toString()');
 
                 src then IncrementFormIndex(src, index);
             };
+        };
 
-            // StrahlenTherapie
+        // StrahlenTherapie
+        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'strahlentherapie') then
+        {
+            
             src then InitFormIndex(src, index);
             src.operations as operations, operations where "crfid = 'ST' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleStrahlentherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
 
-                // Read out and parse form index into extension specific for therapy forms
-                src -> sectionTherapie.extension = create('Extension') as formularIdExtension, 
-                       formularIdExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/formularId', 
-                       formularIdExtension.valueIdentifier = create('Identifier') as formularId,
-                       formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       formularId.value = evaluate(index, '$this.formIndex.toString()');
+                // Read out and parse form index into identifier section
+                src -> sectionTherapie.entry = create('Entry') as entryFormularId, 
+                       entryFormularId.display = 'strahlentherapie',
+                       entryFormularId.identifier as identifier,
+                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                       identifier.value = evaluate(index, '$this.formIndex.toString()');
 
                 src then IncrementFormIndex(src, index);
             };
+        };
 
-            // SonstigeTherapie
+        // SonstigeTherapie
+        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'sonstigeTherapie') then
+        {
+            
             src then InitFormIndex(src, index);
             src.operations as operations, operations where "crfid = 'SO' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleSonstigeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
 
-                // Read out and parse form index into extension specific for therapy forms
-                src -> sectionTherapie.extension = create('Extension') as formularIdExtension, 
-                       formularIdExtension.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/formularId', 
-                       formularIdExtension.valueIdentifier = create('Identifier') as formularId,
-                       formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       formularId.value = evaluate(index, '$this.formIndex.toString()');
+                // Read out and parse form index into identifier section
+                src -> sectionTherapie.entry = create('Entry') as entryFormularId, 
+                       entryFormularId.display = 'sonstigeTherapie',
+                       entryFormularId.identifier as identifier,
+                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                       identifier.value = evaluate(index, '$this.formIndex.toString()');
                        
-                src then IncrementFormIndex(src, index);
             };
         };
+        
+        src then IncrementFormIndex(src, index);
+        src then InitMaxIndexTherapie(src, index);
     };
 }
 
@@ -717,6 +731,47 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger() > %index.maxIndex"
             -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger()');
+    };
+}
+
+group InitMaxIndexTherapie(source src: CTS_Transport, target index: RepeatIndex)
+{
+    // Create this let because we can't check on two parameters with the same name in FHIRPath
+    let caseIndex = evaluate(index, '$this.caseIndex');
+
+    // init maxIndex, then find maxFormIndex
+    src -> index.maxIndex = 1;
+
+    // Operation
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'OP') and type = 'save'" then
+    {
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'OP\') + \'OP\'.length()).toInteger() > %index.maxIndex"
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'OP\') + \'OP\'.length()).toInteger()');
+    };
+
+    // Systemische Therapie
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'SY') and type = 'save'" then
+    {
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'SY\') + \'SY\'.length()).toInteger() > %index.maxIndex"
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'SY\') + \'SY\'.length()).toInteger()');
+    };
+
+    // Strahlentherapie
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'ST') and type = 'save'" then
+    {
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'ST\') + \'ST\'.length()).toInteger() > %index.maxIndex"
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'ST\') + \'ST\'.length()).toInteger()');
+    };
+
+    // Sonstige Therapie
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'SO') and type = 'save'" then
+    {
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'SO\') + \'SO\'.length()).toInteger() > %index.maxIndex"
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'SO\') + \'SO\'.length()).toInteger()');
     };
 }
 
