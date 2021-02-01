@@ -1,6 +1,9 @@
 /// version = 0.1
 /// title = "nNGM: nNGMv09c - FHIR to CTS"
 
+// TODO: InitMaxIndexBefund
+// TODO: Test formularID therapie
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_CdsToFhir_Master" = nNGM_Mapping_CdsToFhir_Master
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
@@ -379,7 +382,6 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
         src -> bundleTherapie.id = uuid();
         src -> bundleTherapie.type = 'transaction';
 
-
         /* ------------------------------ Composition ---------------------------- */
 
         // Meta
@@ -392,11 +394,6 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 
         // Title
         src -> compositionTherapie.title = 'Therapie pseudonymisiert';
-
-        // Identifier i.e. Case ID
-        src -> compositionTherapie.identifier = create('Reference') as reference, reference.identifier = create('Identifier') as formularId,
-                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                                                formularId.value = 0;
 
         // Status
         src -> compositionTherapie.status = cast('final', 'FHIR.code');
@@ -428,7 +425,13 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
             src.operations as operations, operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             {
                 src then TransformBundleOperationTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
-                src then IncrementFormIndex(src, index);
+                
+                // Read out and parse form index into extension specific for therapy forms
+                src -> sectionTherapie = create('Extension') as formularIdExtension, formularIdExtension.identifier = create('Identifier') as formularId,
+                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
+                
+                src then IncrementFormIndex(src, index);                
             };
 
             // SystemischeTherapie
@@ -436,6 +439,12 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
             src.operations as operations, operations where "crfid = 'SY' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             {
                 src then TransformBundleSystemischeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
+
+                // Read out and parse form index into extension specific for therapy forms
+                src -> sectionTherapie = create('Extension') as formularIdExtension, formularIdExtension.identifier = create('Identifier') as formularId,
+                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
+                                                
                 src then IncrementFormIndex(src, index);
             };
 
@@ -444,6 +453,12 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
             src.operations as operations, operations where "crfid = 'ST' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleStrahlentherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
+
+                // Read out and parse form index into extension specific for therapy forms
+                src -> sectionTherapie = create('Extension') as formularIdExtension, formularIdExtension.identifier = create('Identifier') as formularId,
+                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
+
                 src then IncrementFormIndex(src, index);
             };
 
@@ -452,6 +467,12 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
             src.operations as operations, operations where "crfid = 'SO' + %index.formIndex.toString() and type = 'save'" then
             {
                 src then TransformBundleSonstigeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
+
+                // Read out and parse form index into extension specific for therapy forms
+                src -> sectionTherapie = create('Extension') as formularIdExtension, formularIdExtension.identifier = create('Identifier') as formularId,
+                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
+                                                
                 src then IncrementFormIndex(src, index);
             };
         };
