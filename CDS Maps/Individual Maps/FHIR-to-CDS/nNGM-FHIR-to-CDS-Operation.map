@@ -1,6 +1,9 @@
 /// version = 0.1
 /// title = "nNGM: Operation Therapie - FHIR to CTS"
 
+// Art der Resektion, Resektionstatus not mapped in to FHIR Map due to collate bug
+
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieCTS" = nNGM_Mapping_OperationTherapieCTS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
@@ -50,37 +53,37 @@ group TransformOperationTherapieCTS(source src: Bundle, target tgt: BackboneElem
                     procedure -> data.itemid = 'id_1167';
 
                     // Kurativ
-                    coding.code as code where "code = 'K'" then
+                    coding.code as code where "code = 'Kurativ'" then
                     {
                         procedure -> data.values as values, values.value = 'Kurativ';
                     };
 
                     // Palliativ
-                    coding.code as code where "code = 'P'" then
+                    coding.code as code where "code = 'Palliativ'" then
                     {
                         procedure -> data.values as values, values.value = 'Palliativ';
                     };
 
                     // Diagnostisch
-                    coding.code as code where "code = 'D'" then
+                    coding.code as code where "code = 'Diagnostisch'" then
                     {
                         procedure -> data.values as values, values.value = 'Diagnostisch';
                     };
 
                     // Revision/Komplikation
-                    coding.code as code where "code = 'R'" then
+                    coding.code as code where "code = 'Revision\/Komplikation'" then
                     {
                         procedure -> data.values as values, values.value = 'Revision\/Komplikation';
                     };
 
                     // Sonstiges
-                    coding.code as code where "code = 'S'" then
+                    coding.code as code where "code = 'Sonstiges'" then
                     {
                         procedure -> data.values as values, values.value = 'Sonstiges';
                     };
 
                     // N/A
-                    coding.code as code where "code = 'X'" then
+                    coding.code as code where "code = 'N/A'" then
                     {
                         procedure -> data.values as values, values.value = 'N\/A';
                     };
@@ -94,10 +97,13 @@ group TransformOperationTherapieCTS(source src: Bundle, target tgt: BackboneElem
                 {
                     extension.valueCodeableConcept as vcc, vcc.coding as coding then
                     {
-                        procedure -> data.blockindex = 1;
-                        procedure -> data.groupindex = 0;
-                        procedure -> data.itemid = 'id_1168';
-                        coding.code as code -> data.values as values, values.value = code;
+                        coding.code as code where "code != 'unknown'" then 
+                        {
+                            procedure -> data.blockindex = 1;
+                            procedure -> data.groupindex = 0;
+                            procedure -> data.itemid = 'id_1168';
+                            coding.code as code -> data.values as values, values.value = code;
+                        };
                     };
 
                     extension.valueCodeableConcept as vcc, vcc.coding as coding then
@@ -116,15 +122,15 @@ group TransformOperationTherapieCTS(source src: Bundle, target tgt: BackboneElem
             // Lokalisation (Auswahl)
             procedure -> tgt.data as data then
             {
-                procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/OperationLokalisation'" then
+                procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/ValueSet/nNGM/OperationLokalisationUNK'" then
                 {
                     procedure -> data.blockindex = 1;
                     procedure -> data.groupindex = 0;
                     procedure -> data.itemid = 'id_2335';
-                    coding.code as code -> data.values as values, values.value = code;
+                    coding.code as code -> data.values as values, values.value = code;                   
                 };
 
-                procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://uk-koeln.de/fhir/CodeSystem/nNGM/OperationLokalisation'" then
+                procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://ncit.nci.nih.gov'" then
                 {
                     coding.code as code where "code = 'C17649'" then
                     {
@@ -141,7 +147,10 @@ group TransformOperationTherapieCTS(source src: Bundle, target tgt: BackboneElem
                             text -> data.values as values, values.isother = true, values.value = text;
                         };
                     };
+                };
 
+                procedure.bodySite as bodySite, bodySite.coding as coding where "coding.system = 'http://terminology.hl7.org/CodeSystem/data-absent-reason'" then
+                {
                     coding.code as code where "code = 'unknown'" then
                     {
                         procedure -> data.blockindex = 1;
@@ -176,6 +185,7 @@ group TransformOperationTherapieCTS(source src: Bundle, target tgt: BackboneElem
                 };
             };    
 
+            
             // Art der Resektion
             procedure -> tgt.data as data then
             {
@@ -214,6 +224,7 @@ group TransformOperationTherapieCTS(source src: Bundle, target tgt: BackboneElem
                 };
             };
             
+
             // Lymphadenektomie - extension:lymphadenektomie
             procedure -> tgt.data as data then
             {
