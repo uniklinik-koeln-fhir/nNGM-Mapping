@@ -242,15 +242,14 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 
         /* ------------------------------ Composition ---------------------------- */
         // Meta
+        src -> compositionBefund.title = 'Befund Pseudonymisiert';
         src -> compositionBefund.id = uuid();
         src -> compositionBefund.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert';
         src -> compositionBefund.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'molpatho-befund');
+        src -> entryBefund.request as request, request.method = 'PUT', request.url = evaluate(compositionBefund, '\'Composition/\' + $this.id');
 
         // Category idat or psn depends on which type of patient/consent is in the bundle
         src -> compositionBefund.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
-
-        // Title
-        src -> compositionBefund.title = 'Befund Pseudonymisiert';
 
         // Identifier i.e. Case ID
         src -> compositionBefund.identifier = create('Identifier') as FallIdentifier,
@@ -289,58 +288,67 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 
             /* ------------------------------ Resources ---------------------------- */
             // Immunhistochemie (Befund.diagnostik.immunhistochemie)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save' and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save' and data.exists()" ->
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'immunhistochemie', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'immunhistochemie') then
             {
-                src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund, diagnosticSection);
-                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund, nestedSection);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
             };
 
             // Histologie (Befund.diagnostik.histologie)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-HL' + %index.formIndex.toString() and type = 'save' and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-HL' + %index.formIndex.toString() and type = 'save' and data.exists()" -> 
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'histologie', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'histologie') then
             {
-                src then TransformBundleHistologie(operations, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleHistologie(operations, bundleBefund, compositionBefund, nestedSection);
+                // note that Histologie needs no reference to specimen of Anforderung
             };
 
             // Molekularpathologie (Befund.diagnostik.molekularpathologie)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'  and data.exists()" -> 
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'molekularpathologie', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie') then
             {
-                src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, diagnosticSection);
-                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, nestedSection);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
             };
 
             // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'  and data.exists()" -> 
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'ngs-lung-panel', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'ngs-lung-panel') then
             {
-                src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, nestedSection, index);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
             };
 
             // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'  and data.exists()" -> 
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'fusion-ngs', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'fusion-ngs') then
             {
-                src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, nestedSection, index);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
             };
 
             // Fast Track (Befund.diagnostik.fast-track)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'  and data.exists()" -> 
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'fast-track', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'fast-track') then
             {
-                src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, diagnosticSection);
-                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, nestedSection);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
             };
 
             // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'  and data.exists()" -> 
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'sonstige-untersuchungen', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'sonstige-untersuchungen') then
             {
-                src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, nestedSection, index);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
             };
             
             // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'  and data.exists()" -> 
+                diagnosticSection.section = create('BackboneElement') as nestedSection, nestedSection.title = 'liquid-biopsy', nestedSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'liquid-biopsy') then
             {
-                src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+                src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, nestedSection, index);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
             };
 
             src then IncrementFormIndex(src, index);
@@ -712,7 +720,7 @@ group SetBooleanToTrue(source src: BackboneElement, target boolean: Boolean)
 }
 
 // Get the Specimen referenced in composition:antrag.section:biopsy.section:anforderung and set reference to it
-group SetReferenceToAnforderungSpecimen(source src: Bundle, source bundleBefund: Bundle, target compositionBefund: Composition, target diagnosticSection: BackboneElement)
+group SetReferenceToAnforderungSpecimen(source src: Bundle, source bundleBefund: Bundle, target compositionBefund: Composition, target diagnosticSection: BackboneElement, target nestedSection: BackboneElement)
 {
     // find antragComposition according to fallnummer (of current compositionBefund)
     src.entry as srcEntry, srcEntry.resource as bundle, bundle.entry as bundleEntry, 
@@ -728,26 +736,22 @@ group SetReferenceToAnforderungSpecimen(source src: Bundle, source bundleBefund:
             // find anforderungSection
             biopsySection.section as anforderungSection, anforderungSection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'anforderung')" then
             {
-                // get reference of Specimen
+                // get reference of Specimen (which includes its id)
                 anforderungSection.entry as entry, entry.reference as specimenReference where "reference.contains('Specimen')" then
                 {
-                    // get last added nestedSection
-                    diagnosticSection.section as currentSection where "section.last()" then
+                    // get all Observations from nestedSection
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as observation where "resource is Observation and resource.id = %sectionReference.split(\'/\').last()" then
                     {
-                        // get all Observations from this section
-                        currentSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as observation where "resource is Observation and resource.id = %sectionReference.split(\'/\').last()" then
-                        {
-                            // create Reference and set to Specimen
-                            src then CreateObservationReferenceToSpecimen(specimenReference, observation);
-                        }; 
+                        // for each Observation: create Reference and set to Specimen
+                        src then CreateObservationReferenceToSpecimen(specimenReference, observation);
+                    }; 
 
-                        // get all DiagnosticReports from this section
-                        currentSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.id = %sectionReference.split(\'/\').last()" then
-                        {
-                            // create Reference and set to Specimen
-                            src then CreateDiagnosticReportReferenceToSpecimen(specimenReference, diagnosticReport);
-                        }; 
-                    };
+                    // get all DiagnosticReports from this section
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.id = %sectionReference.split(\'/\').last()" then
+                    {
+                        // for each DiagnosticReport: create Reference and set to Specimen
+                        src then CreateDiagnosticReportReferenceToSpecimen(specimenReference, diagnosticReport);
+                    }; 
                 };
             };
         };
