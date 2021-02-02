@@ -352,7 +352,7 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
             // };
 
             // for each added section: set ServiceRequest (from Anforderung) references to created resources
-            diagnosticSection.section where "section.code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections'" then SetReferenceToBefundResources(tgt, bundleBefund, compositionBefund, diagnosticSection);
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections'" then SetReferenceToBefundResources(tgt, nestedSection, compositionBefund, diagnosticSection);
             
             src then IncrementFormIndex(src, index);
         };
@@ -773,7 +773,7 @@ group CreateDiagnosticReportReferenceToSpecimen(source specimenReference: string
 }
 
 // Get the ServiceRequest referenced in composition:antrag.section:biopsy.section:anforderung and set its references to all Observations and DiagnosticReports from Befund
-group SetReferenceToBefundResources(source src: Bundle, source bundleBefund: Bundle, target compositionBefund: Composition, target diagnosticSection: BackboneElement)
+group SetReferenceToBefundResources(source src: Bundle, source nestedSection: BackboneElement, target compositionBefund: Composition, target diagnosticSection: BackboneElement)
 {
     // find antragComposition according to fallnummer (of current compositionBefund)
     src.entry as srcEntry, srcEntry.resource as bundle, bundle.entry as bundleEntry, 
@@ -789,15 +789,33 @@ group SetReferenceToBefundResources(source src: Bundle, source bundleBefund: Bun
             // find anforderungSection
             biopsySection.section as anforderungSection, anforderungSection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'anforderung')" then
             {
-                // get ServiceRequest
-                    // testung or tumorblock
-                        // http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung
-                        // http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock
-                src -> compositionBefund.id = 'schmöp';
-                // for each Observation from Befund: create Reference to it
-                // for each DiagnosticReport from Befund: create Reference to it
-                // both: SR.reasonReference
+                // get ServiceRequest (referenced in current anforderungSection)
+                src.entry as srcEntry, srcEntry.resource as bundle, bundle.entry as bundleEntry, 
+                bundleEntry.resource as serviceRequest, serviceRequest where "id = %anforderungSection.entry.where(reference.contains('ServiceRequest')).reference.split(\'/\').last()" then
+                {
+                    // for each Observation: create and set Reference to it in ServiceRequest
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as observationReference where "reference.contains('Observation')" then
+                    {
+                        src then CreateServiceRequestReferenceToObservation(observationReference, serviceRequest);
+                    };
+
+                    // for each DiagnosticReport: create and set Reference to it in ServiceRequest
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as diagnosticReportReference where "reference.contains('DiagnosticReport')" then
+                    {
+                        src then CreateServiceRequestReferenceToDiagnosticReport(diagnosticReportReference, serviceRequest);
+                    };
+                };
             };
         };
     };
+}
+
+group CreateServiceRequestReferenceToObservation(source observationReference: string, target serviceRequest: ServiceRequest)
+{
+    observationReference -> serviceRequest.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(observationReference, '\'Observation/\' + $this.split(\'/\').last()');
+}
+
+group CreateServiceRequestReferenceToDiagnosticReport(source diagnosticReportReference: string, target serviceRequest: ServiceRequest)
+{
+    diagnosticReportReference -> serviceRequest.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(diagnosticReportReference, '\'DiagnosticReport/\' + $this.split(\'/\').last()');
 }
