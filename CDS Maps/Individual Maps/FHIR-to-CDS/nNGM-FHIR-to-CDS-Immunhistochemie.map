@@ -35,8 +35,10 @@ group TransformIHCDiagnosticReportCDS(source diagnosticReport: DiagnosticReport,
 //------------------------ Observation ------------------------
 group TransformIHCObservationCDS(source observation: Observation, target tgt: BackboneElement)
 {
-    // Standort and SOP is the same for every Observation
-    observation then TransoformIHCStandortSOPEndDateCDS(observation, tgt);
+    // Standort, SOP and EndDate is the same for every Observation
+    observation then TransformIHCStandortSOPEndDateCDS(observation, tgt);
+    // Status and Status.Extension is the same for every Observation
+    observation then TransformIHCStatusAndExtensionCDS(observation, tgt);
 
     observation where "code.coding.code = 'BRAF'" then TransformIHCObservationBRAFCDS(observation, tgt);
     observation where "code.coding.code = 'CK7'" then TransformIHCObservationCK7CDS(observation, tgt);
@@ -1271,7 +1273,7 @@ group TransformIHCObservationROS1CDS(source observation: Observation, target tgt
 }
 
 // Helper function
-group TransoformIHCStandortSOPEndDateCDS(source observation: Observation, target tgt: BackboneElement)
+group TransformIHCStandortSOPEndDateCDS(source observation: Observation, target tgt: BackboneElement)
 {
     // SOP number
     observation->tgt.data as data then
@@ -1319,6 +1321,43 @@ group TransoformIHCStandortSOPEndDateCDS(source observation: Observation, target
             observation->data.groupindex = 0;
             observation->data.itemid = 'id_2521';
             observation->data.values as values, values.value = endDate;
+        };
+    };
+}
+
+group TransformIHCStatusAndExtensionCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // Durchführung
+    observation.status as status where "%tgt.data.where(itemid = 'id_2520').exists().not()" -> tgt.data as data then
+    {
+        observation -> data.blockindex = 15;
+        observation -> data.groupindex = 0;
+        observation -> data.itemid = 'id_2520';
+
+        status where "$this = 'registered'" -> data.values as values, values.value = 'in Bearbeitung';
+        status where "$this = 'final'" -> data.values as values, values.value = 'abgeschlossen';
+    };
+
+    
+    observation.status as status, status.extension as statusAbschluss, statusAbschluss where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss'" then
+    {
+        // Abschluss
+        statusAbschluss.extension as statusExtension, statusExtension where "url = 'status' and %tgt.data.where(itemid = 'id_2462').exists().not()", statusExtension.valueCodeableConcept as vcc,
+            vcc.coding as coding, coding.code as code -> tgt.data as data then
+        {
+            observation -> data.blockindex = 15;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2462';
+            observation -> data.values as values, values.value = code;
+        };
+
+        // Datum des Abschlusses
+        statusAbschluss.extension as datumExtension, datumExtension where "url = 'datum' and %tgt.data.where(itemid = 'id_2521').exists().not()", datumExtension.valueDate as date -> tgt.data as data then
+        {
+            observation -> data.blockindex = 15;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2521';
+            observation -> data.values as values, values.value = date;
         };
     };
 }
