@@ -301,41 +301,42 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
                 src then TransformBundleHistologie(operations, bundleBefund, compositionBefund, diagnosticSection);
             };
 
-            // // Molekularpathologie (Befund.diagnostik.molekularpathologie)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
-            // {
-            //     src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
+            // Molekularpathologie (Befund.diagnostik.molekularpathologie)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, diagnosticSection);
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-            // // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
-            // {
-            //     src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
 
-            // // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
-            // {
-            //     src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
 
-            // // Fast Track (Befund.diagnostik.fast-track)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
-            // {
-            //     src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
+            // Fast Track (Befund.diagnostik.fast-track)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-            // // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
-            // {
-            //     src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
             
-            // // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
-            // {
-            //     src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
 
             src then IncrementFormIndex(src, index);
         };
@@ -732,7 +733,14 @@ group SetReferenceToAnforderungSpecimen(source src: Bundle, source bundleBefund:
                         currentSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as observation where "resource is Observation and resource.id = %sectionReference.split(\'/\').last()" then
                         {
                             // create Reference and set to Specimen
-                            src then CreateReferenceToSpecimen(specimenReference, observation);
+                            src then CreateObservationReferenceToSpecimen(specimenReference, observation);
+                        }; 
+
+                        // get all DiagnosticReports from this section
+                        currentSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.id = %sectionReference.split(\'/\').last()" then
+                        {
+                            // create Reference and set to Specimen
+                            src then CreateDiagnosticReportReferenceToSpecimen(specimenReference, diagnosticReport);
                         }; 
                     };
                 };
@@ -742,7 +750,12 @@ group SetReferenceToAnforderungSpecimen(source src: Bundle, source bundleBefund:
 }
 
 // create Reference and set to Specimen
-group CreateReferenceToSpecimen(source specimenReference: string, target observation: Observation)
+group CreateObservationReferenceToSpecimen(source specimenReference: string, target observation: Observation)
 {
     specimenReference -> observation.specimen = create('Reference') as specimen, specimen.reference = evaluate(specimenReference, '\'Specimen/\' + $this.split(\'/\').last()');
+}
+
+group CreateDiagnosticReportReferenceToSpecimen(source specimenReference: string, target diagnosticReport: DiagnosticReport)
+{
+    specimenReference -> diagnosticReport.specimen = create('Reference') as specimen, specimen.reference = evaluate(specimenReference, '\'Specimen/\' + $this.split(\'/\').last()');
 }
