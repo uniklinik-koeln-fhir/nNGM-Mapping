@@ -3,7 +3,7 @@
 
 /*
     TODO
-    - Datum der Änderung (id_1465) displays same value than Therapiebeginn (id_1246), error explained in CDS-to-FHIR map
+    - Für die Erhaltungstherapie verabreichtes Medikament is not working
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieCTS" = nNGM_Mapping_SystemischeTherapieCTS
@@ -242,7 +242,7 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
             // Off-Label-Behandlung
             medicationAdministration -> tgt.data as data then
             {
-                medicationAdministration.extension as offLabelTherapie then
+                medicationAdministration.extension as offLabelTherapie where "offLabelTherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/OffLabelTherapie'" then
                 {
                     offLabelTherapie.valueBoolean as valueBoolean where "valueBoolean = true" then
                     {
@@ -265,7 +265,7 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
             // Therapie innerhalb einer klinischen Studie
             medicationAdministration -> tgt.data as data then
             {
-                medicationAdministration.extension as studientherapie, studientherapie.extension as teilnahme where "extension.url = 'teilnahme'" then
+                medicationAdministration.extension as studientherapie, studientherapie.extension as teilnahme then
                 {
                     teilnahme.valueBoolean as valueBoolean where "valueBoolean = true" then
                     {
@@ -288,22 +288,19 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
             // Studienname
             medicationAdministration -> tgt.data as data then
             {
-                medicationAdministration.extension as studientherapie, studientherapie.extension as studie where "extension.url = 'studie'" then
+                medicationAdministration.extension as studientherapie, studientherapie.extension as studie then
                 {
-                    medicationAdministration.extension as studientherapie, studientherapie.extension as teilnahme where "extension.url = 'teilnahme' and extension.valueBoolean = true" then
+                    studie.valueReference as valueReference, valueReference.display as display then
                     {
-                        studie.valueReference as valueReference, valueReference.display as display then
-                        {
-                            medicationAdministration -> data.blockindex = 2;
-                            medicationAdministration -> data.groupindex = 0;
-                            medicationAdministration -> data.itemid = 'id_1244';
-                            display -> data.values as values, values.value = display;
-                        };
+                        medicationAdministration -> data.blockindex = 2;
+                        medicationAdministration -> data.groupindex = 0;
+                        medicationAdministration -> data.itemid = 'id_1244';
+                        display -> data.values as values, values.value = display;
                     };
                 };
             };
 
-            // Therapieschema
+            // Neues Therapieschema
             medicationAdministration -> tgt.data as data then
             {
                 medicationAdministration.medicationCodeableConcept as mcc, mcc.text as text where "text = 'Therapieschema'" then
@@ -311,23 +308,42 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
                     medicationAdministration -> data.blockindex = 3;
                     medicationAdministration -> data.groupindex = 0;
                     medicationAdministration -> data.itemid = 'id_1241';
-                    coding.code as code -> data.values as values, values.value = code;
+                    mcc.coding as coding, coding.code as code -> data.values as values, values.value = code;
                 };
             };
+
+            // Neues Therapieschema
+            medicationAdministration -> tgt.data as data then
+            {
+                medicationAdministration.medicationCodeableConcept as mcc, mcc.text as text where "text = 'NeuesTherapieschema'" then
+                {
+                    medicationAdministration -> data.blockindex = 3;
+                    medicationAdministration -> data.groupindex = 0;
+                    medicationAdministration -> data.itemid = 'id_1359';
+                    mcc.coding as coding, coding.code as code -> data.values as values, values.value = code;
+                };
+            };
+            
 
             // Änderung des Therapieschemas (Ja or Nein)
             medicationAdministration -> tgt.data as data then
             {
-                medicationAdministration -> data.blockindex = 3;
-                medicationAdministration -> data.groupindex = 0;
-                medicationAdministration -> data.itemid = 'id_1488';
-                medicationAdministration -> data.values as values then
+                medicationAdministration.category as category, category.coding as coding then
                 {
-                    medicationAdministration -> values.value = 'no';
-
-                    medicationAdministration.dosage as dosage, dosage.extension as anzahlZyklen, anzahlZyklen.valueInteger as integer then
+                    coding where "$this.code = 'C25446'" then
                     {
-                        medicationAdministration -> values.value = 'yes';
+                        medicationAdministration -> data.blockindex = 3;
+                        medicationAdministration -> data.groupindex = 0;
+                        medicationAdministration -> data.itemid = 'id_1488';
+                        medicationAdministration -> data.values as values, values.value = 'yes'; 
+                    };
+
+                    coding where "$this.code = 'C85582'" then
+                    {
+                        medicationAdministration -> data.blockindex = 3;
+                        medicationAdministration -> data.groupindex = 0;
+                        medicationAdministration -> data.itemid = 'id_1488';
+                        medicationAdministration -> data.values as values, values.value = 'no'; 
                     };
                 };
             };
@@ -335,12 +351,12 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
             // Anzahl der Zyklen (ohne Erhaltung)
             medicationAdministration -> tgt.data as data then
             {
-                medicationAdministration.dosage as dosage, dosage.extension as anzahlZyklen, anzahlZyklen.valueInteger as integer then
+                medicationAdministration.dosage as dosage, dosage.rateQuantity as rate, rate.value as value then
                 {
                     medicationAdministration -> data.blockindex = 3;
                     medicationAdministration -> data.groupindex = 0;
                     medicationAdministration -> data.itemid = 'id_1250';
-                    integer -> data.values as values, values.unit = 'mm', values.value = integer;
+                    value -> data.values as values, values.unit = 'mm', values.value = value;
                 };
             };
 
@@ -356,17 +372,6 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
                 };
             };
 
-            // Neues Therapieschema
-            medicationAdministration -> tgt.data as data then
-            {
-                medicationAdministration.medicationCodeableConcept as mcc, mcc.text as text where "text = 'NeuesTherapieschema'" then
-                {
-                    medicationAdministration -> data.blockindex = 3;
-                    medicationAdministration -> data.groupindex = 0;
-                    medicationAdministration -> data.itemid = 'id_1359';
-                    coding.code as code -> data.values as values, values.value = code;
-                };
-            };
 
             // Datum der Änderung
             medicationAdministration -> tgt.data as data then
@@ -408,7 +413,7 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
             {
                 medicationAdministration.extension as erhaltungstherapie, erhaltungstherapie.extension as medikament where "extension.url = 'medikament'" then
                 {
-                    medicationAdministration.extension as erhaltungstherapie, erhaltungstherapie.extension as option where "extension.url = 'option' and extension.valueBoolean = true" then
+                    medicationAdministration.extension as erhaltungstherapie where "extension.url = 'option' and extension.valueBoolean = true" then
                     {
                         medicationAdministration -> data.blockindex = 4;
                         medicationAdministration -> data.groupindex = 0;
