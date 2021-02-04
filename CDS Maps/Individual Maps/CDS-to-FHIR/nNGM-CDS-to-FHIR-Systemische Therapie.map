@@ -4,16 +4,7 @@
 /*
     TODO
     MedicationAdministration
-    - what to do with uuid_nngm_MedicationAdministration_changed?
-    - Missing extension.url for Anzahl der Zyklen (id_1250)
-        profile requires dosage.rate.value, .system and .code
-    - Missing valueSet for id_2342
-    - When 'Abbruch wegen Progress' option is checked in Art des Therapieendes (id_1356), it displays a field named 'Datum Progess' (blockindex = 6, groupindex = 0, itemid = 'sy_date_progress'),
-        but its information is not on Seatable nor Master excel file, so it's not being mapped
     - id_1465 isn't mapping properly because it cannot override value already set by id_1246, even though it's effectivePeriod.start and id_1246 it's effective.start
-
-    EpisodeOfCare
-    - what to do with uuid_nngm_dateOfProgress (and/or uuid_nngm_dateOfProgress2)?
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
@@ -53,10 +44,7 @@ group CreateMedicationAdministrationSY(source operations: BackboneElement, targe
                                                         or blockindex = 2 and groupindex = 0 and itemid = 'id_1244'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'id_1241'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'id_1250'
-                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1464'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'id_1488'
-                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1359'
-                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1465'
                                                         or blockindex = 4 and groupindex = 0 and itemid = 'id_1357'
                                                         or blockindex = 4 and groupindex = 0 and itemid = 'id_2342'
                                                         or blockindex = 6 and groupindex = 0 and itemid = 'id_1356'
@@ -86,24 +74,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
     // Access data
     operations.data as data then
     {
-        // Category
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1488'" then
-        {
-            values.value as value where "$this.value = 'yes'" then 
-            {
-                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C25446');
-            };
-
-            values.value as value where "$this.value = 'no'" then 
-            {
-                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C85582');
-            };
-
-            values.value as value where "$this.value != 'yes' and $this.value != 'no'" then 
-            {
-                value -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
-            };
-        };
 
         // ID + Composition insert
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_nngm_MedicationAdministration'" then
@@ -209,11 +179,11 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         // Therapiebeginn: effective.start
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1246'" then
         {
-            values.value as value -> tgt.effective as effective, effective.start = dateOp(value, 'dateTime');
+            values.value as value -> tgt.effective = create('Period') as effective, effective.start = dateOp(value, 'dateTime');
         }; 
 
-        // Therapieende: effective.end
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247'" then
+        // Therapieende: effective.end, only if Therapiebeginn from id_1246 exists
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247' and blockindex = 2 and %tgt.effective.start.exists()" then
         {
             values.value as value -> tgt.effective as effective collate, effective.end = dateOp(value, 'dateTime');
         };
@@ -289,19 +259,16 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         // Therapieschema: medicationValueCodeableConcept
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1241'" then
         {
-            values.value as value -> tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
-
             values.value as value where "$this.value.exists()" then
             {
                 value ->    tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
-                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept collate,
+                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept,
                             medicationCodeableConcept.text = 'Therapieschema',
                             medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
             };
         };
 
         // Anzahl der Zyklen (ohne Erhaltung): dosage.valueInteger id_1250
-        // TODO: code may be incorrect
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1250'" then
         {
             values.value as value ->    tgt.dosage as dosage,
@@ -317,6 +284,25 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
             values.value as value where "$this.value = 'yes'" then
             {
                 operations then MapAnderungDesSchemasElementsMedicationAdministrationSY(operations, tgt);
+            };
+
+            values.value as value where "$this.value = 'no'" then 
+            {
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C85582');
+            };
+        };
+
+        // Category
+        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1488'" then
+        {
+            values.value as value where "$this.value = 'yes'" then 
+            {
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C25446');
+            };
+
+            values.value as value where "$this.value = 'no'" then 
+            {
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C85582');
             };
         };
 
@@ -355,8 +341,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
                          statusReasonCoding.code = 'Regul\u00e4res Ende',
                          statusReasonCoding.display = 'Regul\u00e4res Ende';
-                
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Abbruch wegen Nebenwirkungen'" then
@@ -367,8 +351,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
                          statusReasonCoding.code = 'nebenwirkungenab',
                          statusReasonCoding.display = 'Abbruch wegen Nebenwirkungen';
-                
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Pause wegen Nebenwirkungen'" then
@@ -380,7 +362,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.code = 'nebenwirkungenpa',
                          statusReasonCoding.display = 'Pause wegen Nebenwirkungen';
                 
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
                 operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
             };
 
@@ -393,7 +374,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.code = 'progress',
                          statusReasonCoding.display = 'Progress';
                 
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
                 operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
             };
 
@@ -406,7 +386,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.code = 'ablehnungPatient',
                          statusReasonCoding.display = 'Ablehnung durch den Patienten';
                 
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Vielversprechendere Therapieoption'" then
@@ -418,7 +397,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.code = 'vielversprechendereTherapieoption',
                          statusReasonCoding.display = 'Vielversprechendere Therapieoption';
                 
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Patient verstorben'" then
@@ -430,7 +408,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.code = 'verstorben',
                          statusReasonCoding.display = 'Patient verstorben';
                 
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
             };
 
             values.value as value where "$this.value = 'Sonstiges'" then
@@ -442,7 +419,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.code = 'sonstiges',
                          statusReasonCoding.display = 'Sonstiges';
                 
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
             };
 
             values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
@@ -454,7 +430,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
                          statusReasonCoding.code = 'not-applicable',
                          statusReasonCoding.display = 'not-applicable';
                 
-                operations then MapAnderungdesTherapieSchemas(operations, tgt);
             };
         };
 
@@ -463,10 +438,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         {
             values.value as value ->    tgt.note as note,
                                         note.text = value;
-        };
-
-        // Referenzen
-        // Observation
+        };        
 
     };
 }
@@ -508,12 +480,12 @@ group MapStudiennameMedicationAdministrationSY(source operations: BackboneElemen
     };
 }
 
-/* ------------------------------ MedicationAdministration - Änderung des TherapieSchemas ---------------------------- */
-group MapAnderungdesTherapieSchemas(source operations: BackboneElement, target tgt: MedicationAdministration)
+
+/* ------------------------------ MedicationAdministration - Elements displayed when Änderung des Schemas is 'Ja' ---------------------------- */
+group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
     operations.data as data then
     {   
-        
         // Grund für die Änderung des Therapieschemas: statusReason.text
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1464'" then
         {
@@ -524,15 +496,7 @@ group MapAnderungdesTherapieSchemas(source operations: BackboneElement, target t
                          statusReason.text =  value;
             };
         };
-    };
-}
-
-
-/* ------------------------------ MedicationAdministration - Elements displayed when Änderung des Schemas is 'Ja' ---------------------------- */
-group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
-{
-    operations.data as data then
-    {   
+        
         // Neues Therapieschema: medicationCodeableConcept
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1359'" then
         {
@@ -541,7 +505,7 @@ group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations:
             values.value as value where "$this.value.exists()" then
             {
                 value ->    tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
-                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept collate,
+                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept,
                             medicationCodeableConcept.text = 'NeuesTherapieschema',
                             medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
             };
@@ -552,8 +516,8 @@ group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations:
         {
             values.value as value where "$this.value.exists()" then
             {
-                value ->    tgt.effectivePeriod = create('Period') as effectivePeriod,
-                            effectivePeriod.start = dateOp(value, 'dateTime');
+                value ->    tgt.effective = create('Period') as effective,
+                            effective.start = dateOp(value, 'dateTime');
             };
         };
     };
