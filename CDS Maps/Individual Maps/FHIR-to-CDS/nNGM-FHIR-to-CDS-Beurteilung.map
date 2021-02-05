@@ -9,167 +9,118 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformBeurteilungCDS(source entry: BackboneElement, target tgt: BackboneElement, target index: RepeatIndex)
 {
-    /* ------------------------------ DiagnosticReport ---------------------------- */
-    entry.resource as diagnosticreport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/beurteilung'" then
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/beurteilung'"
+        then TransformBUDiagnosticReportCDS(diagnosticReport, tgt, index);
+
+    entry.resource as serviceRequest where "resource is ServiceRequest and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/beurteilung'"
+        then TransformBUServiceRequestCDS(serviceRequest, tgt);
+}
+
+/* ------------------------------ DiagnosticReport ---------------------------- */
+group TransformBUDiagnosticReportCDS(source diagnosticReport: DiagnosticReport, target tgt: BackboneElement, target index: RepeatIndex)
+{
+    //Erstelldatum 
+    diagnosticReport->tgt.data as data then
     {
-        //Erstelldatum 
-        diagnosticreport->tgt.data as data then
+        diagnosticReport.effectiveDateTime as dt then
         {
-            diagnosticreport.effectiveDateTime as dt then
-            {
-                diagnosticreport->data.blockindex = 0;
-                diagnosticreport->data.groupindex = 0;
-                diagnosticreport->data.repeatindex = evaluate(index, '$this.sectionIndex');
-                diagnosticreport->data.itemid = 'bu_creation_date';
-                dt->data.values as values, values.value = dt;
-            };
-        };
-
-        //Version
-        diagnosticreport->tgt.data as data then
-        {
-            diagnosticreport.status as status then
-            {
-                diagnosticreport->data.blockindex = 0;
-                diagnosticreport->data.groupindex = 0;
-                diagnosticreport->data.repeatindex = evaluate(index, '$this.sectionIndex');
-                diagnosticreport->data.itemid = 'bu_version';
-                status->data.values as values, values.value = status;
-            };
-        };
-
-        //Klinische Information
-        diagnosticreport->tgt.data as data then
-        {
-            diagnosticreport.conclusion as conclusion then
-            {
-                diagnosticreport->data.blockindex = 0;
-                diagnosticreport->data.groupindex = 0;
-                diagnosticreport->data.repeatindex = evaluate(index, '$this.sectionIndex');
-                diagnosticreport->data.itemid = 'id_1352';
-                conclusion->data.values as values, values.value = conclusion;
-            };
-        };
-
-        //Empfehlung einer systemischen Therapie
-        diagnosticreport->tgt.data as data then
-        {
-            diagnosticreport.conclusionCode as conclusionCode, conclusionCode.extension as beurteilung, beurteilung.valueBoolean as empfehlung where "$this.value = true" then
-            {
-                diagnosticreport->data.blockindex = 0;
-                diagnosticreport->data.groupindex = 0;
-                diagnosticreport->data.repeatindex = evaluate(index, '$this.sectionIndex');
-                diagnosticreport->data.itemid = 'id_2405';
-                empfehlung->data.values as values, values.value = 'Ja';
-            };
-
-            diagnosticreport.conclusionCode as conclusionCode, conclusionCode.extension as beurteilung, beurteilung.valueBoolean as empfehlung where "$this.value = false" then
-            {
-                diagnosticreport->data.blockindex = 0;
-                diagnosticreport->data.groupindex = 0;
-                diagnosticreport->data.repeatindex = evaluate(index, '$this.sectionIndex');
-                diagnosticreport->data.itemid = 'id_2405';
-                empfehlung->data.values as values, values.value = 'Nein';
-            };
+            diagnosticReport->data.blockindex = 0;
+            diagnosticReport->data.groupindex = 0;
+            diagnosticReport->data.repeatindex = evaluate(index, '$this.sectionIndex');
+            diagnosticReport->data.itemid = 'bu_creation_date';
+            dt->data.values as values, values.value = dt;
         };
     };
 
-    /* ------------------------------ ServiceRequest ---------------------------- */
-    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'C125009' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
+    //Version
+    diagnosticReport->tgt.data as data then
     {
-        //Durchfuehrung
-        serviceRequest -> tgt.data as data then
+        diagnosticReport.status as status then
         {
-            serviceRequest.status as status where "$this.status = 'active'" then
-            {
-                serviceRequest ->  data.blockindex = 1;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid = 'id_2523';
-                status -> data.values as values,values.value = 'in Bearbeitung';
-            };
-            serviceRequest.status as status where "$this.status = 'completed'" then
-            {
-                serviceRequest ->  data.blockindex = 1;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid = 'id_2523';
-                status -> data.values as values,values.value = 'abgeschlossen';
-            };
+            diagnosticReport->data.blockindex = 0;
+            diagnosticReport->data.groupindex = 0;
+            diagnosticReport->data.repeatindex = evaluate(index, '$this.sectionIndex');
+            diagnosticReport->data.itemid = 'bu_version';
+            status where "$this = 'final'" ->data.values as values, values.value = 'final';
+            status where "$this = 'preliminary'" ->data.values as values, values.value = 'vorl\u00e4ufig';
+        };
+    };
+
+    //Klinische Information
+    diagnosticReport->tgt.data as data then
+    {
+        diagnosticReport.conclusion as conclusion then
+        {
+            diagnosticReport->data.blockindex = 0;
+            diagnosticReport->data.groupindex = 0;
+            diagnosticReport->data.repeatindex = evaluate(index, '$this.sectionIndex');
+            diagnosticReport->data.itemid = 'id_1352';
+            conclusion->data.values as values, values.value = conclusion;
+        };
+    };
+
+    //Empfehlung einer systemischen Therapie
+    diagnosticReport->tgt.data as data then
+    {
+        diagnosticReport.conclusionCode as conclusionCode, conclusionCode.extension as beurteilung, beurteilung.valueBoolean as empfehlung then
+        {
+            diagnosticReport->data.blockindex = 0;
+            diagnosticReport->data.groupindex = 0;
+            diagnosticReport->data.repeatindex = evaluate(index, '$this.sectionIndex');
+            diagnosticReport->data.itemid = 'id_2405';
+            empfehlung where "$this = true"->data.values as values, values.value = 'Ja';
+            empfehlung where "$this = false"->data.values as values, values.value = 'Nein';
+        };
+    };
+}
+
+/* ------------------------------ ServiceRequest ---------------------------- */
+group TransformBUServiceRequestCDS(source serviceRequest: ServiceRequest, target tgt: BackboneElement)
+{
+    //Durchfuehrung
+    serviceRequest -> tgt.data as data then
+    {
+        serviceRequest.status as status then
+        {
+            serviceRequest ->  data.blockindex = 1;
+            serviceRequest ->  data.groupindex = 0;
+            serviceRequest ->  data.itemid = 'id_2523';
+            status where "$this = 'active'"-> data.values as values,values.value = 'in Bearbeitung';
+            status where "$this = 'completed'"-> data.values as values,values.value = 'abgeschlossen';
+        };
+    };
+
+    serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss'" then
+    {
+        // Abschluss  
+        statusAbschluss.extension as statusExtension, statusExtension where "url = 'status'" -> tgt.data as data then
+        {
+            serviceRequest ->  data.blockindex = 1;
+            serviceRequest ->  data.groupindex = 0;
+            serviceRequest ->  data.itemid = 'bu_closing';
+            statusExtension.valueCodeableConcept as vcc, vcc.coding as coding,
+            coding.code as code  -> data.values as values,values.value = code;
         };
 
-        //Abschluss 
-        serviceRequest -> tgt.data as data then
+        // Datum des Abschlusses
+        statusAbschluss.extension as datumExtension, datumExtension where "url = 'datum'" -> tgt.data as data then
         {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
-            {
-                statusextension where "$this.url ='status'" then
-                {
-                    serviceRequest ->  data.blockindex = 1;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'bu_closing';
-                    statusextension.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code  -> data.values as values,values.value = code;
-                };
-            };
+            serviceRequest ->  data.blockindex = 1;
+            serviceRequest ->  data.groupindex = 0;
+            serviceRequest ->  data.itemid = 'id_2524';
+            datumExtension.valueDate as valueDate -> data.values as values,values.value = valueDate;
         };
-    
-        //Datum des Abschlusses 
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
-            {
-                datumextension where "$this.url ='datum'" then
-                {
-                    serviceRequest ->  data.blockindex = 1;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2524';
-                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
-                };
-            };
-        };
-        
-        //Abschluss 
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
-            {
-                datumextension where "$this.url ='http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands'" then
-                {
-                    serviceRequest ->  data.blockindex = 1;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2525';
-                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
-                };
-            };
-        };
-        
-        //Datum des Abschlusses 
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
-            {
-                datumextension where "$this.url ='datum'" then
-                {
-                    serviceRequest ->  data.blockindex = 1;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2521';
-                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
-                };
-            };
-        };
+    };
 
-        serviceRequest -> tgt.data as data then
+    // Datum des Versands
+    serviceRequest -> tgt.data as data then
+    {
+        serviceRequest.extension as datumExtension, datumExtension where "url ='http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/versandDatum'" then
         {
-            serviceRequest.extension as extension then 
-            {
-                extension.valueDateTime as datumversands where "$this.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumversands'" then
-                {
-                    datumversands -> data.blockindex = 1;
-                    datumversands -> data.groupindex = 0;
-                    datumversands -> data.itemid = 'id_2525';
-                    datumversands -> data.values as values, values.value = datumversands;
-                };
-            };
+            serviceRequest ->  data.blockindex = 1;
+            serviceRequest ->  data.groupindex = 0;
+            serviceRequest ->  data.itemid = 'id_2525';
+            datumExtension.valueDate as valueDate -> data.values as values,values.value = valueDate;
         };
     };
 }
