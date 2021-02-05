@@ -1,7 +1,7 @@
 /* Map a Variant Call Format (VCF) file from FHIR resources based on the Clinical Genmoics Implementation Guide (http://hl7.org/fhir/uv/genomics-reporting/) to the CTS_Transport format */
 
 /* TODO
-* CSQ Selection -> 
+* CSQ Selection -> Test single csq by TF selection -> Test multiple csq selection by TF? Does repeatindex still work
 */
 
 /// version = 0.1
@@ -52,14 +52,22 @@ group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
     src -> tgt.operations as operations collate, operations.crfid = '*_LP1';
     src -> tgt.operations as operations collate, operations.type = 'save';
+    
+    src -> tgt.metaInformation as mI, mI.key = 'SourceSystem', mI.value = 'vcf';
 
-    src.records as records, records.sample as sample, sample.sampleId as sampleId  then 
+    src.records as records, records.sample as sample, sample.sampleId as sampleId then 
     {
-        // sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0] + \'-\' + $index.toString()');
-        //sampleId -> tgt.patid = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1]');
+        //PathoPro ID
+        sampleId where "%tgt.metaInformation.where(key='PathoPro_ID').exists().not()" then 
+        {
+            sampleId -> tgt.metaInformation as mI, mI.key = 'PathoPro_ID', mI.value = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0]');
+        };
         
-        // for import testing
-        sampleId -> tgt.patid = '010503888604135f2d65626f885f09971673f3adaef557f610a760904307445bf88d33725039145a807c6bea82df0bbb1a005c412da845f514f396ae03c3b13b5d866c4e3381a2c923abba85d310708825fbc306d6840f2ef4a8a503911354f4a875b51b7a5f38b6645a';
+        //UntersuchungsID
+        sampleId where "%tgt.metaInformation.where(key='Untersuchungs_ID').exists().not()" then 
+        {
+            sampleId -> tgt.metaInformation as mI, mI.key = 'Untersuchungs_ID', mI.value = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[1].split(\'-\')[0]');
+        };
     };
     
     src -> tgt.operations as operations collate then 
