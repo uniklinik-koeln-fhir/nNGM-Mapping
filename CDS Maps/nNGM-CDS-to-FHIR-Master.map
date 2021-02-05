@@ -492,18 +492,16 @@ group MapTNM(source src: CTS_Transport, target tgt: Bundle)
         
         /* ------------------------------ Section ---------------------------- */
         src then InitFormIndex(src, index);
-        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionTNM.section = create('BackboneElement') as sectionTNM then
+        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionTNM.section as compositionSection then
         {
-            /* ------------------------------ TNM ---------------------------- */
-            src -> sectionTNM.title = 'tnm';
-            src -> sectionTNM.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'tnm');
-
-            // TNM
-            src.operations as operations, operations where "crfid = 'TNM' + %index.formIndex.toString() and type = 'save'" then
+            src.operations as operations,
+                    operations where "crfid = 'TNM' + %index.formIndex.toString() and type = 'save'" -> 
+                    compositionTNM.section = create('BackboneElement') as section,
+                    section.title = 'TNM',
+                    section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'tnm') then
             {
-                /* ------------------------------ Resources ---------------------------- */
-                src then TransformBundleTNM(operations, bundleTNM, compositionTNM, sectionTNM);
-            };
+                operations then CreateObservationTNM(operations, bundleTNM, compositionTNM, section);
+            };   
             src then IncrementFormIndex(src, index);
         };  
     };
