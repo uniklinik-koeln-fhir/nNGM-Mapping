@@ -219,18 +219,8 @@ group CreateObservationNGSPanel(source operations: BackboneElement, target bundl
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='ngs_panel_reftranscript'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='ngs_panel_coverage'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_47'
-                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_48')" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
-        {
-            operations then TransformObservationNGSLungPanel(operations, observation, composition, section, index);
-            // operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
-        };
-        operations then IncrementSectionIndex(operations, index);
-    };
-
-    operations then InitSectionIndex(operations, index); // (re)set index to 0
-    operations.data as data, data.values as values where "repeatindex = %index.sectionIndex and (blockindex = 4 and groupindex = 0 and itemid ='id_41'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_48'
+                                                                                                or blockindex = 4 and groupindex = 0 and itemid ='id_41'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_42'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_43'
                                                                                                 or blockindex = 4 and groupindex = 0 and itemid ='id_44'
@@ -241,7 +231,7 @@ group CreateObservationNGSPanel(source operations: BackboneElement, target bundl
     {
         operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
         {
-            operations then TransformObservationNGSLungPanelResearch(operations, observation, composition, section, index);
+            operations then TransformObservationNGSLungPanel(operations, observation, composition, section, index);
             // operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
         };
         operations then IncrementSectionIndex(operations, index);
@@ -249,7 +239,6 @@ group CreateObservationNGSPanel(source operations: BackboneElement, target bundl
 }
 
 /* ----------------------- Observation NGS Panel ---------------------- */
-/* ---------------------- Panel-Gen ---------------------- */
 group TransformObservationNGSLungPanel(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel';
@@ -378,67 +367,6 @@ group TransformObservationNGSLungPanel(source operations: BackboneElement, targe
         data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid ='id_48'" then
         {
             values.value as value -> tgt.note = create('Annotation') as annotation, annotation.text = value;
-        };
-
-        // Referenzen
-        // Specimen is set in Master.map
-
-        // Device
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_device'" then
-        {
-            values.value as value -> tgt.device = create('Reference') as device, device.reference = evaluate(value, '\'Device/\' + $this');
-        };
-
-        // Organization
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
-        {
-            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
-        };
-    };
-}
-
-/* ---------------------- Panel-Gen Forschung ---------------------- */
-group TransformObservationNGSLungPanelResearch(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel';
-
-    // Status and Extension
-    operations then TransformNGSLungPanelStatusAndExtension(operations, tgt);
-
-    //FISH category
-    operations -> tgt.category as category then
-    {
-        operations -> category.coding = create ('Coding') as coding, coding.system = 'http://terminology.hl7.org/CodeSystem/observation-category',
-                                                                    coding.code = 'laboratory';                                                    
-    };
-
-    // Code
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'NGS Panel Forschung'); 
-
-    // Subject
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Method
-    operations -> tgt.method = cc('http://ncit.nci.nih.gov','C101293');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel_research'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-        };
-
-        // SOP-Versionsnummer des Standorts
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2616'" then
-        {
-            values.value as sop -> tgt.component = create('BackboneElement') as componentSop then
-            {
-                sop -> componentSop.valueString = sop;
-                sop -> componentSop.code = cc('http://ncit.nci.nih.gov', 'C48443');
-            };
         };
 
         /* ------------------- Panel-Gen Forschung -------------------- */

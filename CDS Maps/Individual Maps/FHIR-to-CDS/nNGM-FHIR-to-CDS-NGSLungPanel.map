@@ -17,13 +17,8 @@ group TransformNGSLungPanelCDS(source entry: BackboneElement, target tgt: Backbo
     entry.resource as device where "resource is Device and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device/nNGM/ngs-panel'" 
         then TransformLPDeviceCDS(device, tgt);
 
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'
-                                        and resource.code.coding.code = 'NGS Panel'" 
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" 
         then TransformLPObservationCDS(observation, tgt, index);
-
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'
-                                        and resource.code.coding.code = 'NGS Panel Forschung'" 
-        then TransformLPObservationResearchCDS(observation, tgt, index);
 }
 
 /* -------------------------- DiagnosticReport ------------------------ */
@@ -109,7 +104,6 @@ group TransformLPDeviceCDS(source device: Device, target tgt: BackboneElement)
 }
 
 /* ----------------------- Observation NGS Panel ---------------------- */
-/* ------------------- Panel-Gen -------------------- */
 group TransformLPObservationCDS(source observation: Observation, target tgt: BackboneElement, target index: RepeatIndex)
 {
     // Status and Extension
@@ -146,6 +140,7 @@ group TransformLPObservationCDS(source observation: Observation, target tgt: Bac
         };
     };
 
+    /* ------------------- Panel-Gen -------------------- */
     //Gen -> gene-studied -> 4, 0, 0, id_1159
     observation -> tgt.data as data then
     {
@@ -283,148 +278,124 @@ group TransformLPObservationCDS(source observation: Observation, target tgt: Bac
             text -> data.values as values,values.value = text;
         };
     };
-}
 
-/* ------------------- Panel-Gen Forschung -------------------- */
-group TransformLPObservationResearchCDS(source observation: Observation, target tgt: BackboneElement, target index: RepeatIndex)
-{
-    // Status and Extension
-    observation then TransformLPStatusAndExtensionCDS(observation, tgt);
-
-    //SOP-Versionsnummer des Standorts -> 2, 0, id_2616
-    observation -> tgt.data as data then
-    {
-        observation.component as component then
-        {
-            component.code where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2616').exists().not()" then
-            {
-                component.valueString as valueString then 
-                {
-                    observation -> data.blockindex = 2;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid     = 'id_2616';
-                    valueString  -> data.values as values, values.value = valueString;
-                };
-            };
-        };
-    };
-
-    //Genome build -> ref-sequence-assembly -> 4, 0, 0, id_41
-    observation -> tgt.data as data then
-    {
-        observation.component as component, component where "code.coding.code = '62374-4'" then
-        {
-            component.valueString as valueString then 
-            {
-                observation ->  data.blockindex  = 4;
-                observation ->  data.groupindex  = 0;
-                observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation ->  data.itemid      = 'id_41';
-                valueString  -> data.values as values, values.value = valueString;
-            };
-        };
-    };
-    //Chromosom -> chromosome -> 4, 0, 0, id_42
-    observation -> tgt.data as data then
-    {
-        observation.component as component, component where "code.coding.code = 'C13202'" then
-        {
-            component.valueInteger as valueInteger then 
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_42';
-                valueInteger  -> data.values as values, values.value = valueInteger;
-            };
-        };
-    };
-
-    //Position Start/Stop -> exact-start-end.low/high -> 4,0,0,43/44
-    observation.component as component, component where "code.coding.code = '81254-5'" then
-    {
-        component.valueRange as valueRange then 
-        {
-            valueRange.low as lowQty, lowQty.value as lowValue -> tgt.data as data then
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_43';
-                observation -> data.values as values, values.value = lowValue;
-            };
-
-            valueRange.high as highQty, highQty.value as highValue -> tgt.data as data then
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_44';
-                observation -> data.values as values, values.value = highValue;
-            };
-        };
-    };
-
-    //Ref allele (Nukleotid) -> ref-allele -> 4, 0, 0, id_45
-    observation -> tgt.data as data then
-    {
-        observation.component as component, component where "code.coding.code = '69547-8'" then
-        {
-            component.valueString as valueString then 
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_45';
-                valueString  -> data.values as values, values.value = valueString;
-            };
-        };
-    };
-    //Alt allele (Nukleotid) -> alt-alllele -> 4, 0, 0, id_46
-    observation -> tgt.data as data then
-    {
-        observation.component as component, component where "code.coding.code = '69551-0'" then
-        {
-            component.valueString as valueString then 
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_46';
-                valueString -> data.values as values, values.value = valueString;
-            };
-        };
-    };
-    //Reads Ref Allel -> reads-ref-allele -> 4, 0, 0, id_39
-    observation -> tgt.data as data then
-    {
-        observation.component as component, component where "code.coding.code = 'ReadsRefAllel'" then
-        {
-            component.valueInteger as valueInteger then 
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_39';
-                valueInteger -> data.values as values, values.value = valueInteger;
-            };
-        };
-    };
-    //Reads Alt Allel -> reads-alt-allele -> 4, 0, 0, id_40
-    observation -> tgt.data as data then
-    {
-        observation.component as component, component where "code.coding.code = 'ReadsAltAllel'" then
-        {
-            component.valueInteger as valueInteger then 
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_40';
-                valueInteger -> data.values as values, values.value = valueInteger;
-            };
-        };
-    };
+    /* ------------------- Panel-Gen Forschung -------------------- */
+     //Genome build -> ref-sequence-assembly -> 4, 0, 0, id_41
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = '62374-4'" then
+         {
+             component.valueString as valueString then 
+             {
+                 observation ->  data.blockindex  = 4;
+                 observation ->  data.groupindex  = 0;
+                 observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation ->  data.itemid      = 'id_41';
+                 valueString  -> data.values as values, values.value = valueString;
+             };
+         };
+     };
+     //Chromosom -> chromosome -> 4, 0, 0, id_42
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = 'C13202'" then
+         {
+             component.valueInteger as valueInteger then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_42';
+                 valueInteger  -> data.values as values, values.value = valueInteger;
+             };
+         };
+     };
+ 
+     //Position Start/Stop -> exact-start-end.low/high -> 4,0,0,43/44
+     observation.component as component, component where "code.coding.code = '81254-5'" then
+     {
+         component.valueRange as valueRange then 
+         {
+             valueRange.low as lowQty, lowQty.value as lowValue -> tgt.data as data then
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_43';
+                 observation -> data.values as values, values.value = lowValue;
+             };
+ 
+             valueRange.high as highQty, highQty.value as highValue -> tgt.data as data then
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_44';
+                 observation -> data.values as values, values.value = highValue;
+             };
+         };
+     };
+ 
+     //Ref allele (Nukleotid) -> ref-allele -> 4, 0, 0, id_45
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = '69547-8'" then
+         {
+             component.valueString as valueString then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_45';
+                 valueString  -> data.values as values, values.value = valueString;
+             };
+         };
+     };
+     //Alt allele (Nukleotid) -> alt-alllele -> 4, 0, 0, id_46
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = '69551-0'" then
+         {
+             component.valueString as valueString then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_46';
+                 valueString -> data.values as values, values.value = valueString;
+             };
+         };
+     };
+     //Reads Ref Allel -> reads-ref-allele -> 4, 0, 0, id_39
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = 'ReadsRefAllel'" then
+         {
+             component.valueInteger as valueInteger then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_39';
+                 valueInteger -> data.values as values, values.value = valueInteger;
+             };
+         };
+     };
+     //Reads Alt Allel -> reads-alt-allele -> 4, 0, 0, id_40
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = 'ReadsAltAllel'" then
+         {
+             component.valueInteger as valueInteger then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_40';
+                 valueInteger -> data.values as values, values.value = valueInteger;
+             };
+         };
+     };
 }
 
 group TransformLPStatusAndExtensionCDS(source observation: Observation, target tgt: BackboneElement)
