@@ -22,15 +22,15 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
 // Befund
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCDS"
 
 /*
 // Operation
@@ -46,7 +46,7 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 
     src then MapStammdaten(src, tgt);
     src then MapAntrag(src, tgt);
-    //src then MapBefund(src, tgt);
+    src then MapBefund(src, tgt);
     src then MapTNM(src, tgt);
 
     /*
@@ -297,8 +297,8 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
                     {
                         nestedSection then TransformNGSLungPanelCDS(entry, operations, index);
 
-                        entry where "resource is Observation 
-                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+                        entry where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'
+                                    and resource.code.coding.code = 'NGS Panel'" then
                                     IncrementSectionIndex(src, index);
                     };
                 };
@@ -321,7 +321,7 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
                     {
                         nestedSection then TransformFusionNGSCDS(entry, operations, index);
 
-                        entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
+                        entry where "resource is Observation and resource.code.coding.code = 'Sonstige Fusion NGS'
                                     and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
                                     IncrementSectionIndex(src, index);
                     };
@@ -552,8 +552,12 @@ group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElem
                 observation -> data.groupindex = 0;
                 observation -> data.itemid = 'id_2511';
             };
-            // ensure that "Sonstiges" is added only once
-            observation where "%observation.code.coding.code != 'Sonstiges' or %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            // ensure that "Sonstiges" is added only once (note: 'Sonstige Fusion NGS' in FHIR-Bundle corresponds to 'Sonstiges' in CDS-Export)
+            observation where "%observation.code.coding.code = 'Sonstige Fusion NGS' and %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            {
+                observation -> data.values as values, values.value = 'Sonstiges'; 
+            };
+            observation where "%observation.code.coding.code != 'Sonstige Fusion NGS'" then
             {
                 observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code');  
             };
@@ -646,8 +650,12 @@ group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: Bac
                 observation -> data.groupindex = 0;
                 observation -> data.itemid = 'id_2511';
             };
-            // ensure that "Sonstiges" is added only once
-            observation where "%observation.code.coding.code != 'Sonstiges' or %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            // ensure that "Sonstiges" is added only once (note: 'Sonstige Fusion NGS' in FHIR-Bundle corresponds to 'Sonstiges' in CDS-Export)
+            observation where "%observation.code.coding.code = 'Sonstige Fusion NGS' and %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            {
+                observation -> data.values as values, values.value = 'Sonstiges'; 
+            };
+            observation where "%observation.code.coding.code != 'Sonstige Fusion NGS'" then
             {
                 observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code');  
             };
