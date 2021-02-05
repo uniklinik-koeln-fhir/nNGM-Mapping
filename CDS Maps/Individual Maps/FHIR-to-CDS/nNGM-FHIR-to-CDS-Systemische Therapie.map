@@ -3,7 +3,8 @@
 
 /*
     TODO
-    - if there is a Therapieschema (id_1241) and NeuesTherapieschema (id_1359) both values will be passed to the same itemid resulting in an incorrect form field 
+    - find out why output is produced 4 times 
+
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieCTS" = nNGM_Mapping_SystemischeTherapieCTS
@@ -301,29 +302,24 @@ group TransformSystemischeTherapieCTS(source src: Bundle, target tgt: BackboneEl
             };
 
             // Therapieschema
-            medicationAdministration -> tgt.data as data then
+            medicationAdministration.medicationCodeableConcept as mcc, 
+            mcc where "text = 'Therapieschema' and coding.exists()" -> tgt.data as data then
             {
-                medicationAdministration.medicationCodeableConcept as mcc, mcc.text as text where "text = 'Therapieschema'" then
-                {
-                    medicationAdministration -> data.blockindex = 3;
-                    medicationAdministration -> data.groupindex = 0;
-                    medicationAdministration -> data.itemid = 'id_1241';
-                    mcc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                };
+                medicationAdministration -> data.blockindex = 3;
+                medicationAdministration -> data.groupindex = 0;
+                medicationAdministration -> data.itemid = 'id_1241';
+                medicationAdministration -> data.values as values, values.value = evaluate(mcc, '$this.coding.first().code');
             };
-
+        
             // Neues Therapieschema
-            medicationAdministration -> tgt.data as data then
+            medicationAdministration.medicationCodeableConcept as mcc, 
+            mcc where "text = 'NeuesTherapieschema' and coding.exists()" -> tgt.data as data then
             {
-                medicationAdministration.medicationCodeableConcept as mcc, mcc.text as text where "text = 'NeuesTherapieschema'" then
-                {
-                    medicationAdministration -> data.blockindex = 3;
-                    medicationAdministration -> data.groupindex = 0;
-                    medicationAdministration -> data.itemid = 'id_1359';
-                    mcc.coding as coding, coding.code as code -> data.values as values, values.value = code;
-                };
+                medicationAdministration -> data.blockindex = 3;
+                medicationAdministration -> data.groupindex = 0;
+                medicationAdministration -> data.itemid = 'id_1359';
+                medicationAdministration -> data.values as values, values.value = evaluate(mcc, '$this.coding.last().code');
             };
-            
 
             // Änderung des Therapieschemas (Ja or Nein)
             medicationAdministration -> tgt.data as data then
