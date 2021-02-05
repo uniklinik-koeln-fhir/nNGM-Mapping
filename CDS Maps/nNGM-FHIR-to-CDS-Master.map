@@ -61,10 +61,10 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
 {
     // Patient ID
-    src.entry as entry, entry.resource as compositionAntrag where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Stammdaten-pseudonymisiert'" then
+    src.entry as entry, entry.resource as compositionStammdaten where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Stammdaten-pseudonymisiert'" then
     {
         // Patid
-        compositionAntrag.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+        compositionStammdaten.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
         src -> tgt.operations as operations then TransformStammdatenCDS(src, operations);
     };
 }
@@ -412,6 +412,37 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
         }; 
+    };
+}
+
+group MapTNM(source src: Bundle, target tgt: CTS_Transport)
+{
+    src.entry as entry, entry.resource as compositionTNM where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/TNM-pseudonymisiert'", 
+                                            compositionTNM.identifier as identifier, identifier.value as fallNummer then
+    {
+        // Patid
+        compositionTNM.subject as subject, subject.identifier as subjectIdentifier, subjectIdentifier.value as value -> tgt.patid = value;
+    
+        // Biopsie(n) (Antrag.biopsie)
+        compositionTNM.section as tnmSection, tnmSection where "code.coding.code = 'tnm'" -> tgt.operations as operations then
+        {   
+            let formNummer = evaluate(tnmSection, '$this.entry.identifier.value');
+
+            // TNM (Antrag.biopsie.tnm)
+            let crfidLeft = append('TNM', fallNummer);
+
+            nestedSection -> tgt.version = '1.0';
+            nestedSection -> operations.type = 'save';
+            nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+            nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    nestedSection then TransformTNMCDS(entry, operations);
+                };
+            };
+        };
     };
 }
 
