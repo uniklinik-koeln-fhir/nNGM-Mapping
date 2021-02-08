@@ -23,7 +23,7 @@
     * Strahlentherapie output is present 2 times
     * Todesdatum (Patient) is missing from each form by decision 
     * Operation -> ResectionStatus/Art der resection would map but is not present in generated FHIR bundles (see cds -> FHIR known issues)
-    * Strahlentherapie -> Ende der Bestrahlung doesn’t support multiple choices in mapping, but form does for some reason
+    * Strahlentherapie -> Ende der Bestrahlung doesn’t support multiple choices in mapping, but form does for some reason. In reverse map only 1 value can be selected 
 
 * Result: 
     * 
