@@ -1,7 +1,9 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_SystemischeTherapieFHIR"
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeThe  apieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
+//todo: When Datum anderung (1465) is present in export, thereapie begin (1246) and ende (1247) are not mapped even if they are mapped to different target fields
+
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTheapieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/MedicationAdministration" as target
@@ -177,7 +179,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         }; 
 
         // Therapieende: effective.end, only if Therapiebeginn from id_1246 exists
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247' and blockindex = 2 and %tgt.effective.start.exists()" then
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247' and %tgt.effective.start.exists()" then
         {
             values.value as value -> tgt.effective as effective collate, effective.end = dateOp(value, 'dateTime');
         };
@@ -277,6 +279,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         {
             values.value as value where "$this.value = 'yes'" then
             {
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C25446');
                 operations then MapAnderungDesSchemasElementsMedicationAdministrationSY(operations, tgt);
             };
 
@@ -508,11 +511,9 @@ group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations:
         // Datum der Änderung: effectivePeriod.start
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1465'" then
         {
-            values.value as value where "$this.value.exists()" then
-            {
-                value ->    tgt.effective = create('Period') as effective,
-                            effective.start = dateOp(value, 'dateTime');
-            };
+            
+            value ->    tgt.extension = create('Extension') as anderung,
+                        anderung.valueDate = dateOp(value, 'dateTime');
         };
     };
 }
