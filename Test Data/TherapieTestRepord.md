@@ -19,8 +19,8 @@
 * Using Test Data/3. Antrag-CDS-Export-Transformed.json and Test Data/2. Patient-FHIR-Bundle-2-Antrag.json
 
 * Known Issues:
-    * Systemische Therapie output is present 4 times
-    * Strahlentherapie output is present 2 times
+    * Systemische Therapie output is present 4 times, does not appear to influence the import
+    * Strahlentherapie output is present 2 times, does not appear to influence the import
     * Todesdatum (Patient) is missing from each form by decision 
     * Operation -> ResectionStatus/Art der resection would map but is not present in generated FHIR bundles (see cds -> FHIR known issues)
     * Strahlentherapie -> Ende der Bestrahlung doesn’t support multiple choices in mapping, but form does for some reason. In reverse map only 1 value can be selected 
