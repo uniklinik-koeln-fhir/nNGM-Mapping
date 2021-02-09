@@ -29,8 +29,8 @@ group TransformBundleVorbefundFHIR(source operations: BackboneElement, target bu
         
         // there may be more than 1 instance of some Observation (Sonstiges and Lung Panel), thus an index is needed to reference (and create) the correct observation
         operations then CreateDiagnosticReportVorbefund(operations, bundle, composition, section, index);
-        // operations then CreateObservationFusionNGSVorbefund(operations, bundle, composition, section, index);  
-        // operations then CreateObservationNGSPanelVorbefund(operations, bundle, composition, section, index);  
+        operations then CreateObservationFusionNGSVorbefund(operations, bundle, composition, section, index);  
+        operations then CreateObservationNGSPanelVorbefund(operations, bundle, composition, section, index);  
     };
 }
 
@@ -105,9 +105,6 @@ group CreateDiagnosticReportVorbefund(source operations: BackboneElement, target
 /* ------------------------- DiagnosticReport ------------------------- */
 group TransformDiagnosticReportVorbefund(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // since there can be more than 1 instance of the NGS Lung Panel and Sonstiges (FusionNGS) we need an index to assign the corresponding data to each observation
-    operations then InitSectionIndex(operations, index); // (re)set index to 0
-
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     // status: Item required on simplifier
@@ -179,35 +176,40 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
         {
             values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFISHMPVorbefund(operations, value, reference);
         };
-        // // FusionNGS
-        // data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2511'" then
-        // {
-        //     // if Sonstiges: create n observation references (with n according to repeatindex)
-        //     values.value where "$this.value = 'Sonstiges'" then
-        //     {
-        //         operations.data as data, data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsFusionExpression_sonstiges'" then
-        //         {
-        //             values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-        //             operations then IncrementSectionIndex(operations, index);
-        //         };
-        //     };
-        //     values.value where "$this.value != 'Sonstiges'" then
-        //     {   
-        //         values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationNGSFusionVorbefund(operations, value, reference);
-        //     };
-        // };
+        // FusionNGS
+        operations then InitSectionIndex(operations, index); // (re)set index to 0
+        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2511'" then
+        {
+            // if Sonstiges: create n observation references (with n according to repeatindex)
+            values.value where "$this.value = 'Sonstiges'" then
+            {
+                operations.data as data, data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsFusionExpression_sonstiges'" then
+                {
+                    values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+                    operations then IncrementSectionIndex(operations, index);
+                };
+            };
+            values.value where "$this.value != 'Sonstiges'" then
+            {   
+                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationNGSFusionVorbefund(operations, value, reference);
+            };
+        };
         // FastTrack
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2512'" then
         {
             values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, value, tgt);
         };
-        // // NGS Lung Panel
-        // operations then InitSectionIndex(operations, index); // (re)set index to 0
-        // data.values as values where "blockindex = 26 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
-        // {
-        //     values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-        //     operations then IncrementSectionIndex(operations, index);
-        // };
+    };
+
+    // NGS Lung Panel
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+    operations.data as data then
+    {
+        data.values as values where "blockindex = 26 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
+        {
+            values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+            operations then IncrementSectionIndex(operations, index);
+        };
     };
 }
 
@@ -1617,7 +1619,6 @@ group TransformObservationMETFISHVorbefund(source operations: BackboneElement, t
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
-            //TODO:Please verify the value code to change to right  value
             values.value as value where "value = 'Amplifikation low-level'" then 
             {
                value -> tgt.component = create('BackboneElement') as component then
@@ -2765,7 +2766,7 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
     operations then MapFusionNGSStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code -> Sonstiges: Item required in Simplifier
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'Sonstiges');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'Sonstige Fusion NGS');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -2810,8 +2811,8 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
         {
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
-                value -> component.valueCodeableConcept = cc('http://www.genenames.org',value);
-                value -> component.code                 = cc('http://loinc.org', '48018-6');
+                value -> component.valueString = value;
+                value -> component.code        = cc('http://loinc.org', '48018-6');
             };
         };
 
@@ -2821,7 +2822,7 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
                 value -> component.valueString = value;
-                value -> component.code        = cc('http://ncit.nci.nih.gov', 'C28510');
+                value -> component.code        = cc('http://loinc.org', '48018-6');
             };
         };
 
@@ -2840,8 +2841,8 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
         {
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
-                value -> component.valueInteger  = cast(value, 'FHIR.integer');
-                value -> component.code          = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
+                value -> component.valueString  = value;
+                value -> component.code         = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
             };
         };
         
@@ -2850,8 +2851,8 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
         {
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
-                value -> component.valueInteger  = cast(value, 'FHIR.integer');
-                value -> component.code          = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'zweiter-fusionspartner-exon');
+                value -> component.valueString  = value;
+                value -> component.code         = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'zweiter-fusionspartner-exon');
             };
         };
 
