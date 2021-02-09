@@ -1,9 +1,5 @@
 /* Map a Variant Call Format (VCF) file from FHIR resources based on the Clinical Genmoics Implementation Guide (http://hl7.org/fhir/uv/genomics-reporting/) to the CTS_Transport format */
 
-/* TODO
-* CSQ Selection -> Test single csq by TF selection -> Test multiple csq selection by TF? Does repeatindex still work
-*/
-
 /// version = 0.1
 
 map "http://vonk.fire.ly/fhir/StructureMap/nNGM_NGS_LUNGPANEL_CDS" = "nNGM NGS LUNG PANEL CDS"
@@ -55,19 +51,16 @@ group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
     
     src -> tgt.metaInformation as mI, mI.key = 'SourceSystem', mI.value = 'vcf';
 
-    src.records as records, records.sample as sample, sample.sampleId as sampleId then 
+    //PathoPro ID
+    src.header as header, header.optional as optional, optional.value as pathoproid where "$this.name = 'Pathopro_ID'" then 
     {
-        //PathoPro ID
-        sampleId where "%tgt.metaInformation.where(key='PathoPro_ID').exists().not()" then 
-        {
-            sampleId -> tgt.metaInformation as mI, mI.key = 'PathoPro_ID', mI.value = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[0]');
-        };
-        
-        //UntersuchungsID
-        sampleId where "%tgt.metaInformation.where(key='Untersuchungs_ID').exists().not()" then 
-        {
-            sampleId -> tgt.metaInformation as mI, mI.key = 'Untersuchungs_ID', mI.value = evaluate(records, '$this[0].sample[0].sampleId[0].split(\':\')[1].split(\'_\')[1].split(\'-\')[0]');
-        };
+        pathoproid -> tgt.metaInformation as mI, mI.key = 'PathoPro_ID', mI.value = pathoproid; 
+    };
+    
+    //Unteruschungs ID
+    src.header as header, header.optional as optional, optional.value as untersuchungsid where "$this.name = 'Untersuchungs_ID'" then 
+    {
+        untersuchungsid -> tgt.metaInformation as mI, mI.key = 'Untersuchungs_ID', mI.value = untersuchungsid;   
     };
     
     src -> tgt.operations as operations collate then 
@@ -249,7 +242,7 @@ group MapVCFOptionalBody(source src: BackboneElement, target tgt : CTS_Transport
                 value -> data.groupindex = 0;
                 value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
                 value -> data.itemid = 'id_44';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[21].split(\'.\').last()'); 
+                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[33]'); 
             };
 
 
