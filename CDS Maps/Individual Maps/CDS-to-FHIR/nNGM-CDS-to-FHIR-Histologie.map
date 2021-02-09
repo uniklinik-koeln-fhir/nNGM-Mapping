@@ -111,6 +111,9 @@ group TransformDiagnosticReportHistologie(source operations: BackboneElement, ta
     // code
     operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
 
+    // Subject
+    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+
     // Access data
     operations.data as data then
     {
@@ -121,9 +124,15 @@ group TransformDiagnosticReportHistologie(source operations: BackboneElement, ta
             values.value as value -> section.entry = create('Reference') as untersuchung, untersuchung.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
         };
 
-        // Reference Patient
-        operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
+        //Untersuchungs-ID
+        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
+        {
+            values.value as id -> tgt.identifier = create('Identifier') as befundNummer,
+                                                          befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
+                                                          befundNummer.value = id;
+        };
+        
+        //Referenzen
         // Reference Specimen
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
         {
@@ -134,16 +143,7 @@ group TransformDiagnosticReportHistologie(source operations: BackboneElement, ta
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_histologie'" then
         {
             values.value as value -> tgt.result = create('Reference') as result, result.reference = evaluate(value, '\'Observation/\' + $this');
-        };
-
-        //Referenzen
-        //Untersuchungs-ID
-        data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'assessment_id'" then
-        {
-            values.value as id -> tgt.identifier = create('Identifier') as befundNummer,
-                                                          befundNummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer',
-                                                          befundNummer.value = id;
-        };
+        }; 
     };
 }
 

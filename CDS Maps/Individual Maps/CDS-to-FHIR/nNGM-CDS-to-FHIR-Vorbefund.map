@@ -28,7 +28,7 @@ group TransformBundleVorbefundFHIR(source operations: BackboneElement, target bu
         // operations then CreateDeviceNGSPanelVorbefund(operations, bundle, composition, section);
         
         // there may be more than 1 instance of some Observation (Sonstiges and Lung Panel), thus an index is needed to reference (and create) the correct observation
-        // operations then CreateDiagnosticReportVorbefund(operations, bundle, composition, section, index);
+        operations then CreateDiagnosticReportVorbefund(operations, bundle, composition, section, index);
         // operations then CreateObservationFusionNGSVorbefund(operations, bundle, composition, section, index);  
         // operations then CreateObservationNGSPanelVorbefund(operations, bundle, composition, section, index);  
     };
@@ -115,12 +115,14 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
                     status.extension as dataAbsentReason, 
                     dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
                     dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // operations -> tgt.status = 'final';
 
     // code: Item required on simplifier
     operations ->  tgt.code as code, 
                     code.extension as dataAbsentReason, 
                     dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
                     dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    // operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
 
     // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -135,14 +137,6 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
             values.value as value -> section.entry = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
         };
 
-        /* ------------------------- EXTERNES TUMORMATERIAL ----------------------------- */
-        // Befunddatum
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1653'" then
-        {
-            values.value as value -> tgt.issued =  dateOp(value, 'date');
-        };
-
-        // Referenzen
         // Befundnummer 
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1654'" then
         {
@@ -151,6 +145,14 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
                                                           befundNummer.value  = id;
         };
 
+        /* ------------------------- EXTERNES TUMORMATERIAL ----------------------------- */
+        // Befunddatum
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1653'" then
+        {
+            values.value as value -> tgt.issued =  dateOp(value, 'date');
+        };
+
+        // Referenzen
         // Specimen
         // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
         // {
@@ -171,56 +173,41 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
         // MP: CISH and FISH
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2509'" then
         {
-            let cish = 'CISH';
-            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationMPVorbefund(operations, cish, value, reference);
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationCISHMPVorbefund(operations, value, reference);
         };
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2510'" then
         {
-            let fish = 'FISH';
-            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationMPVorbefund(operations, fish, value, reference);
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFISHMPVorbefund(operations, value, reference);
         };
-        // FusionNGS
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2511'" then
-        {
-            // if Sonstiges: create n observation references (with n according to repeatindex)
-            values.value where "$this.value = 'Sonstiges'" then
-            {
-                operations.data as data, data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsFusionExpression_sonstiges'" then
-                {
-                    values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-                    operations then IncrementSectionIndex(operations, index);
-                };
-            };
-            values.value where "$this.value != 'Sonstiges'" then
-            {   
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationNGSFusionVorbefund(operations, value, reference);
-            };
-        };
+        // // FusionNGS
+        // data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2511'" then
+        // {
+        //     // if Sonstiges: create n observation references (with n according to repeatindex)
+        //     values.value where "$this.value = 'Sonstiges'" then
+        //     {
+        //         operations.data as data, data.values as values where "blockindex = 21 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsFusionExpression_sonstiges'" then
+        //         {
+        //             values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        //             operations then IncrementSectionIndex(operations, index);
+        //         };
+        //     };
+        //     values.value where "$this.value != 'Sonstiges'" then
+        //     {   
+        //         values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationNGSFusionVorbefund(operations, value, reference);
+        //     };
+        // };
         // FastTrack
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2512'" then
         {
-            // if EGFR Exon 19-21: create 3 observation references
-            values.value where "$this.value = 'EGFR Exon 19-21'" then
-            {
-                let EGFFR19 = 'EGFR Exon 19';
-                let EGFFR20 = 'EGFR Exon 20';
-                let EGFFR21 = 'EGFR Exon 21';
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, EGFFR19, reference);
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, EGFFR20, reference);
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, EGFFR21, reference);
-            };
-            values.value where "$this.value != 'EGFR Exon 19-21'" then
-            {
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, value, reference);
-            };
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, value, tgt);
         };
-        // NGS Lung Panel
-        operations then InitSectionIndex(operations, index); // (re)set index to 0
-        data.values as values where "blockindex = 26 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
-        {
-            values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-            operations then IncrementSectionIndex(operations, index);
-        };
+        // // NGS Lung Panel
+        // operations then InitSectionIndex(operations, index); // (re)set index to 0
+        // data.values as values where "blockindex = 26 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
+        // {
+        //     values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+        //     operations then IncrementSectionIndex(operations, index);
+        // };
     };
 }
 
@@ -3785,71 +3772,67 @@ group SetReferenceToObservationIHCVorbefund(source operations: BackboneElement, 
         };     
     };
 }
-group SetReferenceToObservationMPVorbefund(source operations: BackboneElement, source cishFish: string, source name: string, target tgt: Reference)
+group SetReferenceToObservationCISHMPVorbefund(source operations: BackboneElement, source name: string, target tgt: Reference)
 {
     // Check which CISH observation should be referenced
-    cishFish where "%cishFish = 'CISH'" then 
+    name where "%name = 'ALK'" then 
     {
-        name where "%name = 'ALK'" then 
+        operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_ish_alk'" then
         {
-            operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_ish_alk'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
-        name where "%name = 'MET'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ish_met'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'RET'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_ish_ret'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'ROS1'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_ish_ros1'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
     };
-
-    // Check which FISH observation should be referenced
-    cishFish where "%cishFish = 'FISH'" then 
+    name where "%name = 'MET'" then 
     {
-        name where "%name = 'ALK'" then 
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ish_met'" then
         {
-            operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_fish_alk'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
-        name where "%name = 'MET'" then 
+    }; 
+    name where "%name = 'RET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_ish_ret'" then
         {
-            operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fish_met'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'RET'" then 
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_ish_ros1'" then
         {
-            operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_fish_ret'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'ROS1'" then 
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+}
+group SetReferenceToObservationFISHMPVorbefund(source operations: BackboneElement, source name: string, target tgt: Reference)
+{
+    // Check which FISH observation should be referenced
+    name where "%name = 'ALK'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_fish_alk'" then
         {
-            operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_fish_ros1'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'MET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fish_met'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'RET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_fish_ret'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_fish_ros1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
 }
@@ -3920,42 +3903,46 @@ group SetReferenceToObservationNGSFusionVorbefund(source operations: BackboneEle
         };
     };
 }
-group SetReferenceToObservationFastTrackVorbefund(source operations: BackboneElement, source name: string, target tgt: Reference)
+group SetReferenceToObservationFastTrackVorbefund(source operations: BackboneElement, source name: string, target tgt: DiagnosticReport)
 {
     // Check which observation should be referenced
     name where "%name = 'BRAF Exon 15'" then 
     {
-        operations.data as data, data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'uuid_fasttrack_braf15'" then
+        operations.data as data, data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'uuid_fasttrack_braf15'" 
+            -> tgt.result = create('Reference') as reference then
         {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
-    name where "%name = 'EGFR Exon 19'" then 
+    name where "%name = 'EGFR Exon 19-21'" then
     {
-        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr19'" then
+        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr19'" then            
         {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+            values.value as value where "unit.exists().not()" -> tgt.result = create('Reference') as reference then // to not use the unit = 21 value element
+            {
+                values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
+            };
+        };
+
+        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr20'"
+            -> tgt.result = create('Reference') as reference then
+        {
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr21'"  
+            -> tgt.result = create('Reference') as reference then
+        {
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
-    name where "%name = 'EGFR Exon 20'" then 
-    {
-        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr20'" then
-        {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-        };
-    };
-    name where "%name = 'EGFR Exon 21'" then 
-    {
-        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr21'" then
-        {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-        };
-    };
+
     name where "%name = 'KRAS Exon 2'" then 
     {
-        operations.data as data, data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'uuid_fasttrack_kras2'" then
+        operations.data as data, data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'uuid_fasttrack_kras2'"  
+            -> tgt.result = create('Reference') as reference then
         {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
 }
