@@ -1,17 +1,10 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_VorbefundFHIR"
+
 /*
     TODO 
-    - repeatindex is off by +1
-    - creation and reference to Specimen is commented out until clarification 
+    - reference to Specimen is commented out until clarification 
     - Device: has no uuid and therefore cannot be referenced in BservationNGSPanel
-    
-    repeatindex is off by +1
-    Specimen is currently commented out until clarification.
-    NGSPanel: clarify what uuid_ngsPanel_research is meant for
-    FastTrack: what to do with uuid_fasttrack_egfr1921?
-    Device: has no uuid and therefore cannot be referenced in ObservationNGSPanel
-
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR" = nNGM_Mapping_VorbefundFHIR
@@ -27,34 +20,27 @@ group TransformBundleVorbefundFHIR(source operations: BackboneElement, target bu
 {
     operations -> biopsieSection.section = create('BackboneElement') as section, section.title = 'vorbefund', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'vorbefund') then
     {
-        // operations then CreateSpecimenVorbefund(operations, bundle, composition, section);
+        operations then CreateSpecimenVorbefund(operations, bundle, composition, section);
+        operations then CreateObservationHistologieVorbefund(operations, bundle, composition, section);
         operations then CreateObservationIHCVorbefund(operations, bundle, composition, section);
         operations then CreateObservationMPVorbefund(operations, bundle, composition, section);
-        operations then CreateObservationFastTrackVorbefund(operations, bundle, composition, section);
-        operations then CreateDeviceNGSPanelVorbefund(operations, bundle, composition, section);
+        // operations then CreateObservationFastTrackVorbefund(operations, bundle, composition, section);
+        // operations then CreateDeviceNGSPanelVorbefund(operations, bundle, composition, section);
         
         // there may be more than 1 instance of some Observation (Sonstiges and Lung Panel), thus an index is needed to reference (and create) the correct observation
-        operations then CreateDiagnosticReportVorbefund(operations, bundle, composition, section, index);
-        operations then CreateObservationFusionNGSVorbefund(operations, bundle, composition, section, index);  
-        operations then CreateObservationNGSPanelVorbefund(operations, bundle, composition, section, index);  
+        // operations then CreateDiagnosticReportVorbefund(operations, bundle, composition, section, index);
+        // operations then CreateObservationFusionNGSVorbefund(operations, bundle, composition, section, index);  
+        // operations then CreateObservationNGSPanelVorbefund(operations, bundle, composition, section, index);  
     };
 }
 
 /* ------------------------------ Specimen ---------------------------- */
 group CreateSpecimenVorbefund(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    let resourceIsCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceIsCreated);
-
-    operations.data as data, data.values as values where "blockindex = 27 and groupindex = 0 and itemid = 'id_1601'
-                                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then
     {
-        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformSpecimenVorbefund(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-            operations then SetBooleanToTrue(operations, resourceIsCreated);
-        };     
+        operations then TransformSpecimenVorbefund(operations, specimen, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
     };    
 }
 /* ------------------------------ Specimen ---------------------------- */
@@ -67,7 +53,7 @@ group TransformSpecimenVorbefund(source operations: BackboneElement, target tgt:
                                                                     snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
                                                                     snomedGlobalPatientSet.code    = 'UNKNOWN';
 
-    // Sbject 
+    // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
     
     // Access data
@@ -80,9 +66,20 @@ group TransformSpecimenVorbefund(source operations: BackboneElement, target tgt:
             values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         };
 
+        // Eingang des Tumormaterials am nNGM-Standort
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
         {
             values.value as value -> tgt.receivedTime = dateOp(value, 'dateTime');
+        };
+
+        // Type: Item required on simplifier
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
+        {
+           values.value as value -> tgt.type as type, type.coding = create('Coding') as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
+                                                                                        snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
+                                                                                        snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason,
+                                                                                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                                                                                        dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
         };
     };
 }
@@ -245,14 +242,14 @@ group CreateObservationHistologieVorbefund(source operations: BackboneElement, t
     };          
 }
 /* ---------------------- ObservationHistologie ----------------------- */
-group TransformObservationHistologieVorbefund(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+group TransformObservationHistologieVorbefund(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nngm/histologie';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/histologie';
     
-    //status: Item required on simplifier
+    // Status 
     operations ->  tgt.status = cast('final', 'FHIR.code');
 
-    //code: Item required on simplifier
+    // Code
     operations -> tgt.code = cc('http://ncit.nci.nih.gov','C18000');
 
     // Subject
@@ -422,7 +419,7 @@ group TransformObservationBRAFIHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -451,25 +448,21 @@ group TransformObservationBRAFIHCVorbefund(source operations: BackboneElement, t
             };
         };
 
-        //Ergebnis 
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'braf_ihc_result'" then
+        // Ergebnis
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
+        // Antikörper
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_ab'" then
+        {
+            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
+            {
+                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
+                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
+            };
+        };
         // Referenzen
         // Specimen
         // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
@@ -510,7 +503,7 @@ group TransformObservationCK7IHCVorbefund(source operations: BackboneElement, ta
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -539,23 +532,10 @@ group TransformObservationCK7IHCVorbefund(source operations: BackboneElement, ta
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -598,7 +578,7 @@ group TransformObservationMIB1IHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -627,23 +607,10 @@ group TransformObservationMIB1IHCVorbefund(source operations: BackboneElement, t
             };
         };
         
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2063'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -686,7 +653,7 @@ group TransformObservationNapsinAIHCVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -715,23 +682,10 @@ group TransformObservationNapsinAIHCVorbefund(source operations: BackboneElement
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2072'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -768,12 +722,13 @@ group TransformObservationP40IHCVorbefund(source operations: BackboneElement, ta
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2074'" then
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -801,23 +756,11 @@ group TransformObservationP40IHCVorbefund(source operations: BackboneElement, ta
                 };
             };
         };
-        //Ergebnis 
+
+        // Ergebnis
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2079'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -860,7 +803,7 @@ group TransformObservationSynaptophysinIHCVorbefund(source operations: BackboneE
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -889,23 +832,10 @@ group TransformObservationSynaptophysinIHCVorbefund(source operations: BackboneE
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2088'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -948,7 +878,7 @@ group TransformObservationTTF1IHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -977,23 +907,10 @@ group TransformObservationTTF1IHCVorbefund(source operations: BackboneElement, t
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2097'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -1028,28 +945,10 @@ group TransformObservationALKIHCVorbefund(source operations: BackboneElement, ta
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2106'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -1083,28 +982,10 @@ group TransformObservationMETIHCVorbefund(source operations: BackboneElement, ta
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2139'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         //Klassifikation -> Klassifikation component
@@ -1124,7 +1005,7 @@ group TransformObservationMETIHCVorbefund(source operations: BackboneElement, ta
             {
                 value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueBoolean	 = cast(true, 'FHIR.boolean');
+                    value -> component.valueBoolean	 = 'true';
                     value -> component.code          = cc('http://ncit.nci.nih.gov', 'C129474');
                 };
             };
@@ -1132,7 +1013,7 @@ group TransformObservationMETIHCVorbefund(source operations: BackboneElement, ta
             {
                 value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueBoolean	 = cast(false, 'FHIR.boolean');
+                    value -> component.valueBoolean	 = 'false';
                     value -> component.code          = cc('http://ncit.nci.nih.gov', 'C129474');
                 };
             };
@@ -1178,7 +1059,7 @@ group TransformObservationPDL1IHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -1207,18 +1088,10 @@ group TransformObservationPDL1IHCVorbefund(source operations: BackboneElement, t
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2180'" then
         {
-            values.value as value where "value = 'auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         //Menge der Tumorzellen (% positive Tumorzellen TPS) -> menge-tumorzellen component
@@ -1273,28 +1146,10 @@ group TransformObservationROS1IHCVorbefund(source operations: BackboneElement, t
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2219'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
@@ -3381,6 +3236,7 @@ group TransformDeviceNGSPanelVorbefund(source operations: BackboneElement, targe
 {
     // TODO: may need to be replaced by uuid_device
     operations -> tgt.id = uuid();
+    operations -> section.entry = create('Reference') as device, device.reference = evaluate(tgt, '\'Device/\' + $this.id');
     
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device';
     
@@ -3574,7 +3430,7 @@ group MapPercentageValueVorbefund(source src: string, target tgt: Quantity)
 {
     src -> tgt.value   = src,
             tgt.system = 'http://unitsofmeasure.org',
-            tgt.unit   = 'percentage',
+            tgt.unit   = '%',
             tgt.code   = '%';
 }
 group MapStatusCategoryVorbefund(source operations: BackboneElement, target tgt: Observation)
@@ -3608,7 +3464,7 @@ group MapObservationALKDatePhaenotypVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -3652,7 +3508,7 @@ group MapObservationMETDatePhaenotypVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -3696,7 +3552,7 @@ group MapObservationRETDatePhaenotypVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -3740,7 +3596,7 @@ group MapObservationROS1DatePhaenotypVorbefund(source operations: BackboneElemen
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
