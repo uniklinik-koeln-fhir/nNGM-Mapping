@@ -51,11 +51,13 @@ group TransformSpecimenVorbefund(source operations: BackboneElement, target tgt:
     // Type : Item required on simplifier
     operations -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system  = 'http://snomed.info/sct',
                                                                     snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                                    snomedGlobalPatientSet.code    = 'UNKNOWN';
+                                                                    snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason,
+                                                                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                                                                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
     // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-    
+
     // Access data
     operations.data as data then
     {
@@ -70,16 +72,6 @@ group TransformSpecimenVorbefund(source operations: BackboneElement, target tgt:
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
         {
             values.value as value -> tgt.receivedTime = dateOp(value, 'dateTime');
-        };
-
-        // Type: Item required on simplifier
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2517'" then
-        {
-           values.value as value -> tgt.type as type, type.coding = create('Coding') as snomedGlobalPatientSet, snomedGlobalPatientSet.system = 'http://snomed.info/sct',
-                                                                                        snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                                                        snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason,
-                                                                                        dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                                                                                        dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
         };
     };
 }
@@ -1022,7 +1014,7 @@ group TransformObservationPDL1IHCVorbefund(source operations: BackboneElement, t
     operations then MapIHCStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code -> PD-L1: Item required in Simplifier
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'PD-L1');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'PD-L1');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -3284,7 +3276,7 @@ group TransformObservationNGSPanelVorbefund(source operations: BackboneElement, 
     operations ->  tgt.status = cast('final', 'FHIR.code');
 
     // Code : Item required on simplifier : there is not code for NGS Lung Panel
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes','NGS Panel');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes','NGS Panel');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
