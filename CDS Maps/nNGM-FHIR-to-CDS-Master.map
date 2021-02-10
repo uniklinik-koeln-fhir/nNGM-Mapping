@@ -2,11 +2,6 @@
 /// title = "nNGM: nNGMv09c - FHIR to CTS"
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_FHIR_to_CDS" = nNGM_FHIR_to_CDS
-/* TODO
-    - The repeatindex gets mapped to an array with 1 element of integer in the CTS_Transport but should be just unsigned int.  
-    [BEFUND]
-    - LP: Currently the data for Panel Gen Forschung Observation gets the same repeatindex as the Observation. Is this correct?
-*/
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
@@ -22,15 +17,15 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
 // Befund
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCDS"
 
 /*
 // Operation
@@ -46,7 +41,7 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 
     src then MapStammdaten(src, tgt);
     src then MapAntrag(src, tgt);
-    //src then MapBefund(src, tgt);
+    src then MapBefund(src, tgt);
     src then MapTNM(src, tgt);
 
     /*
@@ -114,24 +109,30 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                     src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is ServiceRequest" then
                     {
                         // Gewebediagnostik
-                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen, Organization)
+                        // Transform ServiceRequest itself, followed by the other resources in this section in this case (Observation, Specimen, Organization)
                         entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/tumorblock'" then
                         {
                             let gewebeBlut = 'Gewebe';
                             nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
-                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
-                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
-                            src.entry as entry, entry where "resource.id = %serviceRequest.requester.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                            {
+                                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is Observation" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is Specimen" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is Organization" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            };   
                         };
 
                         // Blutdiagnostik (Liquid Biopsy)
-                        // Transform ServiceRequest itself, followed by its referenced resources (Observation, Specimen)
+                        // Transform ServiceRequest itself, followed by the other resources in this section in this case (Observation, Specimen)
                         entry.resource as serviceRequest where "resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
                         {
                             let gewebeBlut = 'Blut';
                             nestedSection then TransformAnforderungCDS(entry, gewebeBlut, operations);
-                            src.entry as entry, entry where "resource.id = %serviceRequest.reasonReference.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
-                            src.entry as entry, entry where "resource.id = %serviceRequest.specimen.reference.split(\'/\').last()" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                            {
+                                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is Observation" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last() and resource is Specimen" then TransformAnforderungCDS(entry, gewebeBlut, operations);
+                            };   
                         };
                     };
                 };
@@ -297,8 +298,8 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
                     {
                         nestedSection then TransformNGSLungPanelCDS(entry, operations, index);
 
-                        entry where "resource is Observation 
-                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+                        entry where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'
+                                    and resource.code.coding.code = 'NGS Panel'" then
                                     IncrementSectionIndex(src, index);
                     };
                 };
@@ -321,7 +322,7 @@ group MapBefund(source src: Bundle, target tgt: CTS_Transport)
                     {
                         nestedSection then TransformFusionNGSCDS(entry, operations, index);
 
-                        entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
+                        entry where "resource is Observation and resource.code.coding.code = 'Sonstige Fusion NGS'
                                     and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
                                     IncrementSectionIndex(src, index);
                     };
@@ -552,8 +553,12 @@ group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElem
                 observation -> data.groupindex = 0;
                 observation -> data.itemid = 'id_2511';
             };
-            // ensure that "Sonstiges" is added only once
-            observation where "%observation.code.coding.code != 'Sonstiges' or %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            // ensure that "Sonstiges" is added only once (note: 'Sonstige Fusion NGS' in FHIR-Bundle corresponds to 'Sonstiges' in CDS-Export)
+            observation where "%observation.code.coding.code = 'Sonstige Fusion NGS' and %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            {
+                observation -> data.values as values, values.value = 'Sonstiges'; 
+            };
+            observation where "%observation.code.coding.code != 'Sonstige Fusion NGS'" then
             {
                 observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code');  
             };
@@ -573,9 +578,11 @@ group TransformCheckboxes(source src: Bundle, source nestedSection: BackboneElem
                 observation -> data.groupindex = 0;
                 observation -> data.itemid = 'id_2512';
             };
-            observation where "code.coding.code = 'C158854'" -> data.values as values, values.value = 'BRAF Exon 15';  
-            observation where "code.coding.code = 'C128662'" -> data.values as values, values.value = 'EGFR Exon 19-21';  
-            observation where "code.coding.code = 'C135715'" -> data.values as values, values.value = 'KRAS Exon 2';  
+            observation where "%observation.code.coding.code = 'BRAF Exon 15'" -> data.values as values, values.value = 'BRAF Exon 15';  
+            observation where "%observation.code.coding.code = 'KRAS Exon 2'" -> data.values as values, values.value = 'KRAS Exon 2';
+            // need to only check for EGFR Exon 19 since 19, 20 and 21 are selected/identified via this one value below
+            observation where "%observation.code.coding.code = 'EGFR Exon 19'" -> data.values as values, values.value = 'EGFR Exon 19-21';  
+
         };
     };
 }
@@ -646,8 +653,12 @@ group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: Bac
                 observation -> data.groupindex = 0;
                 observation -> data.itemid = 'id_2511';
             };
-            // ensure that "Sonstiges" is added only once
-            observation where "%observation.code.coding.code != 'Sonstiges' or %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            // ensure that "Sonstiges" is added only once (note: 'Sonstige Fusion NGS' in FHIR-Bundle corresponds to 'Sonstiges' in CDS-Export)
+            observation where "%observation.code.coding.code = 'Sonstige Fusion NGS' and %data.where(values.where(value = 'Sonstiges')).exists().not()" then
+            {
+                observation -> data.values as values, values.value = 'Sonstiges'; 
+            };
+            observation where "%observation.code.coding.code != 'Sonstige Fusion NGS'" then
             {
                 observation -> data.values as values, values.value = evaluate(observation, '$this.code.coding.code');  
             };
@@ -667,9 +678,10 @@ group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: Bac
                 observation -> data.groupindex = 0;
                 observation -> data.itemid = 'id_2512';
             };
-            observation where "code.coding.code = 'C158854'" -> data.values as values, values.value = 'BRAF Exon 15';  
-            observation where "code.coding.code = 'C128662'" -> data.values as values, values.value = 'EGFR Exon 19-21';  
-            observation where "code.coding.code = 'C135715'" -> data.values as values, values.value = 'KRAS Exon 2';  
+            observation where "%observation.code.coding.code = 'BRAF Exon 15'" -> data.values as values, values.value = 'BRAF Exon 15';  
+            observation where "%observation.code.coding.code = 'KRAS Exon 2'" -> data.values as values, values.value = 'KRAS Exon 2';
+            // need to only check for EGFR Exon 19 since 19, 20 and 21 are selected/identified via this one value below
+            observation where "%observation.code.coding.code = 'EGFR Exon 19'" -> data.values as values, values.value = 'EGFR Exon 19-21'; 
         };
     };
 }

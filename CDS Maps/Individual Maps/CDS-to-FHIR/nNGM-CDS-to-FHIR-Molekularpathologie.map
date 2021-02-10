@@ -1,18 +1,6 @@
 /// version = 0.1
 /// title = "nNGM: Mapping MolekularPhatologie FHIR"
 
-/*
-TODO
-    - Specimen (creation and reference of uuid_specimen_nngm4) is commented out
-    - ServiceRequest.code may need to be updated to code form current valueset
-
-    - Modify MET CISH instance of ergebnis to facilitate difference between 
-        positiv (high-level amplification)
-        positiv (moderate-level amplification) 
-
-    - In the seatable the episode of care section is replaced with the diagnosticreport?
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR" = nNGM_Mapping_MolekularphatologieFHIR
 
 /* ------------------------------ Bundle ---------------------------- */
@@ -20,62 +8,10 @@ group TransformBundleMolekularpathologie(source operations: BackboneElement, tar
 {
     operations -> diagnosticSection.section = create('BackboneElement') as section, section.title = 'molekularpathologie', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie') then
     {
-        operations then CreateSpecimenMP(operations, bundle, composition, section);
         operations then CreateDiagnosticReportMP(operations, bundle, composition, section);
         operations then CreateOrganizationMP(operations, bundle, composition, section);
-        operations then CreateServiceRequestMP(operations, bundle, composition, section);
         operations then CreateObservationMP(operations, bundle, composition, section);
     };    
-}
-
-/*-----------------Specimen-----------------------*/
-group CreateSpecimenMP(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1601'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformSpecimenMP(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-        };    
-    };
-}
-
-group TransformSpecimenMP(source operations: BackboneElement, target tgt: Specimen, target composition: Composition, target section: BackboneElement) 
-{
-    // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM';
-    
-    // Type
-    operations -> tgt.type = create('Type') as type,
-                    type.coding as coding,
-                    coding.system = 'http://snomed.info/sct', 
-                    coding.version = 'http://snomed.info/sct/900000000000207008',
-                    coding.code as code, 
-                    code.extension as dataAbsentReason, 
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Patient reference
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // Access data
-    operations.data as data then 
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        };
-
-        // Referenzen
-        // Request
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.request = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-    };
 }
 
 /*-----------------DiagnosticReport-----------------------*/
@@ -96,14 +32,11 @@ group TransformDiagnosticReportMP(source operations: BackboneElement, target tgt
     // Metadata
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
-    // fixed status
-    operations -> tgt.status = 'active';
+    // status
+    operations -> tgt.status = 'final';
 
     // code
-    operations -> tgt.code as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
 
     // Patient reference
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -127,11 +60,7 @@ group TransformDiagnosticReportMP(source operations: BackboneElement, target tgt
         };
 
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        // Specimen is set in Master.map
         
         // Observations CISH and FISH
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2509'" then
@@ -141,6 +70,12 @@ group TransformDiagnosticReportMP(source operations: BackboneElement, target tgt
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2510'" then
         {
             values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFISHMP(operations, value, reference);
+        };
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
         };
     };
 }
@@ -161,7 +96,7 @@ group CreateOrganizationMP(source operations: BackboneElement, target bundle: Bu
 group TransformOrganizationMP(source operations: BackboneElement, target tgt: Organization, target composition: Composition, target section: BackboneElement) 
 {
     // Metadata
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit';
 
     // Access data
     operations.data as data then 
@@ -177,144 +112,6 @@ group TransformOrganizationMP(source operations: BackboneElement, target tgt: Or
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2435'" then
         {
             values.value as value -> tgt.name = value;
-        };
-    };
-}
-
-/* -------------------------------------- Check if Service Request is required -------------------------------------------- */
-group CreateServiceRequestMP(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    let resourceIsCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceIsCreated);
-
-    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'
-                                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2462'
-                                                        or blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
-    {
-        // if resource is not created yet: call transform
-        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('ServiceRequest') as serviceRequest then 
-        {
-            operations then TransformServiceRequestMP(operations, serviceRequest, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(serviceRequest, '\'ServiceRequest/\' + $this.id');
-            operations then SetBooleanToTrue(operations, resourceIsCreated);
-        };
-    }; 
-}
-
-/* -------------------------------------- Service Request -------------------------------------------- */
-group TransformServiceRequestMP(source operations: BackboneElement, target tgt: ServiceRequest, target composition: Composition, target section: BackboneElement)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung';
-
-    // status extensions
-    operations then TransformMPStatusExtension(operations, tgt);
-
-    // Intent
-    operations -> tgt.intent = cast('proposal', 'FHIR.code');
- 
-    // Code
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'molekularpathologie');
-
-    // Category
-    operations -> tgt.category as cat, 
-                cat.coding as coding, 
-                coding.code as code, 
-                code.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Subject
-    operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-
-    // AuthoredOn
-    operations -> tgt.authoredOn as ao, 
-                ao.extension as dataAbsentReason, 
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'uuid_nngm_testung2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as serviceRequest, serviceRequest.reference = evaluate(value, '\'ServiceRequest/\' + $this');
-        };
-
-        //Durchfuehrung
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
-        {
-            values.value as value where "$this.value = 'in Bearbeitung'" then 
-            {
-                value -> tgt.status = 'active' collate;
-            };
-            values.value as value where "$this.value = 'abgeschlossen'" then 
-            {
-                value -> tgt.status = 'completed' collate;
-            };
-        };
-
-        // Referenzen
-        // Requester
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
-        {
-            values.value as value -> tgt.requester = create('Reference') as organization, organization.reference = evaluate(value, '\'Organization/\' + $this');
-        };
-
-        // DiagnosticReport
-        data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_nngm_befund2'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
-        };
-
-        // Observations CISH and FISH
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2509'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservationCISHMP(operations, value, reference);
-        };
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2510'" then
-        {
-            values.value as value -> tgt.reasonReference = create('Reference') as reference then SetReferenceToObservationFISHMP(operations, value, reference);
-        };
-
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
-    };
-}
-
-/* -------------------------------------- Create double extensions for Fast Track --------------------------------------------*/
-group TransformMPStatusExtension(source operations: BackboneElement, target tgt: ServiceRequest)
-{
-    operations.data as data then
-    {
-        // Status des Abschlusses
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'status').exists().not()" then
-            {
-                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
-                {
-                    value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
-                    value -> statusExtension.url = 'status';
-                };
-            };
-        };
-
-        //Datum des Abschlusses
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
-        {
-            values.value as value where "%tgt.status.extension.extension.where(url = 'datum').exists().not()" then
-            {
-                value -> tgt.status as status collate, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
-                {
-                    value -> datumExtension.valueDate = dateOp(value, 'date');
-                    value -> datumExtension.url = 'datum';
-                };
-            };
         };
     };
 }
@@ -387,8 +184,8 @@ group TransformALKCISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -398,6 +195,7 @@ group TransformALKCISHObservationMP(source operations: BackboneElement, target t
 
     operations then MapDateOfAssessmentMP(operations, ALK, tgt);
     operations then MapCodeMP(operations, ALK, tgt);
+    operations then MapALKPhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -472,11 +270,13 @@ group TransformALKCISHObservationMP(source operations: BackboneElement, target t
         };
 
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        // Specimen is set in Master.map
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -486,8 +286,8 @@ group TransformALKFISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -497,6 +297,7 @@ group TransformALKFISHObservationMP(source operations: BackboneElement, target t
 
     operations then MapDateOfAssessmentMP(operations, ALK, tgt);
     operations then MapCodeMP(operations, ALK, tgt);
+    operations then MapALKPhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -581,11 +382,13 @@ group TransformALKFISHObservationMP(source operations: BackboneElement, target t
         };
 
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        // Specimen is set in Master.map 
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -595,8 +398,8 @@ group TransformMETCISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -606,6 +409,7 @@ group TransformMETCISHObservationMP(source operations: BackboneElement, target t
 
     operations then MapDateOfAssessmentMP(operations, MET, tgt);
     operations then MapCodeMP(operations, MET, tgt);
+    operations then MapMETPhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -656,7 +460,7 @@ group TransformMETCISHObservationMP(source operations: BackboneElement, target t
             values.value where "$this.value = 'positiv (high-level amplification)'
                                or $this.value = 'positiv (moderate-level amplification)'" then 
             {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', ergebnis, ergebnis);
             };
 
             values.value where "$this.value = 'negativ'" then 
@@ -678,7 +482,6 @@ group TransformMETCISHObservationMP(source operations: BackboneElement, target t
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
                     amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA9193-9', 'High');
-
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -688,7 +491,6 @@ group TransformMETCISHObservationMP(source operations: BackboneElement, target t
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
                     amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA8982-6', 'Medium');
-
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -697,19 +499,20 @@ group TransformMETCISHObservationMP(source operations: BackboneElement, target t
             {
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
-                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA32-8', 'no');
-
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA32-8', 'No');
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
         };
 
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        // Specimen is set in Master.map
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -719,8 +522,8 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -730,6 +533,7 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
 
     operations then MapDateOfAssessmentMP(operations, MET, tgt);
     operations then MapCodeMP(operations, MET, tgt);
+    operations then MapMETPhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -777,8 +581,7 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
         //Ergebnis
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2154'" then
         {
-            values.value where "$this.value = 'positiv (high-level amplification)'
-                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            values.value where "$this.value = 'positiv'" then
             {
                 values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
             };
@@ -802,7 +605,6 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
                     values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                     {
                         amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA9193-9', 'High');
-
                         amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                     };
                 };
@@ -812,7 +614,6 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
                     amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA8982-6', 'Medium');
-
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -821,8 +622,7 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
             {
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
-                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA32-8', 'no');
-
+                    amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA32-8', 'No');
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -832,7 +632,6 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
                     amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA9194-7', 'Low');
-
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -842,7 +641,6 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
                 values.value as amplifikation -> tgt.component = create('BackboneElement') as amplifikationcomponent then
                 {
                     amplifikation -> amplifikationcomponent.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-
                     amplifikation -> amplifikationcomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -905,7 +703,7 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
             values.value as censignale -> tgt.component = create('BackboneElement') as censignalecomponent then
             {
                 censignale -> censignalecomponent.valueInteger = censignale;
-                censignale -> censignalecomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'cet-signal-count');
+                censignale -> censignalecomponent.code = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'cen-signal-count');
             };
         };
 
@@ -940,11 +738,13 @@ group TransformMETFISHObservationMP(source operations: BackboneElement, target t
         };
     
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        // Specimen is set in Master.map 
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -954,8 +754,8 @@ group TransformRETCISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -965,6 +765,7 @@ group TransformRETCISHObservationMP(source operations: BackboneElement, target t
 
     operations then MapDateOfAssessmentMP(operations, RET, tgt);
     operations then MapCodeMP(operations, RET, tgt);
+    operations then MapRETPhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -1012,8 +813,7 @@ group TransformRETCISHObservationMP(source operations: BackboneElement, target t
         //Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2191'" then
         {
-            values.value where "$this.value = 'positiv (high-level amplification)'
-                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            values.value where "$this.value = 'positiv'" then 
             {
                 values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
             };
@@ -1040,11 +840,13 @@ group TransformRETCISHObservationMP(source operations: BackboneElement, target t
         };
 
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        // Specimen is set in Master.map
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -1054,8 +856,8 @@ group TransformRETFISHObservationMP(source operations: BackboneElement, target t
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -1065,6 +867,7 @@ group TransformRETFISHObservationMP(source operations: BackboneElement, target t
 
     operations then MapDateOfAssessmentMP(operations, RET, tgt);
     operations then MapCodeMP(operations, RET, tgt);
+    operations then MapRETPhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -1112,8 +915,7 @@ group TransformRETFISHObservationMP(source operations: BackboneElement, target t
         //Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2198'" then
         {
-            values.value where "$this.value = 'positiv (high-level amplification)'
-                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            values.value where "$this.value = 'positiv'" then 
             {
                 values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
             };
@@ -1150,11 +952,13 @@ group TransformRETFISHObservationMP(source operations: BackboneElement, target t
         };
 
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        // Specimen is set in Master.map
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -1164,8 +968,8 @@ group TransformROS1CISHObservationMP(source operations: BackboneElement, target 
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -1175,6 +979,7 @@ group TransformROS1CISHObservationMP(source operations: BackboneElement, target 
 
     operations then MapDateOfAssessmentMP(operations, ROS1, tgt);
     operations then MapCodeMP(operations, ROS1, tgt);
+    operations then MapROS1PhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -1222,8 +1027,7 @@ group TransformROS1CISHObservationMP(source operations: BackboneElement, target 
         //Ergebnis
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2225'" then
         {
-            values.value where "$this.value = 'positiv (high-level amplification)'
-                               or $this.value = 'positiv (moderate-level amplification)'" then 
+            values.value where "$this.value = 'positiv'" then 
             {
                 values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
             };
@@ -1260,11 +1064,13 @@ group TransformROS1CISHObservationMP(source operations: BackboneElement, target 
         };
        
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        // Specimen is set in Master.map 
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -1274,8 +1080,8 @@ group TransformROS1FISHObservationMP(source operations: BackboneElement, target 
 
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'; 
 
-    // Status 
-    operations -> tgt.status = cast('final', 'FHIR.code');
+    // Status and Extension
+    operations then TransformMPStatusAndExtension(operations, tgt);
 
     // Category 
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'laboratory');
@@ -1285,6 +1091,7 @@ group TransformROS1FISHObservationMP(source operations: BackboneElement, target 
 
     operations then MapDateOfAssessmentMP(operations, ROS1, tgt);
     operations then MapCodeMP(operations, ROS1, tgt);
+    operations then MapROS1PhaenotypMP(operations, tgt);
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -1369,11 +1176,13 @@ group TransformROS1FISHObservationMP(source operations: BackboneElement, target 
         };
 
         // Referenzen
-        // Specimen
-        // data.values as values where "blockindex = 8 and groupindex = 0 and itemid = 'uuid_specimen_nngm4'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        // Specimen is set in Master.map
+
+        // Organization
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_organizationalunit'" then
+        {
+            values.value as value -> tgt.performer = create('Reference') as performer, performer.reference = evaluate(value, '\'Organization/\' + $this');
+        };
     };
 }
 
@@ -1381,6 +1190,41 @@ group TransformROS1FISHObservationMP(source operations: BackboneElement, target 
 /*------------------Functionality--------------------------------*/
 /*---------------------------------------------------------------*/
 
+group TransformMPStatusAndExtension(source operations: BackboneElement, target tgt: Observation)
+{
+    // Durchführung
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2520'" then
+    {
+        values.value as value where "$this.value = 'in Bearbeitung'" then 
+        {
+            value -> tgt.status = 'registered';
+        };
+        values.value as value where "$this.value = 'abgeschlossen'" then 
+        {
+            value -> tgt.status = 'final';
+        };
+    };
+    
+    // Abschluss
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2462'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as statusExtension then
+        {
+            value -> statusExtension.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/NNGM/statusAbschluss',value, value);
+            value -> statusExtension.url = 'status';
+        };
+    };
+
+    // Datum des Abschlusses
+    operations.data as data, data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2521'" then
+    {
+        values.value as value, value -> tgt.status as status, status.extension as statusAbschluss collate, statusAbschluss.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss', statusAbschluss.extension as datumExtension then
+        {
+            value -> datumExtension.valueDate = dateOp(value, 'date');
+            value -> datumExtension.url = 'datum';
+        };
+    };
+}
 
 group MapDateOfAssessmentMP(source operations: BackboneElement, source name: string, target tgt: Observation)
 {
@@ -1426,7 +1270,7 @@ group MapPercentageValueMP(source src: string, target tgt: Quantity)
 {
     src -> tgt.value = src,
             tgt.system = 'http://unitsofmeasure.org',
-            tgt.unit = 'percentage',
+            tgt.unit = '%',
             tgt.code = '%';
 }
 
@@ -1436,7 +1280,7 @@ group MapALKPhaenotypMP(source operations: BackboneElement, target tgt: Observat
     //Phänotype
     operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2099'" then
     {
-        values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+        values.value as phaenotyp where "unit.exists().not()" -> tgt.component = create('BackboneElement') as phaenotypcomponent then
         {
             values.value as phaenotyp where "value = 'Expression'" then
             {
@@ -1468,12 +1312,12 @@ group MapALKPhaenotypMP(source operations: BackboneElement, target tgt: Observat
     };
 }
 
-group MMapMETPhaenotypMP(source operations: BackboneElement, target tgt: Observation)
+group MapMETPhaenotypMP(source operations: BackboneElement, target tgt: Observation)
 {
     //Phänotype
     operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2133'" then
     {
-        values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+        values.value as phaenotyp where "unit.exists().not()" -> tgt.component = create('BackboneElement') as phaenotypcomponent then
         {
             values.value as phaenotyp where "value = 'Expression'" then
             {
@@ -1510,7 +1354,7 @@ group MapRETPhaenotypMP(source operations: BackboneElement, target tgt: Observat
     //Phänotype
     operations.data as data, data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2184'" then
     {
-        values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+        values.value as phaenotyp where "unit.exists().not()" -> tgt.component = create('BackboneElement') as phaenotypcomponent then
         {
             values.value as phaenotyp where "value = 'Expression'" then
             {
@@ -1547,7 +1391,7 @@ group MapROS1PhaenotypMP(source operations: BackboneElement, target tgt: Observa
     //Phänotype
     operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2212'" then
     {
-        values.value as phaenotyp -> tgt.component = create('BackboneElement') as phaenotypcomponent then
+        values.value as phaenotyp where "unit.exists().not()" -> tgt.component = create('BackboneElement') as phaenotypcomponent then
         {
             values.value as phaenotyp where "value = 'Expression'" then
             {
@@ -1583,8 +1427,7 @@ group MapROS1PhaenotypMP(source operations: BackboneElement, target tgt: Observa
 //Codes
 group MapCodeMP(source operations: BackboneElement, source name: string, target tgt: Observation)
 {
-    //ALK code
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'ALK');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', name);
 }
 
 // Reference

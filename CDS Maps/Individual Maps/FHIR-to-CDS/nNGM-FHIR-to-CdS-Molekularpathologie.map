@@ -1,11 +1,6 @@
 /// version = 0.1
 /// title = "nNGM: nNGM_Mapping_MolekularpathologieCTS - FHIR to CDS"
 
-/*
-TODO
-- 2147 Valueset does not allow for differentiation between high-level and moderate-level amplification
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularpathologieCDS" = nNGM_Mapping_MolekularpathologieCDS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
@@ -14,1480 +9,1120 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformMolekularpathologieCDS(source entry: BackboneElement, target tgt: BackboneElement)
 {
-    //------------------------ Specimen ------------------------
-    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
-    {
-        //Biopsy-ID -> 0, 0, id_1601
-        specimen -> tgt.data as data then
-        {
-            specimen.identifier as identifier then
-            {   
-                specimen -> data.blockindex = 0;
-                specimen -> data.groupindex = 0;
-                specimen -> data.itemid = 'id_1601';
-                identifier.value as value-> data.values as values, values.unit = 'count', values.value = value;
-            };
-        };                
-    };
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'"
+        then TransformMPDiagnosticReportCDS(diagnosticReport, tgt);
 
-    /*---------------------DiagnosticReport-----------------------*/
-    entry.resource as episodeofcare where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" then
-    {
-        //Untersuchung-ID
-        episodeofcare -> tgt.data as data then
-        {
-            episodeofcare.identifier as identifier, identifier.value as value then
-            {   
-                episodeofcare -> data.blockindex = 8;
-                episodeofcare -> data.groupindex = 0;
-                episodeofcare -> data.itemid = 'assessment_id';
-                value -> data.values as values, values.value = value;
-            };
-        };
-    };
-
-    /* --------------- Organization ---------------------- */
-    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Organization/clinical-site'" then
-    {
-        //Standort -> 0, 0, id_2435
-        organization -> tgt.data as data then
-        {
-            organization.name as name then
-            {   
-                organization -> data.blockindex = 0;
-                organization -> data.groupindex = 0;
-                organization -> data.itemid = 'id_2435';
-                name -> data.values as values, values.value = name;
-            };
-        };                
-    };
-
-    /* --------------- ServiceRequest ---------------------- */
-    entry.resource as serviceRequest where "resource is ServiceRequest and code.coding.code = 'molekularpathologie' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
-    {
-        //Durchfuehrung -> 7,0,  id_2520
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status where "$this.status = 'active'" then
-            {
-                serviceRequest ->  data.blockindex = 7;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid = 'id_2520';
-                status -> data.values as values,values.value = 'in Bearbeitung';
-            };
-            serviceRequest.status as status where "$this.status = 'completed'" then
-            {
-                serviceRequest ->  data.blockindex = 7;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid = 'id_2520';
-                status -> data.values as values,values.value = 'abgeschlossen';
-            };
-        };
-
-        //Abschluss -> 7,0, id_2462
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
-            {
-                statusextension where "$this.url = 'status'" then
-                {
-                    serviceRequest ->  data.blockindex = 7;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2462';
-                    statusextension.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code  -> data.values as values,values.value = code;
-                };
-            };
-        };
+    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" 
+        then TransformMPOrganizationCDS(organization, tgt);
     
-        //Datum des Abschlusses -> 7,0, id_2521
-        serviceRequest -> tgt.data as data then
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish'"
+        then TransformMPCISHObservationCDS(observation, tgt);
+
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish'"
+        then TransformMPFISHObservationCDS(observation, tgt);
+}
+
+/*---------------------DiagnosticReport-----------------------*/
+group TransformMPDiagnosticReportCDS(source diagnosticReport: DiagnosticReport, target tgt: BackboneElement)
+{
+    //Untersuchung-ID
+    diagnosticReport -> tgt.data as data then
+    {
+        diagnosticReport.identifier as identifier, identifier.value as value then
+        {   
+            diagnosticReport -> data.blockindex = 8;
+            diagnosticReport -> data.groupindex = 0;
+            diagnosticReport -> data.itemid = 'assessment_id';
+            value -> data.values as values, values.value = value;
+        };
+    };
+}
+
+/* --------------- Organization ---------------------- */
+group TransformMPOrganizationCDS(source organization: Organization, target tgt: BackboneElement)
+{
+    //Standort -> 0, 0, id_2435
+    organization -> tgt.data as data then
+    {
+        organization.name as name then
+        {   
+            organization -> data.blockindex = 0;
+            organization -> data.groupindex = 0;
+            organization -> data.itemid = 'id_2435';
+            name -> data.values as values, values.value = name;
+        };
+    };                
+}
+
+/* --------------- CISH Observation ---------------------- */
+group TransformMPCISHObservationCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // SOP is the same for every Observation
+    observation then TransformSOPNumberMP(observation, tgt);
+    // Status and Status.Extension is the same for every Observation
+    observation then TransformMPStatusAndExtensionCDS(observation, tgt);
+
+    observation where "code.coding.code = 'ALK'" then TransformMPCISHObservationALKCDS(observation, tgt);
+    observation where "code.coding.code = 'MET'" then TransformMPCISHObservationMETCDS(observation, tgt);
+    observation where "code.coding.code = 'RET'" then TransformMPCISHObservationRETCDS(observation, tgt);
+    observation where "code.coding.code = 'ROS1'" then TransformMPCISHObservationROS1CDS(observation, tgt);
+}
+
+/* --------------- FISH Observation ---------------------- */
+group TransformMPFISHObservationCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // SOP is the same for every Observation
+    observation then TransformSOPNumberMP(observation, tgt);
+    // Status and Status.Extension is the same for every Observation
+    observation then TransformMPStatusAndExtensionCDS(observation, tgt);
+
+    observation where "code.coding.code = 'ALK'" then TransformMPFISHObservationALKCDS(observation, tgt);
+    observation where "code.coding.code = 'MET'" then TransformMPFISHObservationMETCDS(observation, tgt);
+    observation where "code.coding.code = 'RET'" then TransformMPFISHObservationRETCDS(observation, tgt);
+    observation where "code.coding.code = 'ROS1'" then TransformMPFISHObservationROS1CDS(observation, tgt);
+}
+
+/*---------------ALK CISH OBSERVATION----------------*/
+group TransformMPCISHObservationALKCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
         {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2099').exists().not()" then
             {
-                datumextension where "$this.url ='datum'" then
+                observation->data.blockindex = 3;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2099';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2098').exists().not()" then
+        {
+            observation-> data.blockindex = 3;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2098';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2108').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
                 {
-                    serviceRequest ->  data.blockindex = 7;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2521';
-                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                    observation-> data.blockindex = 3;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2108';
+                    code -> data.values as values, values.value = code;
                 };
             };
         };
     };
 
-    /*---------------ALK CISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'ALK'" then
+    // Hersteller
+    observation -> tgt.data as data then
     {
-        // ALK Phaenotyp
-        observation->tgt.data as data then
+        observation.component as component then
         {
-            observation.component as component then
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2109').exists().not()" then
             {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2099').exists().not()" then
-                {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2099';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2099';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2099';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
-                };
-            };
-        };
-
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
-
-        // Date Of Assesment
-        observation -> tgt.data as data then
-        {
-            observation.effectivePeriod as period then
-            {
-                observation-> data.blockindex = 3;
-                observation-> data.groupindex = 0;
-                observation-> data.itemid = 'id_2098';
-                period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-            };
-        };
-
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2108').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 3;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2108';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2109').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 3;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2109';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
+                component.valueCodeableConcept as valueCodeableConcept,
                 valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6576-8'" then 
+                coding.code as code then  
                 {
-                    observation -> data.blockindex = 3;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2112';
-                    code -> data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6577-6'" then 
-                {
-                    observation -> data.blockindex = 3;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2112';
-                    code -> data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA18198-4'" then 
-                {
-                    observation -> data.blockindex = 3;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2112';
-                    code -> data.values as values, values.value = 'nicht auswertbar';
+                    observation-> data.blockindex = 3;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2109';
+                    code -> data.values as values, values.value = code;
                 };
             };
-
-        
-        // Positieve Tumorzellen
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
-                {
-                    observation->data.blockindex = 3;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2113';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };     
+        };
     };
 
-    /*---------------ALK FISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'ALK'" then
+    //Ergebnis
+    observation->tgt.data as data then
     {
-        // ALK Phaenotyp
-        observation->tgt.data as data then
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
         {
-            observation.component as component then
+            observation->data.blockindex = 3;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2112';
+            coding.code as code where "code = 'LA6576-8'" -> data.values as values, values.value = 'positiv';
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+
+    // Positieve Tumorzellen
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
             {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2099').exists().not()" then
+                observation->data.blockindex = 3;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2113';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };     
+}
+
+/*---------------ALK FISH OBSERVATION----------------*/
+group TransformMPFISHObservationALKCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
+        {
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2099').exists().not()" then
+            {
+                observation->data.blockindex = 3;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2099';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2098').exists().not()" then
+        {
+            observation-> data.blockindex = 3;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2098';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2115').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
                 {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2099';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2099';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 3;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2099';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
+                    observation-> data.blockindex = 3;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2115';
+                    code -> data.values as values, values.value = code;
                 };
             };
         };
+    };
 
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
+    // Hersteller
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2116').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 3;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2116';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Ergebnis
+    observation->tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
+        {
+            observation->data.blockindex = 3;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2119';
+            coding.code as code where "code = 'LA6576-8'" -> data.values as values, values.value = 'positiv';
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+
     
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2115').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 3;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2115';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2116').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 3;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2116';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6576-8'" then 
-                {
-                    observation -> data.blockindex = 3;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2119';
-                    code -> data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6577-6'" then 
-                {
-                    observation -> data.blockindex = 3;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2119';
-                    code -> data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA18198-4'" then 
-                {
-                    observation -> data.blockindex = 3;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2119';
-                    code -> data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-        
-        // Positieve Tumorzellen
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
-                {
-                    observation->data.blockindex = 3;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2120';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };
-
-        // Polysomie
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
-                {
-                    observation->data.blockindex = 3;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2121';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };          
-    };
-
-    /*---------------MET CISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'MET'" then
+    // Positieve Tumorzellen
+    observation-> tgt.data as data then
     {
-        // MET Phaenotyp
-        observation->tgt.data as data then
+        observation.component as component then
         {
-            observation.component as component then
+            component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
             {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2133').exists().not()" then
-                {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 4;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2133';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 4;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2133';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 4;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2133';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
-                };
-            };
-        };
-
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
-
-        // Date Of Assesment
-        observation -> tgt.data as data then
-        {
-            observation.effectivePeriod as period then
-            {
-                observation-> data.blockindex = 4;
-                observation-> data.groupindex = 0;
-                observation-> data.itemid = 'id_2132';
-                period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-            };
-        };
-
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2143').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2143';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2144').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2144';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-        {
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code where "code = 'LA6576-8'" then 
-            {
-                observation -> data.blockindex = 4;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2147';
-                code -> data.values as values, values.value = 'positiv (high-level amplification)';
-            };
-
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code where "code = 'LA6577-6'" then 
-            {
-                observation -> data.blockindex = 4;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2147';
-                code -> data.values as values, values.value = 'negativ';
-            };
-
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code where "code = 'LA18198-4'" then 
-            {
-                observation -> data.blockindex = 4;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_2147';
-                code -> data.values as values, values.value = 'nicht auswertbar';
-            };
-        };
-
-        // Amplifikation
-        observation -> tgt.data as data then 
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'amplification-level' and %tgt.data.where(itemid = 'id_2148').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA9193-9'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2148';
-                        code -> data.values as values, values.value = 'Amplifikation high-level';
-                    };
-
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA8982-6'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2148';
-                        code -> data.values as values, values.value = 'Amplifikation moderate-level';
-                    };
-
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA32-8'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2148';
-                        code -> data.values as values, values.value = 'keine Amplifikation';
-                    };
-                };
+                observation->data.blockindex = 3;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2120';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
             };
         };
     };
 
-    /*---------------MET FISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'MET'" then
+    // Polysomie
+    observation-> tgt.data as data then
     {
-        // MET Phaenotyp
-        observation->tgt.data as data then
+        observation.component as component then
         {
-            observation.component as component then
+            component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
             {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2133').exists().not()" then
-                {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 4;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2133';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 4;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2133';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 4;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2133';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
-                };
-            };
-        };
-
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
-    
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2150').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2150';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2151').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2151';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6576-8'" then 
-                {
-                    observation -> data.blockindex = 4;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2154';
-                    code -> data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6577-6'" then 
-                {
-                    observation -> data.blockindex = 4;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2154';
-                    code -> data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA18198-4'" then 
-                {
-                    observation -> data.blockindex = 4;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2154';
-                    code -> data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-        // Amplifikation
-        observation -> tgt.data as data then 
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'amplification-level' and %tgt.data.where(itemid = 'id_2155').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA9193-9'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2155';
-                        code -> data.values as values, values.value = 'Amplifikation high-level';
-                    };
-
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA8982-6'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2155';
-                        code -> data.values as values, values.value = 'Amplifikation intermediate-level';
-                    };
-
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA32-8'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2155';
-                        code -> data.values as values, values.value = 'negativ';
-                    };
-
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA9194-7'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2155';
-                        code -> data.values as values, values.value = 'Amplifikation low-level';
-                    };
-
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code where "code = 'LA11884-6'" then  
-                    {
-                        observation-> data.blockindex = 4;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2155';
-                        code -> data.values as values, values.value = 'nicht auswertbar';
-                    };
-                };
-            };
-        };
-
-        // Prozentzahl an Zellen mit mehr als 15 MET-Signalen pro Zelle (Positiv ≥ 10 %) bei einer high-level Amplifikation
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = '15-met-ratio'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2156';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };
-
-        // Prozentzahl an Zellen mit mehr als 5 MET-Signalen pro Zelle (Positiv ≥ 50 %) bei einer low-level Amplifikation:
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = '5-met-ratio'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2157';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };
-
-        // Prozentzahl an Zellen mit mehr als 4 MET-Signalen pro Zelle (Positiv ≥ 40 %) bei einer low-level Amplifikation:
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = '4-met-ratio'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2158';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };
-
-        // Gezählte Tumorzellen:
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueInteger as integer where "code.coding.code = 'C0007584'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2159';
-                    integer -> data.values as values, values.unit = 'count', values.value = integer;
-                };
-            };
-        };
-        
-
-        // MET Signale
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueInteger as integer where "code.coding.code = 'met-signal-count'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2160';
-                    integer -> data.values as values, values.unit = 'count',  values.value = integer;
-                };
-            };
-        };
-
-        // CEN signale
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueInteger as integer where "code.coding.code = 'cen-signal-count'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2161';
-                    integer -> data.values as values, values.unit = 'count',  values.value = integer;
-                };
-            };
-        };
-        
-
-        // Quotient MET/CEN7 Signale
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueInteger as integer where "code.coding.code = 'met-cen-signal-count'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2162';
-                    integer -> data.values as values, values.unit = 'count',  values.value = integer;
-                };
-            };
-        };
-        
-
-        // Durchschnitt MET-Genkopiezahl/Zelle (Positiv ≥ 6)
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueInteger as integer where "code.coding.code = 'met-copy-per-cell'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2163';
-                    integer -> data.values as values, values.unit = 'count', values.value = integer;
-                };
-            };
-        };
-        
-
-        // Polysomie
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
-                {
-                    observation->data.blockindex = 4;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2164';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };
-    };
-        
-    /*---------------RET CISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'RET'" then
-    {
-        // RET Phaenotyp
-        observation->tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2184').exists().not()" then
-                {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 5;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2184';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 5;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2184';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 5;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2184';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
-                };
-            };
-        };
-
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
-    
-        // Date Of Assesment
-        observation -> tgt.data as data then
-        {
-            observation.effectivePeriod as period then
-            {
-                observation-> data.blockindex = 5;
-                observation-> data.groupindex = 0;
-                observation-> data.itemid = 'id_2183';
-                period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-            };
-        };
-
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2187').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 5;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2187';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2188').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 5;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2188';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6576-8'" then 
-                {
-                    observation -> data.blockindex = 5;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2191';
-                    code -> data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6577-6'" then 
-                {
-                    observation -> data.blockindex = 5;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2191';
-                    code -> data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA18198-4'" then 
-                {
-                    observation -> data.blockindex = 5;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2191';
-                    code -> data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-        
-        // Positieve Tumorzellen
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
-                {
-                    observation->data.blockindex = 5;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2192';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };     
-    };
-
-    /*---------------RET FISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'RET'" then
-    {
-        // RET Phaenotyp
-        observation->tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2184').exists().not()" then
-                {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 5;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2184';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 5;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2184';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 5;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2184';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
-                };
-            };
-        };
-
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
-    
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2194').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 5;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2194';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2195').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 5;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2195';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6576-8'" then 
-                {
-                    observation -> data.blockindex = 5;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2198';
-                    code -> data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6577-6'" then 
-                {
-                    observation -> data.blockindex = 5;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2198';
-                    code -> data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA18198-4'" then 
-                {
-                    observation -> data.blockindex = 5;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2198';
-                    code -> data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-        
-        // Positieve Tumorzellen
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
-                {
-                    observation->data.blockindex = 5;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2199';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };
-
-        // Polysomie
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
-                {
-                    observation->data.blockindex = 5;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2200';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };          
-    };
-
-        /*---------------ROS1 CISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ish' and resource.code.coding.code = 'ROS1'" then
-    {
-        // ROS1 Phaenotyp
-        observation->tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2212').exists().not()" then
-                {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 6;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2212';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 6;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2212';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 6;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2212';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
-                };
-            };
-        };
-
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
-    
-        // Date Of Assesment
-        observation -> tgt.data as data then
-        {
-            observation.effectivePeriod as period then
-            {
-                observation-> data.blockindex = 6;
-                observation-> data.groupindex = 0;
-                observation-> data.itemid = 'id_2211';
-                period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
-            };
-        };
-
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2221').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 6;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2221';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2222').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 6;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2222';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6576-8'" then 
-                {
-                    observation -> data.blockindex = 6;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2225';
-                    code -> data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6577-6'" then 
-                {
-                    observation -> data.blockindex = 6;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2225';
-                    code -> data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA18198-4'" then 
-                {
-                    observation -> data.blockindex = 6;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2225';
-                    code -> data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-        
-        // Positieve Tumorzellen
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
-                {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2226';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };  
-
-        // Polysomie
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
-                {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2227';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };          
-    };   
-
-    /*---------------ROS1 FISH OBSERVATION----------------*/
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fish' and resource.code.coding.code = 'ROS1'" then
-    {
-        // ROS1 Phaenotyp
-        observation->tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2212').exists().not()" then
-                {
-                    vcc.coding as coding where "coding.code = 'C80488'" then
-                    {
-                        observation->data.blockindex = 6;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2212';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Expression';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C28510'" then
-                    {
-                        observation->data.blockindex = 6;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2212';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Fusion';
-                    };
-
-                    vcc.coding as coding where "coding.code = 'C25418'" then
-                    {
-                        observation->data.blockindex = 6;
-                        observation->data.groupindex = 0;
-                        observation->data.itemid = 'id_2212';
-                        coding->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
-                    };
-                };
-            };
-        };
-
-        // SOP Number
-        observation then TransformSOPNumberMP(observation, tgt);
-
-        // Kit bezeichnung
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2229').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 6;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2229';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Hersteller
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2230').exists().not()" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then  
-                    {
-                        observation-> data.blockindex = 6;
-                        observation-> data.groupindex = 0;
-                        observation-> data.itemid = 'id_2230';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        // Ergebnis
-        observation -> tgt.data as data then
-            {
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6576-8'" then 
-                {
-                    observation -> data.blockindex = 6;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2233';
-                    code -> data.values as values, values.value = 'positiv';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA6577-6'" then 
-                {
-                    observation -> data.blockindex = 6;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2233';
-                    code -> data.values as values, values.value = 'negativ';
-                };
-
-                observation.valueCodeableConcept as valueCodeableConcept,
-                valueCodeableConcept.coding as coding,
-                coding.code as code where "code = 'LA18198-4'" then 
-                {
-                    observation -> data.blockindex = 6;
-                    observation -> data.groupindex = 0;
-                    observation -> data.itemid = 'id_2233';
-                    code -> data.values as values, values.value = 'nicht auswertbar';
-                };
-            };
-
-        
-        // Positieve Tumorzellen
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
-                {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2234';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
-            };
-        };
-
-        // Polysomie
-        observation-> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
-                {
-                    observation->data.blockindex = 6;
-                    observation->data.groupindex = 0;
-                    observation->data.itemid = 'id_2235';
-                    quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
-                };
+                observation->data.blockindex = 3;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2121';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
             };
         };
     };          
 }
 
+/*---------------MET CISH OBSERVATION----------------*/
+group TransformMPCISHObservationMETCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
+        {
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2133').exists().not()" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2133';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2132').exists().not()" then
+        {
+            observation-> data.blockindex = 4;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2132';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2143').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 4;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2143';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Hersteller
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2144').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 4;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2144';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Ergebnis
+    observation->tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
+        {
+            observation->data.blockindex = 4;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2147';
+            coding.code as code where "code = 'positiv (high-level amplification)'" -> data.values as values, values.value = code;
+            coding.code as code where "code = 'positiv (moderate-level amplification)'" -> data.values as values, values.value = code;
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+
+
+    // Amplifikation
+    observation -> tgt.data as data then 
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'amplification-level' and %tgt.data.where(itemid = 'id_2148').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding then  
+                {
+                    observation-> data.blockindex = 4;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2148';
+                    coding.code as code where "code = 'LA9193-9'" -> data.values as values, values.value = 'Amplifikation high-level';
+                    coding.code as code where "code = 'LA8982-6'" -> data.values as values, values.value = 'Amplifikation moderate-level';
+                    coding.code as code where "code = 'LA32-8'" -> data.values as values, values.value = 'keine Amplifikation';
+                };
+            };
+        };
+    };
+}
+
+/*---------------MET FISH OBSERVATION----------------*/
+group TransformMPFISHObservationMETCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
+        {
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2133').exists().not()" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2133';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2132').exists().not()" then
+        {
+            observation-> data.blockindex = 4;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2132';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2150').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 4;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2150';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Hersteller
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2151').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 4;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2151';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Ergebnis
+    observation->tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
+        {
+            observation->data.blockindex = 4;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2154';
+            coding.code as code where "code = 'LA6576-8'" -> data.values as values, values.value = 'positiv';
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+
+    // Amplifikation
+    observation -> tgt.data as data then 
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'amplification-level' and %tgt.data.where(itemid = 'id_2155').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding then  
+                {
+                    observation-> data.blockindex = 4;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2155';
+                    coding.code as code where "code = 'LA9193-9'" -> data.values as values, values.value = 'Amplifikation high-level';
+                    coding.code as code where "code = 'LA8982-6'" -> data.values as values, values.value = 'Amplifikation intermediate-level';
+                    coding.code as code where "code = 'LA9194-7'" -> data.values as values, values.value = 'Amplifikation low-level';
+                    coding.code as code where "code = 'LA32-8'" -> data.values as values, values.value = 'negativ';
+                    coding.code as code where "code = 'LA11884-6'" -> data.values as values, values.value = 'nicht auswertbar';
+                };
+            };
+        };
+    };
+
+    // Prozentzahl an Zellen mit mehr als 15 MET-Signalen pro Zelle (Positiv ≥ 10 %) bei einer high-level Amplifikation
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = '15-met-ratio'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2156';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };
+
+    // Prozentzahl an Zellen mit mehr als 5 MET-Signalen pro Zelle (Positiv ≥ 50 %) bei einer low-level Amplifikation:
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = '5-met-ratio'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2157';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };
+
+    // Prozentzahl an Zellen mit mehr als 4 MET-Signalen pro Zelle (Positiv ≥ 40 %) bei einer low-level Amplifikation:
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = '4-met-ratio'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2158';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };
+
+    // Gezählte Tumorzellen:
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueInteger as integer where "code.coding.code = 'C0007584'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2159';
+                integer -> data.values as values, values.unit = 'count', values.value = integer;
+            };
+        };
+    };
+    
+
+    // MET Signale
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueInteger as integer where "code.coding.code = 'met-signal-count'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2160';
+                integer -> data.values as values, values.unit = 'count',  values.value = integer;
+            };
+        };
+    };
+
+    // CEN signale
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueInteger as integer where "code.coding.code = 'cen-signal-count'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2161';
+                integer -> data.values as values, values.unit = 'count',  values.value = integer;
+            };
+        };
+    };
+    
+
+    // Quotient MET/CEN7 Signale
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueInteger as integer where "code.coding.code = 'met-cen-signal-ratio'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2162';
+                integer -> data.values as values, values.unit = 'count',  values.value = integer;
+            };
+        };
+    };
+    
+
+    // Durchschnitt MET-Genkopiezahl/Zelle (Positiv ≥ 6)
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueInteger as integer where "code.coding.code = 'met-copy-per-cell'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2163';
+                integer -> data.values as values, values.unit = 'count', values.value = integer;
+            };
+        };
+    };
+    
+
+    // Polysomie
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
+            {
+                observation->data.blockindex = 4;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2164';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };
+}
+        
+/*---------------RET CISH OBSERVATION----------------*/
+group TransformMPCISHObservationRETCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
+        {
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2184').exists().not()" then
+            {
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2184';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2183').exists().not()" then
+        {
+            observation-> data.blockindex = 5;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2183';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2187').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 5;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2187';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Hersteller
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2188').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 5;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2188';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Ergebnis
+    observation->tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
+        {
+            observation->data.blockindex = 5;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2191';
+            coding.code as code where "code = 'LA6576-8'" -> data.values as values, values.value = 'positiv';
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+    
+    // Positieve Tumorzellen
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
+            {
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2192';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };     
+}
+
+/*---------------RET FISH OBSERVATION----------------*/
+group TransformMPFISHObservationRETCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
+        {
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2184').exists().not()" then
+            {
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2184';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2183').exists().not()" then
+        {
+            observation-> data.blockindex = 5;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2183';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2194').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 5;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2194';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Hersteller
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2195').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 5;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2195';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Ergebnis
+    observation->tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
+        {
+            observation->data.blockindex = 5;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2198';
+            coding.code as code where "code = 'LA6576-8'" -> data.values as values, values.value = 'positiv';
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+    
+    // Positieve Tumorzellen
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
+            {
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2199';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };
+
+    // Polysomie
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
+            {
+                observation->data.blockindex = 5;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2200';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };          
+}
+
+/*---------------ROS1 CISH OBSERVATION----------------*/
+group TransformMPCISHObservationROS1CDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
+        {
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2212').exists().not()" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2212';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2211').exists().not()" then
+        {
+            observation-> data.blockindex = 6;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2211';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2221').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 6;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2221';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Hersteller
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2222').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 6;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2222';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Ergebnis
+    observation->tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
+        {
+            observation->data.blockindex = 6;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2225';
+            coding.code as code where "code = 'LA6576-8'" -> data.values as values, values.value = 'positiv';
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+    
+    // Positieve Tumorzellen
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2226';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };  
+
+    // Polysomie
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2227';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };          
+} 
+
+/*---------------ROS1 FISH OBSERVATION----------------*/
+group TransformMPFISHObservationROS1CDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Phaenotyp
+    observation->tgt.data as data then
+    {
+        observation.component as component, component.code where "code.coding.code = 'C16977'" then
+        {
+            component.valueCodeableConcept as vcc where "%tgt.data.where(itemid = 'id_2212').exists().not()" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2212';
+                vcc.coding as coding where "coding.code = 'C80488'"->data.values as values, values.unit = 'predef', values.value = 'Expression';
+                vcc.coding as coding where "coding.code = 'C28510'"->data.values as values, values.unit = 'predef', values.value = 'Fusion';
+                vcc.coding as coding where "coding.code = 'C25418'"->data.values as values, values.unit = 'predef', values.value = 'Amplifikation';
+            };
+        };
+    };
+
+    // Date Of Assessment
+    observation -> tgt.data as data then
+    {
+        observation.effectivePeriod as period where "%tgt.data.where(itemid = 'id_2211').exists().not()" then
+        {
+            observation-> data.blockindex = 6;
+            observation-> data.groupindex = 0;
+            observation-> data.itemid = 'id_2211';
+            period.start as dateOfAssessment-> data.values as values, values.value = dateOfAssessment;
+        };
+    };
+
+    // Kit bezeichnung
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C42793' and %tgt.data.where(itemid = 'id_2229').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 6;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2229';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Hersteller
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueCodeableConcept where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2230').exists().not()" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then  
+                {
+                    observation-> data.blockindex = 6;
+                    observation-> data.groupindex = 0;
+                    observation-> data.itemid = 'id_2230';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    // Ergebnis
+    observation->tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+            valueCodeableConcept.coding as coding then
+        {
+            observation->data.blockindex = 6;
+            observation->data.groupindex = 0;
+            observation->data.itemid = 'id_2233';
+            coding.code as code where "code = 'LA6576-8'" -> data.values as values, values.value = 'positiv';
+            coding.code as code where "code = 'LA6577-6'" -> data.values as values, values.value = 'negativ';
+            coding.code as code where "code = 'LA18198-4'" -> data.values as values, values.value = 'nicht auswertbar';
+        };
+    };
+    
+    // Positieve Tumorzellen
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C70460'" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2234';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };
+
+    // Polysomie
+    observation-> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.valueQuantity as quantity where "code.coding.code = 'C36331'" then
+            {
+                observation->data.blockindex = 6;
+                observation->data.groupindex = 0;
+                observation->data.itemid = 'id_2235';
+                quantity.value as value->data.values as values, values.unit = 'percent', values.value = value;
+            };
+        };
+    };
+}         
+
+// Helper functions
 group TransformSOPNumberMP(source observation: Observation, target tgt: BackboneElement)
 {
     //SOP-Versionsnummer des Standorts -> 0, 0, id_2617
@@ -1502,6 +1137,43 @@ group TransformSOPNumberMP(source observation: Observation, target tgt: Backbone
                 observation ->  data.itemid = 'id_2617';
                 component.valueString as valueString -> data.values as values, values.value = valueString;
             };
+        };
+    };
+}
+
+group TransformMPStatusAndExtensionCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // Durchführung
+    observation.status as status where "%tgt.data.where(itemid = 'id_2520').exists().not()" -> tgt.data as data then
+    {
+        observation -> data.blockindex = 7;
+        observation -> data.groupindex = 0;
+        observation -> data.itemid = 'id_2520';
+
+        status where "$this = 'registered'" -> data.values as values, values.value = 'in Bearbeitung';
+        status where "$this = 'final'" -> data.values as values, values.value = 'abgeschlossen';
+    };
+
+    
+    observation.status as status, status.extension as statusAbschluss, statusAbschluss where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss'" then
+    {
+        // Abschluss
+        statusAbschluss.extension as statusExtension, statusExtension where "url = 'status' and %tgt.data.where(itemid = 'id_2462').exists().not()", statusExtension.valueCodeableConcept as vcc,
+            vcc.coding as coding, coding.code as code -> tgt.data as data then
+        {
+            observation -> data.blockindex = 7;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2462';
+            observation -> data.values as values, values.value = code;
+        };
+
+        // Datum des Abschlusses
+        statusAbschluss.extension as datumExtension, datumExtension where "url = 'datum' and %tgt.data.where(itemid = 'id_2521').exists().not()", datumExtension.valueDate as date -> tgt.data as data then
+        {
+            observation -> data.blockindex = 7;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2521';
+            observation -> data.values as values, values.value = date;
         };
     };
 }

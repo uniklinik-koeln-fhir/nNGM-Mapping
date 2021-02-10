@@ -15,18 +15,18 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_Anforderung"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungFHIR"
-imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
+// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR"
 
 // Befund
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyFHIR"
-// imports "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ImmunhistochemieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_HistologieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_MolekularphatologieFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FusionNGSFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyFHIR"
+imports "http://uk-koeln.de/fhir/StructureMap/nnGM_Mapping_BeurteilungFHIR"
 
 // Therapien
 // imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR"
@@ -42,8 +42,7 @@ group MapCDS(source src: CTS_Transport, target tgt: Bundle)
 
     src then MapStammdaten(src, tgt);
     src then MapAntrag(src, tgt);
-    // TODO
-    // src then MapBefund(src, tgt);
+    src then MapBefund(src, tgt);
     // TODO
     // src then MapTherapies(src, tgt);
     src then MapTNM(src, tgt);
@@ -108,7 +107,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
     src.operations as operations,
         // Execute as many times as there are Basisangaben
-        operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
+        operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'  and data.exists()" ->
         // Add a transaction bundle to the collection bundle
         tgt.entry as entry,
         entry.resource = create('Bundle') as bundleAntrag,
@@ -161,7 +160,7 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
         /* ------------------------------ Resources ---------------------------- */
 
         // Basisangaben (Antrag.basisangaben)
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BA' and type = 'save'" then
+        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BA' and type = 'save'  and data.exists()" then
         {
             src then TransformBundleBasisangaben(operations, bundleAntrag, compositionAntrag);
         };
@@ -180,25 +179,25 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
 
             /* ------------------------------ Resources ---------------------------- */
             // Anforderung (Antrag.biopsie.anforderung)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             {
                 src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection);
             };
 
             // TNM (Antrag.biopsie.tnm)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             {
                 src then TransformBundleTNM(operations, bundleAntrag, compositionAntrag, biopsieSection);
             };
 
             // Resistenztestung (Antrag.biopsie.resistenztestung)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             {
                 src then TransformBundleResistenztestung(operations, bundleAntrag, compositionAntrag, biopsieSection);
             };
 
             // // Vorbefund (Antrag.biopsie.vorbefund)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.formIndex.toString() and type = 'save'" then
+            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             // {
             //     src then TransformBundleVorbefundFHIR(operations, bundleAntrag, compositionAntrag, biopsieSection, index);
             // };
@@ -212,18 +211,17 @@ group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
     };
 }
 
-// TODO
+/* ------------------------------ Befund ---------------------------- */
 group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 {
     let index = create('RepeatIndex');
 
-    /* ------------------------------ Befund ---------------------------- */
     src then InitCaseIndex(src, index); // Reset caseIndex
     src then InitMaxIndexBefund(src, index); // Reset maxIndex
 
     src.operations as operations,
     // Execute as many times as there are Basisangaben
-    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
+    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'  and data.exists()" ->
     // Add a transaction bundle to the collection bundle
     tgt.entry as entry,
     entry.resource = create('Bundle') as bundleBefund,
@@ -242,15 +240,14 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 
         /* ------------------------------ Composition ---------------------------- */
         // Meta
+        src -> compositionBefund.title = 'Befund Pseudonymisiert';
         src -> compositionBefund.id = uuid();
         src -> compositionBefund.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert';
         src -> compositionBefund.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'molpatho-befund');
+        src -> entryBefund.request as request, request.method = 'PUT', request.url = evaluate(compositionBefund, '\'Composition/\' + $this.id');
 
         // Category idat or psn depends on which type of patient/consent is in the bundle
         src -> compositionBefund.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
-
-        // Title
-        src -> compositionBefund.title = 'Befund pseudonymisiert';
 
         // Identifier i.e. Case ID
         src -> compositionBefund.identifier = create('Identifier') as FallIdentifier,
@@ -289,58 +286,68 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
 
             /* ------------------------------ Resources ---------------------------- */
             // Immunhistochemie (Befund.diagnostik.immunhistochemie)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save' and data.exists()" then
+            {
+                src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-            // // Histologie (Befund.diagnostik.histologie)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-HL' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleHistologie(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
+            // Histologie (Befund.diagnostik.histologie)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-HL' + %index.formIndex.toString() and type = 'save' and data.exists()" then
+            {
+                src then TransformBundleHistologie(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-            // // Molekularpathologie (Befund.diagnostik.molekularpathologie)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
+            // Molekularpathologie (Befund.diagnostik.molekularpathologie)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-            // // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
 
-            // // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
 
-            // // Fast Track (Befund.diagnostik.fast-track)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
+            // Fast Track (Befund.diagnostik.fast-track)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, diagnosticSection);
+            };
 
-            // // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
             
-            // // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
+            // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
+            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
+            {
+                src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, diagnosticSection, index);
+            };
+
+            // for each added section and its referenced Observations and DiagnosticReports: 
+            diagnosticSection.section as nestedSection, nestedSection where "code.coding.system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections'
+                                                                            and code.coding.code != 'histologie'" then 
+            {
+                // set Specimen references according to ServiceRequest (from Anforderung)
+                src then SetReferenceToAnforderungSpecimen(tgt, bundleBefund, compositionBefund, diagnosticSection, nestedSection);
+                // set ServiceRequest (from Anforderung) references to created resources
+                src then SetReferenceToBefundResources(tgt, nestedSection, compositionBefund, diagnosticSection);
+            };
 
             src then IncrementFormIndex(src, index);
         };
 
         // Beurteilung (Befund.beurteilung)
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BU' and type = 'save'" then
+        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BU' and type = 'save'  and data.exists()" then
         {
             src then TransformBundleBeurteilung(operations, bundleBefund, compositionBefund, index);
         };
@@ -348,7 +355,6 @@ group MapBefund(source src: CTS_Transport, target tgt: Bundle)
         /* ------------------------------ Increment index ---------------------------- */
         src then IncrementCaseIndex(src, index);
         src then InitMaxIndexBefund(src, index); // Reset maxIndex
-        //src -> tgt.id = evaluate(index, '$this.formIndex');
     };
 }
 
@@ -414,7 +420,7 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 
             // Operation
             src then InitFormIndex(src, index);
-            src.operations as operations, operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'" then
+            src.operations as operations, operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             {
                 // src then TransformBundleOperationTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
                 src then IncrementFormIndex(src, index);
@@ -422,7 +428,7 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 
             // SystemischeTherapie
             src then InitFormIndex(src, index);
-            src.operations as operations, operations where "crfid = 'SY' + %index.formIndex.toString() and type = 'save'" then
+            src.operations as operations, operations where "crfid = 'SY' + %index.formIndex.toString() and type = 'save'  and data.exists()" then
             {
                 src then TransformBundleSystemischeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
                 src then IncrementFormIndex(src, index);
@@ -556,7 +562,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     src -> index.maxIndex = 1;
 
     // Anforderung
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-AF') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-AF') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-AF\') + \'-AF\'.length()).toInteger() > %index.maxIndex"
@@ -564,7 +570,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // TNM
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-TNM') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-TNM') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-TNM\') + \'-TNM\'.length()).toInteger() > %index.maxIndex"
@@ -572,7 +578,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Resistenztestung
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-RT') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-RT') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-RT\') + \'-RT\'.length()).toInteger() > %index.maxIndex"
@@ -580,7 +586,7 @@ group InitMaxIndexAntrag(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Vorbefund
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-VB') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-VB') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-VB\') + \'-VB\'.length()).toInteger() > %index.maxIndex"
@@ -597,7 +603,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     src -> index.maxIndex = 1;
 
     // Histologie
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-HL') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-HL') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-HL\') + \'-HL\'.length()).toInteger() > %index.maxIndex"
@@ -605,7 +611,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Immunhistochemie
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-IHC') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-IHC') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-IHC\') + \'-IHC\'.length()).toInteger() > %index.maxIndex"
@@ -613,7 +619,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // NGS Lung Panel
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-LP') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-LP') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-LP\') + \'-LP\'.length()).toInteger() > %index.maxIndex"
@@ -621,7 +627,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Molekularpathologie
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-MP') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-MP') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-MP\') + \'-MP\'.length()).toInteger() > %index.maxIndex"
@@ -629,7 +635,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Fusion NGS
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-FS') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-FS') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-FS\') + \'-FS\'.length()).toInteger() > %index.maxIndex"
@@ -637,7 +643,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Fast Track
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-FT') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-FT') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-FT\') + \'-FT\'.length()).toInteger() > %index.maxIndex"
@@ -645,7 +651,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Sonstige Untersuchungen
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-SU') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-SU') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-SU\') + \'-SU\'.length()).toInteger() > %index.maxIndex"
@@ -653,7 +659,7 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Liquid Biopsy
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-LB') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + '-LB') and type = 'save'  and data.exists()" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'-LB\') + \'-LB\'.length()).toInteger() > %index.maxIndex"
@@ -703,4 +709,101 @@ group SetBooleanToFalse(source src: BackboneElement, target boolean: Boolean)
 group SetBooleanToTrue(source src: BackboneElement, target boolean: Boolean)
 {
     src -> boolean.valueBoolean = true;
+}
+
+// Get the Specimen referenced in composition:antrag.section:biopsy.section:anforderung and set reference to it
+group SetReferenceToAnforderungSpecimen(source src: Bundle, source bundleBefund: Bundle, target compositionBefund: Composition, target diagnosticSection: BackboneElement, target nestedSection: BackboneElement)
+{
+    // find antragComposition according to fallnummer (of current compositionBefund)
+    src.entry as srcEntry, srcEntry.resource as bundle, bundle.entry as bundleEntry, 
+        bundleEntry.resource as antragComposition, antragComposition where "meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert' 
+                                                    and identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer' 
+                                                                        and value = %compositionBefund.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer').value)" then
+    {
+        // find biopsySection according to formularId (of current diagnosticSection)
+        antragComposition.section as biopsySection, biopsySection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'biopsie')
+                                                                            and entry.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId' 
+                                                                                and value = %diagnosticSection.entry.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId').value)" then
+        {
+            // find anforderungSection
+            biopsySection.section as anforderungSection, anforderungSection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'anforderung')" then
+            {
+                // get reference of Specimen (which includes its id)
+                anforderungSection.entry as entry, entry.reference as specimenReference where "reference.contains('Specimen')" then
+                {
+                    // get all Observations from nestedSection
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as observation where "resource is Observation and resource.id = %sectionReference.split(\'/\').last()" then
+                    {
+                        // for each Observation: create Reference and set to Specimen
+                        src then CreateObservationReferenceToSpecimen(specimenReference, observation);
+                    }; 
+
+                    // get all DiagnosticReports from this section
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as sectionReference, bundleBefund.entry as entry, entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.id = %sectionReference.split(\'/\').last()" then
+                    {
+                        // for each DiagnosticReport: create Reference and set to Specimen
+                        src then CreateDiagnosticReportReferenceToSpecimen(specimenReference, diagnosticReport);
+                    }; 
+                };
+            };
+        };
+    };
+}
+
+group CreateObservationReferenceToSpecimen(source specimenReference: string, target observation: Observation)
+{
+    specimenReference -> observation.specimen = create('Reference') as specimen, specimen.reference = evaluate(specimenReference, '\'Specimen/\' + $this.split(\'/\').last()');
+}
+
+group CreateDiagnosticReportReferenceToSpecimen(source specimenReference: string, target diagnosticReport: DiagnosticReport)
+{
+    specimenReference -> diagnosticReport.specimen = create('Reference') as specimen, specimen.reference = evaluate(specimenReference, '\'Specimen/\' + $this.split(\'/\').last()');
+}
+
+// Get the ServiceRequest referenced in composition:antrag.section:biopsy.section:anforderung and set its references to all Observations and DiagnosticReports from Befund
+group SetReferenceToBefundResources(source src: Bundle, source nestedSection: BackboneElement, target compositionBefund: Composition, target diagnosticSection: BackboneElement)
+{
+    // find antragComposition according to fallnummer (of current compositionBefund)
+    src.entry as srcEntry, srcEntry.resource as bundle, bundle.entry as bundleEntry, 
+        bundleEntry.resource as antragComposition, antragComposition where "meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert' 
+                                                    and identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer' 
+                                                                        and value = %compositionBefund.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer').value)" then
+    {
+        // find biopsySection according to formularId (of current diagnosticSection)
+        antragComposition.section as biopsySection, biopsySection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'biopsie')
+                                                                            and entry.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId' 
+                                                                                and value = %diagnosticSection.entry.identifier.where(system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId').value)" then
+        {
+            // find anforderungSection
+            biopsySection.section as anforderungSection, anforderungSection where "code.coding.where(system = 'http://uk-koeln.de/fhir/CodeSystem/nngm/sections' and code = 'anforderung')" then
+            {
+                // get ServiceRequest (referenced in current anforderungSection)
+                src.entry as srcEntry, srcEntry.resource as bundle, bundle.entry as bundleEntry, 
+                bundleEntry.resource as serviceRequest, serviceRequest where "id = %anforderungSection.entry.where(reference.contains('ServiceRequest')).reference.split(\'/\').last()" then
+                {
+                    // for each Observation: create and set Reference to it in ServiceRequest
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as observationReference where "reference.contains('Observation')" then
+                    {
+                        src then CreateServiceRequestReferenceToObservation(observationReference, serviceRequest);
+                    };
+
+                    // for each DiagnosticReport: create and set Reference to it in ServiceRequest
+                    nestedSection.entry as sectionEntry, sectionEntry.reference as diagnosticReportReference where "reference.contains('DiagnosticReport')" then
+                    {
+                        src then CreateServiceRequestReferenceToDiagnosticReport(diagnosticReportReference, serviceRequest);
+                    };
+                };
+            };
+        };
+    };
+}
+
+group CreateServiceRequestReferenceToObservation(source observationReference: string, target serviceRequest: ServiceRequest)
+{
+    observationReference -> serviceRequest.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(observationReference, '\'Observation/\' + $this.split(\'/\').last()');
+}
+
+group CreateServiceRequestReferenceToDiagnosticReport(source diagnosticReportReference: string, target serviceRequest: ServiceRequest)
+{
+    diagnosticReportReference -> serviceRequest.reasonReference = create('Reference') as reasonReference, reasonReference.reference = evaluate(diagnosticReportReference, '\'DiagnosticReport/\' + $this.split(\'/\').last()');
 }
