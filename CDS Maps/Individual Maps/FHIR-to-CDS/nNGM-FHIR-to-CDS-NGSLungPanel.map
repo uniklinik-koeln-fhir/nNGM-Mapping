@@ -8,488 +8,429 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformNGSLungPanelCDS(source entry: BackboneElement, target tgt: BackboneElement, target index: RepeatIndex)
 {
-    /* ------------------------------ Specimen ---------------------------- */
-    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'"
+        then TransformLPDiagnosticReportCDS(diagnosticReport, tgt);
+
+    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" 
+        then TransformLPOrganizationCDS(organization, tgt);
+
+    entry.resource as device where "resource is Device and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device/nNGM/ngs-panel'" 
+        then TransformLPDeviceCDS(device, tgt);
+
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" 
+        then TransformLPObservationCDS(observation, tgt, index);
+}
+
+/* -------------------------- DiagnosticReport ------------------------ */
+group TransformLPDiagnosticReportCDS(source diagnosticReport: DiagnosticReport, target tgt: BackboneElement)
+{
+    //Untersuchungs-ID -> 1, 0, assessment_id
+    diagnosticReport -> tgt.data as data then
     {
-        //Biopsy-ID -> 0, 0, id_1601
-        specimen -> tgt.data as data then
-        {
-            specimen.identifier as identifier then
-            {   
-                specimen -> data.blockindex = 0;
-                specimen -> data.groupindex = 0;
-                specimen -> data.itemid     = 'id_1601';
-                identifier.value as value-> data.values as values, values.unit = 'count', values.value = value;
-            };
-        };                  
-    };
-    /* -------------------------- DiagnosticReport ------------------------ */
-    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" then
-    {
-        //Untersuchungs-ID -> 1, 0, assessment_id
-        diagnosticReport -> tgt.data as data then
-        {
-            diagnosticReport.identifier as identifier,
-                identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
-            {   
-                diagnosticReport -> data.blockindex = 1;
-                diagnosticReport -> data.groupindex = 0;
-                diagnosticReport -> data.itemid     = 'assessment_id';
-                identifier.value as value-> data.values as values, values.value = value;
-            };
-        };                
-    };
-    /* ---------------------------- Organization -------------------------- */
-    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" then
-    {
-        //Standort -> 2, 0, id_2435
-        organization -> tgt.data as data then
-        {
-            organization.name as name then
-            {   
-                organization -> data.blockindex = 2;
-                organization -> data.groupindex = 0;
-                organization -> data.itemid     = 'id_2435';
-                name -> data.values as values, values.value = name;
-            };
-        };                
-    };
-    /* ------------------------------ Device ------------------------------ */
-    entry.resource as device where "resource is Device and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device'" then
-    {
-        //NGS Lung Panel Version -> 3, 0, id_1260
-        device -> tgt.data as data then
-        {
-            device.version as version, version.value as valueDevice then
-            {
-                device -> data.blockindex = 3;
-                device -> data.groupindex = 0;
-                device -> data.itemid     = 'id_1260';
-                valueDevice -> data.values as values, values.value = valueDevice;
-            };
-        };   
-        //NGS Sequencer -> 3, 0, id_2603
-        device -> tgt.data as data then
-        {
-            device.deviceName as deviceName, deviceName.name as name then
-            {
-                device -> data.blockindex = 3;
-                device -> data.groupindex = 0;
-                device -> data.itemid     = 'id_2603';
-                name -> data.values as values, values.value = name;
-            };
+        diagnosticReport.identifier as identifier,
+            identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
+        {   
+            diagnosticReport -> data.blockindex = 1;
+            diagnosticReport -> data.groupindex = 0;
+            diagnosticReport -> data.itemid     = 'assessment_id';
+            identifier.value as value-> data.values as values, values.value = value;
         };
-        //Hersteller -> 3, 0, id_2604
-        device -> tgt.data as data then
-        {
-            device.manufacturer as manufacturer then
-            {
-                device -> data.blockindex = 3;
-                device -> data.groupindex = 0;
-                device -> data.itemid     = 'id_2604';
-                manufacturer -> data.values as values, values.value = manufacturer;
-            };
+    };                
+}
+
+/* ---------------------------- Organization -------------------------- */
+group TransformLPOrganizationCDS(source organization: Organization, target tgt: BackboneElement)
+{
+    //Standort -> 2, 0, id_2435
+    organization -> tgt.data as data then
+    {
+        organization.name as name then
+        {   
+            organization -> data.blockindex = 2;
+            organization -> data.groupindex = 0;
+            organization -> data.itemid     = 'id_2435';
+            name -> data.values as values, values.value = name;
         };
-        //Panel Detail ->3, 0, ngs_panel_panel_detail
-        device -> tgt.data as data then
+    };                
+}
+
+/* ------------------------------ Device ------------------------------ */
+group TransformLPDeviceCDS(source device: Device, target tgt: BackboneElement)
+{
+    //NGS Lung Panel Version -> 3, 0, id_1260
+    device -> tgt.data as data then
+    {
+        device.version as version, version.value as valueDevice then
         {
-            device.note as note,note.text as text then
-            {
-                device -> data.blockindex = 3;
-                device -> data.groupindex = 0;
-                device -> data.itemid     = 'ngs_panel_panel_detail';
-                text -> data.values as values, values.value = text;
-            };
+            device -> data.blockindex = 3;
+            device -> data.groupindex = 0;
+            device -> data.itemid     = 'id_1260';
+            valueDevice -> data.values as values, values.value = valueDevice;
+        };
+    };   
+    //NGS Sequencer -> 3, 0, id_2603
+    device -> tgt.data as data then
+    {
+        device.deviceName as deviceName, deviceName.name as name then
+        {
+            device -> data.blockindex = 3;
+            device -> data.groupindex = 0;
+            device -> data.itemid     = 'id_2603';
+            name -> data.values as values, values.value = name;
         };
     };
-    /* ----------------------- Observation NGS Panel ---------------------- */
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+    //Hersteller -> 3, 0, id_2604
+    device -> tgt.data as data then
     {
-        //SOP-Versionsnummer des Standorts -> 2, 0, id_2616
-        observation -> tgt.data as data then
+        device.manufacturer as manufacturer then
         {
-            observation.component as component then
+            device -> data.blockindex = 3;
+            device -> data.groupindex = 0;
+            device -> data.itemid     = 'id_2604';
+            manufacturer -> data.values as values, values.value = manufacturer;
+        };
+    };
+    //Panel Detail ->3, 0, ngs_panel_panel_detail
+    device -> tgt.data as data then
+    {
+        device.note as note,note.text as text then
+        {
+            device -> data.blockindex = 3;
+            device -> data.groupindex = 0;
+            device -> data.itemid     = 'ngs_panel_panel_detail';
+            text -> data.values as values, values.value = text;
+        };
+    };
+}
+
+/* ----------------------- Observation NGS Panel ---------------------- */
+group TransformLPObservationCDS(source observation: Observation, target tgt: BackboneElement, target index: RepeatIndex)
+{
+    // Status and Extension
+    observation then TransformLPStatusAndExtensionCDS(observation, tgt);
+
+    //SOP-Versionsnummer des Standorts -> 2, 0, id_2616
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2616').exists().not()" then
             {
-                component.code where "code.coding.code = 'C48443'" then
+                component.valueString as valueString then 
                 {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 2;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid     = 'id_2616';
-                        valueString  -> data.values as values, values.value = valueString;
-                    };
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid     = 'id_2616';
+                    valueString  -> data.values as values, values.value = valueString;
                 };
             };
         };
-        /* ------------------- Panel-Gen -------------------- */
-        //Date of Assessment -> 4, 0, 0, id_1160
-        observation -> tgt.data as data then
+    };
+
+    //Date of Assessment -> 4, 0, 0, id_1160
+    observation -> tgt.data as data then
+    {
+        observation.effectiveDateTime as effectiveDateTime then
         {
-            observation.effectiveDateTime as effectiveDateTime then
-            {
-                observation ->  data.blockindex  = 4;
-                observation ->  data.groupindex  = 0;
-                observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation ->  data.itemid      = 'id_1160';
-                effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
-            };
+            observation ->  data.blockindex  = 4;
+            observation ->  data.groupindex  = 0;
+            observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
+            observation ->  data.itemid      = 'id_1160';
+            effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
         };
-        //Gen -> gene-studied -> 4, 0, 0, id_1159
-        observation -> tgt.data as data then
+    };
+
+    /* ------------------- Panel-Gen -------------------- */
+    //Gen -> gene-studied -> 4, 0, 0, id_1159
+    observation -> tgt.data as data then
+    {
+        observation.component as component, component where "code.coding.code = '48018-6'" then
         {
-            observation.component as component then
+            component.valueCodeableConcept as valueCodeableConcept then
             {
-                component.valueCodeableConcept as valueCodeableConcept where "valueCodeableConcept.coding.system = 'http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc'" then
+                valueCodeableConcept.coding as coding,
+                coding.code as code then 
                 {
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_1159';
-                        code -> data.values as values, values.value = code;
-                    };
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'id_1159';
+                    code -> data.values as values, values.value = code;
                 };
             };
         };
-        //Exon -> exon -> 4, 0, 0, id_35 
-        observation -> tgt.data as data then
+    };
+    //Exon -> exon -> 4, 0, 0, id_35 
+    observation -> tgt.data as data then
+    {
+        observation.component as component, component where "code.coding.code = 'C13231'" then
         {
-            observation.component as component then
+            component.valueString as valueString then 
             {
-                component.code where "code.coding.code = 'C13231'" then
-                {
-                    component.valueInteger as valueInteger then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid     = 'id_35';
-                        valueInteger  -> data.values as values, values.value = valueInteger;
-                    };
-                };
+                observation -> data.blockindex  = 4;
+                observation -> data.groupindex  = 0;
+                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.itemid     = 'id_35';
+                valueString  -> data.values as values, values.value = valueString;
             };
         };
-        //HGVS c. (Mutation cDNA) -> dna-chg -> 4, 0, 0, id_36
-        observation -> tgt.data as data then
+    };
+    //HGVS c. (Mutation cDNA) -> dna-chg -> 4, 0, 0, id_36
+    observation -> tgt.data as data then
+    {
+        observation.component as component, component where "code.coding.code = '48004-6'" then
         {
-            observation.component as component then
+            component.valueString as valueString then 
             {
-                component.code where "code.coding.code = '48004-6'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid     = 'id_36';
-                        valueString  -> data.values as values, values.value = valueString;
-                    };
-                };
+                observation -> data.blockindex  = 4;
+                observation -> data.groupindex  = 0;
+                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.itemid     = 'id_36';
+                valueString  -> data.values as values, values.value = valueString;
             };
         };
-        //HGVS p. (Mutation Protein) -> amino-acid-chg -> 4, 0, 0, id_37
-        observation -> tgt.data as data then
+    };
+    //HGVS p. (Mutation Protein) -> amino-acid-chg -> 4, 0, 0, id_37
+    observation -> tgt.data as data then
+    {
+        observation.component as component, component where "code.coding.code = '48005-3'" then
         {
-            observation.component as component then
+            component.valueString as valueString then 
             {
-                component.code where "code.coding.code = '48005-3'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid     = 'id_37';
-                        valueString  -> data.values as values, values.value = valueString;
-                    };
-                };
+                observation -> data.blockindex  = 4;
+                observation -> data.groupindex  = 0;
+                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.itemid     = 'id_37';
+                valueString  -> data.values as values, values.value = valueString;
             };
         };
-        //Allelic fraction -> allelicfraction -> 4, 0, 0, id_38
-        observation -> tgt.data as data then
+    };
+    //Allelic fraction -> allelicfraction -> 4, 0, 0, id_38
+    observation -> tgt.data as data then
+    {
+        observation.component as component, component where "code.coding.code = 'C154665'" then
         {
-            observation.component as component then
+            component.valueQuantity as valueQuantity, 
+                valueQuantity.value as value then  
             {
-                component.code where "code.coding.code = 'C154665'" then
-                {
-                    component.valueQuantity as valueQuantity, 
-                        valueQuantity.value as value then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid     = 'id_38';
-                        value  -> data.values as values, values.unit = 'percent', values.value = value;
-                    };
-                };
+                observation -> data.blockindex  = 4;
+                observation -> data.groupindex  = 0;
+                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.itemid     = 'id_38';
+                value  -> data.values as values, values.unit = 'percent', values.value = value;
             };
         };
-        //Referenztranskript -> referenztranskript -> 4, 0, 0, ngs_panel_reftranscript
-        observation -> tgt.data as data then
+    };
+    //Referenztranskript -> referenztranskript -> 4, 0, 0, ngs_panel_reftranscript
+    observation -> tgt.data as data then
+    {
+        observation.component as component, component where "code.coding.code = '51958-7'" then
         {
-            observation.component as component then
+            component.valueString as valueString then  
             {
-                component.code where "code.coding.code = '51958-7'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'ngs_panel_reftranscript';
-                        valueString  -> data.values as values, values.value = valueString;
-                    };
-                };
+                observation -> data.blockindex  = 4;
+                observation -> data.groupindex  = 0;
+                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.itemid      = 'ngs_panel_reftranscript';
+                valueString  -> data.values as values, values.value = valueString;
             };
         };
-        //Coverage -> coverage -> 4, 0, 0, ngs_panel_coverage
-        observation -> tgt.data as data then
+    };
+    //Coverage -> coverage -> 4, 0, 0, ngs_panel_coverage
+    observation -> tgt.data as data then
+    {
+        observation.component as component, component where "code.coding.code = '82121-5'" then
         {
-            observation.component as component then
+            component.valueString as valueString then 
             {
-                component.code where "code.coding.code = '82121-5'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'ngs_panel_coverage';
-                        valueString  -> data.values as values, values.value = valueString;
-                    };
-                };
+                observation -> data.blockindex  = 4;
+                observation -> data.groupindex  = 0;
+                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                observation -> data.itemid      = 'ngs_panel_coverage';
+                valueString  -> data.values as values, values.value = valueString;
             };
         };
-        //Biologische/molekulare Bewertung -> 4, 0, 0, id_47
-        observation -> tgt.data as data then
+    };
+    //Biologische/molekulare Bewertung -> 4, 0, 0, id_47
+    observation -> tgt.data as data then
+    {
+        observation.interpretation as interpretation,
+        interpretation.coding as coding, 
+        coding.code as code then
         {
-            observation.interpretation as interpretation,
-            interpretation.coding as coding, 
-            coding.code as code then
-            {
-                observation ->  data.blockindex  = 4;
-                observation ->  data.groupindex  = 0;
-                observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation ->  data.itemid      = 'id_47';
-                code -> data.values as values,values.value = code;
-            };
+            observation ->  data.blockindex  = 4;
+            observation ->  data.groupindex  = 0;
+            observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
+            observation ->  data.itemid      = 'id_47';
+            code -> data.values as values,values.value = code;
         };
-        //Kommentar -> 4, 0, 0, id_48
-        observation -> tgt.data as data then
+    };
+    //Kommentar -> 4, 0, 0, id_48
+    observation -> tgt.data as data then
+    {
+        observation.note as note,
+        note.text as text then
         {
-            observation.note as note,
-            note.text as text then
-            {
-                observation ->  data.blockindex  = 4;
-                observation ->  data.groupindex  = 0;
-                observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation ->  data.itemid      = 'id_48';
-                text -> data.values as values,values.value = text;
-            };
+            observation ->  data.blockindex  = 4;
+            observation ->  data.groupindex  = 0;
+            observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
+            observation ->  data.itemid      = 'id_48';
+            text -> data.values as values,values.value = text;
         };
-        /* ------------------- Panel-Gen Forschung -------------------- */
-        //Genome build -> ref-sequence-assembly -> 4, 0, 0, id_41
-        observation -> tgt.data as data then
+    };
+
+    /* ------------------- Panel-Gen Forschung -------------------- */
+     //Genome build -> ref-sequence-assembly -> 4, 0, 0, id_41
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = '62374-4'" then
+         {
+             component.valueString as valueString then 
+             {
+                 observation ->  data.blockindex  = 4;
+                 observation ->  data.groupindex  = 0;
+                 observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation ->  data.itemid      = 'id_41';
+                 valueString  -> data.values as values, values.value = valueString;
+             };
+         };
+     };
+     //Chromosom -> chromosome -> 4, 0, 0, id_42
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = 'C13202'" then
+         {
+             component.valueInteger as valueInteger then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_42';
+                 valueInteger  -> data.values as values, values.value = valueInteger;
+             };
+         };
+     };
+ 
+     //Position Start/Stop -> exact-start-end.low/high -> 4,0,0,43/44
+     observation.component as component, component where "code.coding.code = '81254-5'" then
+     {
+         component.valueRange as valueRange then 
+         {
+             valueRange.low as lowQty, lowQty.value as lowValue -> tgt.data as data then
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_43';
+                 observation -> data.values as values, values.value = lowValue;
+             };
+ 
+             valueRange.high as highQty, highQty.value as highValue -> tgt.data as data then
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_44';
+                 observation -> data.values as values, values.value = highValue;
+             };
+         };
+     };
+ 
+     //Ref allele (Nukleotid) -> ref-allele -> 4, 0, 0, id_45
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = '69547-8'" then
+         {
+             component.valueString as valueString then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_45';
+                 valueString  -> data.values as values, values.value = valueString;
+             };
+         };
+     };
+     //Alt allele (Nukleotid) -> alt-alllele -> 4, 0, 0, id_46
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = '69551-0'" then
+         {
+             component.valueString as valueString then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_46';
+                 valueString -> data.values as values, values.value = valueString;
+             };
+         };
+     };
+     //Reads Ref Allel -> reads-ref-allele -> 4, 0, 0, id_39
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = 'ReadsRefAllel'" then
+         {
+             component.valueInteger as valueInteger then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_39';
+                 valueInteger -> data.values as values, values.value = valueInteger;
+             };
+         };
+     };
+     //Reads Alt Allel -> reads-alt-allele -> 4, 0, 0, id_40
+     observation -> tgt.data as data then
+     {
+         observation.component as component, component where "code.coding.code = 'ReadsAltAllel'" then
+         {
+             component.valueInteger as valueInteger then 
+             {
+                 observation -> data.blockindex  = 4;
+                 observation -> data.groupindex  = 0;
+                 observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                 observation -> data.itemid      = 'id_40';
+                 valueInteger -> data.values as values, values.value = valueInteger;
+             };
+         };
+     };
+}
+
+group TransformLPStatusAndExtensionCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // Durchführung
+    observation.status as status where "%tgt.data.where(itemid = 'id_2520').exists().not()" -> tgt.data as data then
+    {
+        observation -> data.blockindex = 5;
+        observation -> data.groupindex = 0;
+        observation -> data.itemid = 'id_2520';
+
+        status where "$this = 'registered'" -> data.values as values, values.value = 'in Bearbeitung';
+        status where "$this = 'final'" -> data.values as values, values.value = 'abgeschlossen';
+    };
+
+    
+    observation.status as status, status.extension as statusAbschluss, statusAbschluss where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss'" then
+    {
+        // Abschluss
+        statusAbschluss.extension as statusExtension, statusExtension where "url = 'status' and %tgt.data.where(itemid = 'id_2462').exists().not()", statusExtension.valueCodeableConcept as vcc,
+            vcc.coding as coding, coding.code as code -> tgt.data as data then
         {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '62374-4'" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                        valueCodeableConcept.coding as coding, coding.code as code then 
-                    {
-                        observation ->  data.blockindex  = 4;
-                        observation ->  data.groupindex  = 0;
-                        observation ->  data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation ->  data.itemid      = 'id_41';
-                        code  -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-        //Chromosom -> chromosome -> 4, 0, 0, id_42
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C13202'" then
-                {
-                    component.valueInteger as valueInteger then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_42';
-                        valueInteger  -> data.values as values, values.value = valueInteger;
-                    };
-                };
-            };
+            observation -> data.blockindex = 5;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2462';
+            observation -> data.values as values, values.value = code;
         };
 
-        //Position Start (1-basiert) -> 4,0,0,43
-        observation -> tgt.data as data then
+        // Datum des Abschlusses
+        statusAbschluss.extension as datumExtension, datumExtension where "url = 'datum' and %tgt.data.where(itemid = 'id_2521').exists().not()", datumExtension.valueDate as date -> tgt.data as data then
         {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'exact-start-end'" then
-                {
-                    component.valueRange as valueRange then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_43';
-                        valueRange.low as low, low.value as value -> data.values as values, values.value = value;
-                    };
-                };
-            };
-        };
-
-        //Position Stop (1-basiert) -> 4,0,0,44
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'exact-start-end'" then
-                {
-                    component.valueRange as valueRange then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_44';
-                        valueRange.high as high, high.value as value -> data.values as values, values.value = value;
-                    };
-                };
-            };
-        };
-
-        //Ref allele (Nukleotid) -> ref-allele -> 4, 0, 0, id_45
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '69547-8'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_45';
-                        valueString  -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-        //Alt allele (Nukleotid) -> alt-alllele -> 4, 0, 0, id_46
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '69551-0'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_46';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-        //Reads Ref Allel -> reads-ref-allele -> 4, 0, 0, id_39
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'ReadsRefAllel'" then
-                {
-                    component.valueInteger as valueInteger then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_39';
-                        valueInteger -> data.values as values, values.value = valueInteger;
-                    };
-                };
-            };
-        };
-        //Reads Alt Allel -> reads-alt-allele -> 4, 0, 0, id_40
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'ReadsAltAllel'" then
-                {
-                    component.valueInteger as valueInteger then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_40';
-                        valueInteger -> data.values as values, values.value = valueInteger;
-                    };
-                };
-            };
-        };
-    };
-    /* -------------------------- ServiceRequest ------------------------ */
-    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'ngs-lung-panel' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
-    {
-        //Durchfuehrung -> 5, 0, id_2520
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status where "$this.status = 'active'" then
-            {
-                serviceRequest ->  data.blockindex = 5;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid     = 'id_2520';
-                status -> data.values as values,values.value = 'in Bearbeitung';
-            };
-            serviceRequest.status as status where "$this.status = 'completed'" then
-            {
-                serviceRequest ->  data.blockindex = 5;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid     = 'id_2520';
-                status -> data.values as values,values.value = 'abgeschlossen';
-            };
-        };
-        //Status des Abschlusses -> 5,0, id_2462
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
-            {
-                statusextension where "$this.url ='status'" then
-                {
-                    serviceRequest ->  data.blockindex = 5;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid     = 'id_2462';
-                    statusextension.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code  -> data.values as values,values.value = code;
-                };
-            };
-        };
-        //Datum des Abschlusses -> 5,0, id_2521
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
-            {
-                datumextension where "$this.url ='datum'" then
-                {
-                    serviceRequest ->  data.blockindex = 5;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid     = 'id_2521';
-                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
-                };
-            };
+            observation -> data.blockindex = 5;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2521';
+            observation -> data.values as values, values.value = date;
         };
     };
 }

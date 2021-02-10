@@ -8,523 +8,469 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformFastTrackCDS(source entry: BackboneElement, target tgt: BackboneElement)
 {
-    //------------------------ Specimen ------------------------
-    entry.resource as specimen where "resource is Specimen and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Specimen/nNGM'" then
-    {
-        //Biopsy-ID -> 0, 0, id_1601
-        specimen -> tgt.data as data then
-        {
-            specimen.identifier as identifier then
-            {   
-                specimen -> data.blockindex = 0;
-                specimen -> data.groupindex = 0;
-                specimen -> data.itemid = 'id_1601';
-                identifier.value as value-> data.values as values, values.value = value, values.unit = 'count';
-            };
-        };                
-    };
-    //------------------------ DiagnosticReport ------------------------
-    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" then
-    {
-        //Biopsy-ID -> 1, 0, assessment_id
-        diagnosticReport -> tgt.data as data then
-        {
-            diagnosticReport.identifier as identifier,
-                identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'"then
-            {   
-                diagnosticReport -> data.blockindex = 1;
-                diagnosticReport -> data.groupindex = 0;
-                diagnosticReport -> data.itemid = 'assessment_id';
-                identifier.value as value-> data.values as values, values.value = value;
-            };
-        };                
-    };
-    //------------------------ Organization ------------------------
-    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" then
-    {
-        //Standort -> 2, 0, id_2435
-        organization -> tgt.data as data then
-        {
-            organization.name as name then
-            {   
-                organization -> data.blockindex = 2;
-                organization -> data.groupindex = 0;
-                organization -> data.itemid = 'id_2435';
-                name -> data.values as values, values.value = name;
-            };
-        };                
-    };
-    //------------------------ Observation ------------------------
-    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
-    {
-        //NetzwerkZentrum
-        //SOP-Versionsnummer des Standorts -> 2, 0, id_2486
-        observation -> tgt.data as data then
-        {
-            observation.component as component then 
-            {
-                component.code where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2486').exists().not()" then
-                {
-                    observation ->  data.blockindex = 2;
-                    observation ->  data.groupindex = 0;
-                    observation ->  data.itemid = 'id_2486';
-                    component.valueString as valueString -> data.values as values, values.value = valueString;
-                };
-            };
-        };
-    };
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'" 
+        then TransformFTDiagnosticReportCDS(diagnosticReport, tgt);
+
+    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" 
+        then TransformFTOrganizationCDS(organization, tgt);
     
-    /* --------------- Observation BRAF Exon 15 ---------------------- */
-    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C158854' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'"
+        then TransformFTObservationCDS(observation, tgt);
+}
+
+//------------------------ DiagnosticReport ------------------------
+group TransformFTDiagnosticReportCDS(source diagnosticReport: DiagnosticReport, target tgt: BackboneElement)
+{
+    //Biopsy-ID -> 1, 0, assessment_id
+    diagnosticReport -> tgt.data as data then
     {
-        //Date of Assessment 4, 0, id_1945
-        observation -> tgt.data as data then
-        {
-            observation.effectiveDateTime as effectiveDateTime then
-            {
-                observation ->  data.blockindex = 4;
-                observation ->  data.groupindex = 0;
-                observation ->  data.itemid = 'id_1945';
-                effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
-            };
+        diagnosticReport.identifier as identifier,
+            identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'"then
+        {   
+            diagnosticReport -> data.blockindex = 1;
+            diagnosticReport -> data.groupindex = 0;
+            diagnosticReport -> data.itemid = 'assessment_id';
+            identifier.value as value-> data.values as values, values.value = value;
         };
-        //Assay -> 4, 0, id_1912
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C60819'"then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then 
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1912';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
+    };                
+}
 
-        //Hersteller -> 4, 0, id_1913
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C25392'"then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then 
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1913';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        //Ergebnis -> 4, 0, id_1946
-        observation -> tgt.data as data then
-        {
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code then 
-            {
-                observation -> data.blockindex = 4;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_1946';
-                code -> data.values as values, values.value = code;
-            };
-        };
-
-        //Change DNA -> 4, 0, id_1947
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48004-6'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1947';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-
-        //Change Protein -> 4, 0, id_1948
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48005-3'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 4;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1948';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-    };
-
-    /* --------------- Observation EGFR Exon 19  ---------------------- */
-    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C128662' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
+//------------------------ Organization ------------------------
+group TransformFTOrganizationCDS(source organization: Organization, target tgt: BackboneElement)
+{
+    //Standort -> 2, 0, id_2435
+    organization -> tgt.data as data then
     {
-        observation then TransformEGFREXO1921(observation, tgt);
-        
-        //Ergebnis -> 5, 0, id_1950
-        observation -> tgt.data as data then
-        {
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code then 
-            {
-                observation -> data.blockindex = 5;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_1950';
-                code -> data.values as values, values.value = code;
-            };
+        organization.name as name then
+        {   
+            organization -> data.blockindex = 2;
+            organization -> data.groupindex = 0;
+            organization -> data.itemid = 'id_2435';
+            name -> data.values as values, values.value = name;
         };
-        
-        //Change DNA -> 5, 0, id_1951
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48004-6'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 5;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1951';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
+    };                
+}
 
-        //Change Protein -> 5, 0, id_1952
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48005-3'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 5;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1952';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-    };
+//------------------------ Observation ------------------------
+group TransformFTObservationCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // SOP is the same for every Observation
+    observation then TransformSOPVersionNumber(observation, tgt);
+    // Status and Status.Extension is the same for every Observation
+    observation then TransformFTStatusAndExtensionCDS(observation, tgt);
 
-    /* --------------- Observation EGFR Exon 20 ---------------------- */
-    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C128663' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
-    {
-        observation then TransformEGFREXO1921(observation, tgt);
-        //Ergebnis -> 5, 0, id_1954
-        observation -> tgt.data as data then
-        {
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code then 
-            {
-                observation -> data.blockindex = 5;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_1954';
-                code -> data.values as values, values.value = code;
-            };
-        };
-        
-        //Change DNA -> 5, 0, id_1955
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48004-6'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 5;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1955';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-
-        //Change Protein -> 5, 0, id_1956
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48005-3'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 5;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1956';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-    };
-    /* --------------- Observation EGFR Exon 21 ---------------------- */
-    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C128666' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
-    {
-        observation then TransformEGFREXO1921(observation, tgt);
-        //Ergebnis -> 5, 0, id_1958
-        observation -> tgt.data as data then
-        {
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code then 
-            {
-                observation -> data.blockindex = 5;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_1958';
-                code -> data.values as values, values.value = code;
-            };
-        };
-        
-        //Change DNA -> 5, 0, id_1959
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48004-6'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 5;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1959';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-        
-        //Change Protein -> 5, 0, id_1956
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48005-3'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 5;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1960';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-    };
-    /* --------------- Observation KRAS Exon 2 ---------------------- */
-    entry.resource as observation where "resource is Observation and resource.code.coding.code = 'C135715' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/fasttrack'" then
-    {
-        //Date of Assessment 6, 0, id_1961
-        observation -> tgt.data as data then
-        {
-            observation.effectiveDateTime as effectiveDateTime then
-            {
-                observation ->  data.blockindex = 6;
-                observation ->  data.groupindex = 0;
-                observation ->  data.itemid = 'id_1961';
-                effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
-            };
-        };
-
-        //Assay -> 6, 0, id_2610
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C60819'"then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then 
-                    {
-                        observation -> data.blockindex = 6;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2610';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        //Hersteller -> 6, 0, id_2611
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C25392'"then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code then 
-                    {
-                        observation -> data.blockindex = 6;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_2611';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-
-        //Ergebnis -> 6, 0, id_1962
-        observation -> tgt.data as data then
-        {
-            observation.valueCodeableConcept as valueCodeableConcept,
-            valueCodeableConcept.coding as coding,
-            coding.code as code then 
-            {
-                observation -> data.blockindex = 6;
-                observation -> data.groupindex = 0;
-                observation -> data.itemid = 'id_1962';
-                code -> data.values as values, values.value = code;
-            };
-        };
-
-        //Change DNA -> 6, 0, id_1963
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48004-6'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 6;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1963';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-
-        //Change Protein -> 6, 0, id_1964
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48005-3'"then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 6;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid = 'id_1964';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-    };
-    /* --------------- ServiceRequest ---------------------- */
-    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'fast-track' and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/ServiceRequest/nNGM/testung'" then
-    {
-        //Durchfuehrung -> 7,0,  id_2520
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status where "$this.status = 'active'" then
-            {
-                serviceRequest ->  data.blockindex = 7;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid = 'id_2520';
-                status -> data.values as values,values.value = 'in Bearbeitung';
-            };
-            serviceRequest.status as status where "$this.status = 'completed'" then
-            {
-                serviceRequest ->  data.blockindex = 7;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid = 'id_2520';
-                status -> data.values as values,values.value = 'abgeschlossen';
-            };
-        };
-
-        //Abschluss -> 7,0, id_2462
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
-            {
-                statusextension where "$this.url ='status'" then
-                {
-                    serviceRequest ->  data.blockindex = 7;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2462';
-                    statusextension.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code  -> data.values as values,values.value = code;
-                };
-            };
-        };
+    observation where "code.coding.code = 'BRAF Exon 15'" then TransformFTObservationBRAFExon15CDS(observation, tgt);
+    observation where "code.coding.code = 'EGFR Exon 19'" then TransformFTObservationEGFRExon19CDS(observation, tgt);
+    observation where "code.coding.code = 'EGFR Exon 20'" then TransformFTObservationEGFRExon20CDS(observation, tgt);
+    observation where "code.coding.code = 'EGFR Exon 21'" then TransformFTObservationEGFRExon21CDS(observation, tgt);
+    observation where "code.coding.code = 'KRAS Exon 2'" then TransformFTObservationKRASExon2CDS(observation, tgt);
+}
     
-        //Datum des Abschlusses -> 7,0, id_2521
-        serviceRequest -> tgt.data as data then
+/* --------------- Observation BRAF Exon 15 ---------------------- */
+group TransformFTObservationBRAFExon15CDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Date of Assessment 4, 0, id_1945
+    observation -> tgt.data as data then
+    {
+        observation.effectiveDateTime as effectiveDateTime then
         {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+            observation ->  data.blockindex = 4;
+            observation ->  data.groupindex = 0;
+            observation ->  data.itemid = 'id_1945';
+            effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
+        };
+    };
+    //Assay -> 4, 0, id_1912
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = 'C60819'"then
             {
-                datumextension where "$this.url ='datum'" then
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then 
                 {
-                    serviceRequest ->  data.blockindex = 7;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid = 'id_2521';
-                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                    observation -> data.blockindex = 4;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1912';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Hersteller -> 4, 0, id_1913
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = 'C25392'"then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then 
+                {
+                    observation -> data.blockindex = 4;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1913';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Ergebnis -> 4, 0, id_1946
+    observation -> tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+        valueCodeableConcept.coding as coding,
+        coding.code as code then 
+        {
+            observation -> data.blockindex = 4;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_1946';
+            code -> data.values as values, values.value = code;
+        };
+    };
+
+    //Change DNA -> 4, 0, id_1947
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48004-6'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 4;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1947';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+
+    //Change Protein -> 4, 0, id_1948
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48005-3'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 4;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1948';
+                    valueString -> data.values as values, values.value = valueString;
                 };
             };
         };
     };
 }
 
-group TransformEGFREXO1921(source src:Observation, target tgt: BackboneElement)
+/* --------------- Observation EGFR Exon 19  ---------------------- */
+group TransformFTObservationEGFRExon19CDS(source observation: Observation, target tgt: BackboneElement)
 {
-    src -> tgt.data as data then
+    // Date of Assessment, Assay, Hersteller
+    observation then TransformEGFREXO1921(observation, tgt);
+    
+    //Ergebnis -> 5, 0, id_1950
+    observation -> tgt.data as data then
     {
-        //Date of Assessment 5, 0, ft_grp_egfr_19-21
-        src.effectiveDateTime where "%tgt.data.where(itemid = 'ft_grp_egfr_19-21').exists().not()" then
+        observation.valueCodeableConcept as valueCodeableConcept,
+        valueCodeableConcept.coding as coding,
+        coding.code as code then 
         {
-            src.effectiveDateTime as effectiveDateTime then
+            observation -> data.blockindex = 5;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_1950';
+            code -> data.values as values, values.value = code;
+        };
+    };
+    
+    //Change DNA -> 5, 0, id_1951
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48004-6'"then
             {
-                src ->  data.blockindex = 5;
-                src ->  data.groupindex = 0;
-                src ->  data.itemid = 'ft_grp_egfr_19-21';
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1951';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+
+    //Change Protein -> 5, 0, id_1952
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48005-3'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1952';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+}
+
+/* --------------- Observation EGFR Exon 20 ---------------------- */
+group TransformFTObservationEGFRExon20CDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // Date of Assessment, Assay, Hersteller
+    observation then TransformEGFREXO1921(observation, tgt);
+
+    //Ergebnis -> 5, 0, id_1954
+    observation -> tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+        valueCodeableConcept.coding as coding,
+        coding.code as code then 
+        {
+            observation -> data.blockindex = 5;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_1954';
+            code -> data.values as values, values.value = code;
+        };
+    };
+    
+    //Change DNA -> 5, 0, id_1955
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48004-6'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1955';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+
+    //Change Protein -> 5, 0, id_1956
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48005-3'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1956';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+}
+
+/* --------------- Observation EGFR Exon 21 ---------------------- */
+group TransformFTObservationEGFRExon21CDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // Date of Assessment, Assay, Hersteller
+    observation then TransformEGFREXO1921(observation, tgt);
+
+    //Ergebnis -> 5, 0, id_1958
+    observation -> tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+        valueCodeableConcept.coding as coding,
+        coding.code as code then 
+        {
+            observation -> data.blockindex = 5;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_1958';
+            code -> data.values as values, values.value = code;
+        };
+    };
+    
+    //Change DNA -> 5, 0, id_1959
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48004-6'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1959';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+    
+    //Change Protein -> 5, 0, id_1956
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48005-3'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1960';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+}
+
+/* --------------- Observation KRAS Exon 2 ---------------------- */
+group TransformFTObservationKRASExon2CDS(source observation: Observation, target tgt: BackboneElement)
+{
+    //Date of Assessment 6, 0, id_1961
+    observation -> tgt.data as data then
+    {
+        observation.effectiveDateTime as effectiveDateTime then
+        {
+            observation ->  data.blockindex = 6;
+            observation ->  data.groupindex = 0;
+            observation ->  data.itemid = 'id_1961';
+            effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
+        };
+    };
+
+    //Assay -> 6, 0, id_2610
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = 'C60819'"then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then 
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2610';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Hersteller -> 6, 0, id_2611
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = 'C25392'"then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding,
+                coding.code as code then 
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2611';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+
+    //Ergebnis -> 6, 0, id_1962
+    observation -> tgt.data as data then
+    {
+        observation.valueCodeableConcept as valueCodeableConcept,
+        valueCodeableConcept.coding as coding,
+        coding.code as code then 
+        {
+            observation -> data.blockindex = 6;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_1962';
+            code -> data.values as values, values.value = code;
+        };
+    };
+
+    //Change DNA -> 6, 0, id_1963
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48004-6'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1963';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+
+    //Change Protein -> 6, 0, id_1964
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48005-3'"then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex = 6;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_1964';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+}
+
+
+// Helper functions
+group TransformEGFREXO1921(source observation: Observation, target tgt: BackboneElement)
+{
+    //Date of Assessment 5, 0, ft_grp_egfr_19-21
+    observation -> tgt.data as data then
+    {
+        observation.effectiveDateTime where "%tgt.data.where(itemid = 'ft_grp_egfr_19-21').exists().not()" then
+        {
+            observation.effectiveDateTime as effectiveDateTime then
+            {
+                observation ->  data.blockindex = 5;
+                observation ->  data.groupindex = 0;
+                observation ->  data.itemid = 'ft_grp_egfr_19-21';
                 effectiveDateTime -> data.values as values,values.value = effectiveDateTime;
             };
         };
     };
 
-    src -> tgt.data as data then
+    observation -> tgt.data as data then
     {
         //Assay -> 5, 0, id_2608
-        src.component as component then
+        observation.component as component then
         {
             component.code where "code.coding.code = 'C60819' and %tgt.data.where(itemid = 'id_2608').exists().not()"then
             {
@@ -532,19 +478,19 @@ group TransformEGFREXO1921(source src:Observation, target tgt: BackboneElement)
                 valueCodeableConcept.coding as coding,
                 coding.code as code then 
                 {
-                    src -> data.blockindex = 5;
-                    src -> data.groupindex = 0;
-                    src -> data.itemid = 'id_2608';
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2608';
                     code -> data.values as values, values.value = code;
                 };
             };
         };
     };
 
-    src -> tgt.data as data then
+    observation -> tgt.data as data then
     {
         //Hersteller -> 5, 0, id_2609
-        src.component as component then
+        observation.component as component then
         {
             component.code where "code.coding.code = 'C25392' and %tgt.data.where(itemid = 'id_2609').exists().not()"then
             {
@@ -552,12 +498,67 @@ group TransformEGFREXO1921(source src:Observation, target tgt: BackboneElement)
                 valueCodeableConcept.coding as coding,
                 coding.code as code then 
                 {
-                    src -> data.blockindex = 5;
-                    src -> data.groupindex = 0;
-                    src -> data.itemid = 'id_2609';
+                    observation -> data.blockindex = 5;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid = 'id_2609';
                     code -> data.values as values, values.value = code;
                 };
             };
+        };
+    };
+}
+
+group TransformSOPVersionNumber(source observation: Observation, target tgt: BackboneElement)
+{
+    //SOP-Versionsnummer des Standorts -> 2, 0, id_2486
+    observation -> tgt.data as data then
+    {
+        observation.component as component then 
+        {
+            component.code where "code.coding.code = 'C48443' and %tgt.data.where(itemid = 'id_2486').exists().not()" then
+            {
+                observation ->  data.blockindex = 2;
+                observation ->  data.groupindex = 0;
+                observation ->  data.itemid = 'id_2486';
+                component.valueString as valueString -> data.values as values, values.value = valueString;
+            };
+        };
+    };
+}
+
+group TransformFTStatusAndExtensionCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // Durchführung
+    observation.status as status where "%tgt.data.where(itemid = 'id_2520').exists().not()" -> tgt.data as data then
+    {
+        observation -> data.blockindex = 7;
+        observation -> data.groupindex = 0;
+        observation -> data.itemid = 'id_2520';
+
+        status where "$this = 'registered'" -> data.values as values, values.value = 'in Bearbeitung';
+        status where "$this = 'final'" -> data.values as values, values.value = 'abgeschlossen';
+    };
+
+    
+    observation.status as status, status.extension as statusAbschluss, statusAbschluss where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss'" then
+    {
+        // Abschluss
+        statusAbschluss.extension as statusExtension, statusExtension where "url = 'status' and %tgt.data.where(itemid = 'id_2462').exists().not()", statusExtension.valueCodeableConcept as vcc,
+            vcc.coding as coding, coding.code as code -> tgt.data as data then
+        {
+            observation -> data.blockindex = 7;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2462';
+            observation -> data.values as values, values.value = code;
+        };
+
+        // Datum des Abschlusses
+        statusAbschluss.extension as datumExtension, datumExtension where "url = 'datum' and %tgt.data.where(itemid = 'id_2521').exists().not()", datumExtension.valueDate as date -> tgt.data as data then
+        {
+            observation -> data.blockindex = 7;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2521';
+            observation -> data.values as values, values.value = date;
         };
     };
 }

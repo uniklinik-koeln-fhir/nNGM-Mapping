@@ -9,338 +9,320 @@ uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
 group TransformLiquidBiopsyCDS(source entry: BackboneElement, target tgt: BackboneElement, target index: RepeatIndex)
 {
-    /* ------------------------------ Specimen ---------------------------- */
-    entry.resource as specimen where "resource is Specimen" then
+    entry.resource as diagnosticReport where "resource is DiagnosticReport and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund'"
+        then TransformLBDiagnosticReportCDS(diagnosticReport, tgt);
+
+    entry.resource as organization where "resource is Organization and resource.meta.profile = 'http://clinicalsite.org/fhir/StructureDefinition/organizationalunit'" 
+        then TransformLBOrganizationCDS(organization, tgt);
+    
+    entry.resource as observation where "resource is Observation and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/liquid-biopsy'"
+        then TransformLBObservationCDS(observation, tgt, index);
+}
+    
+/* -------------------------- DiagnosticReport ------------------------ */
+group TransformLBDiagnosticReportCDS(source diagnosticReport: DiagnosticReport, target tgt: BackboneElement)
+{
+    //Untersuchungs-ID -> 1, 0, assessment_id
+    diagnosticReport -> tgt.data as data then
     {
-        //Biopsy-ID -> 0, 0, id_1601
-        specimen -> tgt.data as data then
-        {
-            specimen.identifier as identifier then
-            {   
-                specimen -> data.blockindex = 0;
-                specimen -> data.groupindex = 0;
-                specimen -> data.itemid     = 'id_1601';
-                identifier.value as value-> data.values as values, values.unit = 'count', values.value = value;
-            };
-        };  
-    };
-    /* -------------------------- DiagnosticReport ------------------------ */
-    entry.resource as diagnosticReport where "resource is DiagnosticReport" then
-    {
-        //Untersuchungs-ID -> 1, 0, assessment_id
-        diagnosticReport -> tgt.data as data then
-        {
-            diagnosticReport.identifier as identifier,
-                identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
-            {   
-                diagnosticReport -> data.blockindex = 1;
-                diagnosticReport -> data.groupindex = 0;
-                diagnosticReport -> data.itemid     = 'assessment_id';
-                identifier.value as value-> data.values as values, values.value = value;
-            };
+        diagnosticReport.identifier as identifier,
+            identifier.system as system where "system = 'http://uk-koeln.de/NamingSystem/nNGM/befundnummer'" then
+        {   
+            diagnosticReport -> data.blockindex = 1;
+            diagnosticReport -> data.groupindex = 0;
+            diagnosticReport -> data.itemid     = 'assessment_id';
+            identifier.value as value-> data.values as values, values.value = value;
         };
     };
-    /* ---------------------------- Organization -------------------------- */
-    entry.resource as organization where "resource is Organization" then
+}
+
+/* ---------------------------- Organization -------------------------- */
+group TransformLBOrganizationCDS(source organization: Organization, target tgt: BackboneElement)
+{
+    // Standort -> 2, 0, id_2435
+    organization -> tgt.data as data then
     {
-        // Standort -> 2, 0, id_2435
-        organization -> tgt.data as data then
+        organization.name as name then
         {
-            organization.name as name then
-            {
-                organization -> data.blockindex = 2;
-                organization -> data.groupindex = 0;
-                organization -> data.itemid     = 'id_2435';
-                name -> data.values as values, values.value = name;
-            };
+            organization -> data.blockindex = 2;
+            organization -> data.groupindex = 0;
+            organization -> data.itemid     = 'id_2435';
+            name -> data.values as values, values.value = name;
         };
     };
-    /* ---------------------- Observation LiquidBiopsy -------------------- */
-    entry.resource as observation where "resource is Observation" then
+}
+
+/* ---------------------- Observation LiquidBiopsy -------------------- */
+group TransformLBObservationCDS(source observation: Observation, target tgt: BackboneElement, target index: RepeatIndex)
+{
+    // Status and Extension
+    observation then TransformLBStatusAndExtensionCDS(observation, tgt);
+
+    //SOP-Versionsnummer des Standorts -> 2, 0, id_2614
+    observation -> tgt.data as data then
     {
-        //SOP-Versionsnummer des Standorts -> 2, 0, id_2614
-        observation -> tgt.data as data then
+        observation.component as component then
         {
-            observation.component as component then
+            component.code where "code.coding.code = 'C48443'" then
             {
-                component.code where "code.coding.code = 'C48443'" then
+                component.valueString as valueString then 
                 {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex = 2;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid     = 'id_2614';
-                        valueString  -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-        /* --------------------------------- METHODIK ------------------------------ */
-        // Assay -> assay -> 3, 0, id_2601
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C60819'" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding, coding.code as code then 
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid     = 'id_2601';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-        //Hersteller -> hersteller -> 3, 0, id_2602
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C25392'" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding, coding.code as code then
-                    {
-                        observation -> data.blockindex = 3;
-                        observation -> data.groupindex = 0;
-                        observation -> data.itemid     = 'id_2602';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-        /* ---------------------------- LIQUID BIOPSY ------------------------------ */
-        // Date of Assessment -> 4, 0, 0, id_2528
-        observation -> tgt.data as data then
-        {
-            observation.effectiveDateTime as effectiveDateTime then
-            {
-                observation -> data.blockindex  = 4;
-                observation -> data.groupindex  = 0;
-                observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                observation -> data.itemid      = 'id_2528';
-                effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
-            };
-        };
-        // Phänotyp -> phaenotyp -> 4, 0, 0, id_1929
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C16977'" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding, coding.code as code then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_1929';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-        // Gen -> gene-studied -> 4, 0, 0, id_1928
-        observation -> tgt.data as data then 
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48018-6'" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding, coding.code as code then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_1928';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-        // Exon des 5' Gens -> exon -> 4, 0, 0, id_1931
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = 'C13231'" then
-                {
-                    component.valueInteger as valueInteger then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_1931';
-                        valueInteger -> data.values as values, values.value = valueInteger;
-                    };
-                };
-            };
-        };
-        //Referenztranskript 5' Gen -> referenztranskript -> 4, 0, 0, lb_referencetranscript_5_end_gene
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '51958-7'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'lb_referencetranscript_5_end_gene';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-        //3' Gen der Fusion (2.Gen) -> 2ndGen -> 4, 0, 0, lb_3_end_gene
-        observation -> tgt.data as data then 
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '2ndGen'" then
-                {
-                    component.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding, coding.code as code then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'lb_3_end_gene';
-                        code -> data.values as values, values.value = code;
-                    };
-                };
-            };
-        };
-        //Exon des 3' Gens -> 2ndGenExon -> 4, 0, 0, lb_exon_3_end_gen
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '2ndGenExon'" then
-                {
-                    component.valueInteger as valueInteger then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'lb_exon_3_end_gen';
-                        valueInteger -> data.values as values, values.value = valueInteger;
-                    };
-                };
-            };
-        };
-        //Referenztranskript 3' Gen -> 2ndGenTranskript -> 4, 0, 0, lb_referencetranscript_3_end_gen
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '2ndGenTranskript'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'lb_referencetranscript_3_end_gen';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-        //HGVS c. (Mutation cDNA) -> dna-chg -> 4, 0, 0, id_1930
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48004-6'" then
-                {
-                    component.valueString as valueString then 
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_1930';
-                        component.valueString as valueString -> data.values as values, values.value = valueString;
-                    };
-                };
-            };
-        };
-        //HGVS p. (Mutation Protein) -> amino-acid-chg -> 4, 0, id_1932
-        observation -> tgt.data as data then
-        {
-            observation.component as component then
-            {
-                component.code where "code.coding.code = '48005-3'" then
-                {
-                    component.valueString as valueString then  
-                    {
-                        observation -> data.blockindex  = 4;
-                        observation -> data.groupindex  = 0;
-                        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
-                        observation -> data.itemid      = 'id_1932';
-                        valueString -> data.values as values, values.value = valueString;
-                    };
+                    observation -> data.blockindex = 2;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid     = 'id_2614';
+                    valueString  -> data.values as values, values.value = valueString;
                 };
             };
         };
     };
-    /* --------------------------- ServiceRequest ------------------------- */
-    entry.resource as serviceRequest where "resource is ServiceRequest and resource.code.coding.code = 'liquid-biopsy'" then
+    /* --------------------------------- METHODIK ------------------------------ */
+    // Assay -> assay -> 3, 0, id_2601
+    observation -> tgt.data as data then
     {
-        //Durchfuehrung -> 5, 0, id_2520
-        serviceRequest -> tgt.data as data then
+        observation.component as component then
         {
-            serviceRequest.status as status where "$this.status = 'active'" then
+            component.code where "code.coding.code = 'C60819'" then
             {
-                serviceRequest ->  data.blockindex = 5;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid     = 'id_2520';
-                status -> data.values as values,values.value = 'in Bearbeitung';
-            };
-            serviceRequest.status as status where "$this.status = 'completed'" then
-            {
-                serviceRequest ->  data.blockindex = 5;
-                serviceRequest ->  data.groupindex = 0;
-                serviceRequest ->  data.itemid     = 'id_2520';
-                status -> data.values as values,values.value = 'abgeschlossen';
-            };
-        };
-        //Status des Abschlusses -> 5,0, id_2462
-        serviceRequest -> tgt.data as data then
-        {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as statusextension then
-            {
-                statusextension where "$this.url ='status'" then
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding, coding.code as code then 
                 {
-                    serviceRequest ->  data.blockindex = 5;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid     = 'id_2462';
-                    statusextension.valueCodeableConcept as valueCodeableConcept,
-                    valueCodeableConcept.coding as coding,
-                    coding.code as code  -> data.values as values,values.value = code;
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid     = 'id_2601';
+                    code -> data.values as values, values.value = code;
                 };
             };
         };
-        //Datum des Abschlusses -> 5,0, id_2521
-        serviceRequest -> tgt.data as data then
+    };
+    //Hersteller -> hersteller -> 3, 0, id_2602
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
         {
-            serviceRequest.status as status, status.extension as statusAbschluss, statusAbschluss.extension as datumextension then
+            component.code where "code.coding.code = 'C25392'" then
             {
-                datumextension where "$this.url ='datum'" then
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding, coding.code as code then
                 {
-                    serviceRequest ->  data.blockindex = 5;
-                    serviceRequest ->  data.groupindex = 0;
-                    serviceRequest ->  data.itemid     = 'id_2521';
-                    datumextension.valueDate as valueDate -> data.values as values,values.value = valueDate;
+                    observation -> data.blockindex = 3;
+                    observation -> data.groupindex = 0;
+                    observation -> data.itemid     = 'id_2602';
+                    code -> data.values as values, values.value = code;
                 };
             };
+        };
+    };
+    /* ---------------------------- LIQUID BIOPSY ------------------------------ */
+    // Date of Assessment -> 4, 0, 0, id_2528
+    observation -> tgt.data as data then
+    {
+        observation.effectiveDateTime as effectiveDateTime then
+        {
+            observation -> data.blockindex  = 4;
+            observation -> data.groupindex  = 0;
+            observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+            observation -> data.itemid      = 'id_2528';
+            effectiveDateTime -> data.values as values, values.value = effectiveDateTime;
+        };
+    };
+    // Phänotyp -> phaenotyp -> 4, 0, 0, id_1929
+    // ensure that at max only 1 data block is created even if Observation has both phaenotyp components
+    observation where "component.where(code.coding.code = 'C16977' and valueCodeableConcept.where(coding.code = 'C45576' or coding.code = 'C20195')).exists()" 
+        -> tgt.data as data then
+    {
+        observation -> data.blockindex  = 4;
+        observation -> data.groupindex  = 0;
+        observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+        observation -> data.itemid      = 'id_1929';
+
+        observation.component as component, component.valueCodeableConcept as vcc where "code.coding.code = 'C16977'" then
+        {    
+            vcc.coding as coding where "coding.code = 'C45576'"->data.values as values, values.value = 'Mutation';
+            vcc.coding as coding where "coding.code = 'C20195'"->data.values as values, values.value = 'Fusion';
+        };
+    };
+
+    // Gen -> gene-studied -> 4, 0, 0, id_1928
+    observation -> tgt.data as data then 
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48018-6'" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding, coding.code as code then 
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'id_1928';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+    // Exon des 5' Gens -> exon -> 4, 0, 0, id_1931
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = 'C13231'" then
+            {
+                component.valueInteger as valueInteger then 
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'id_1931';
+                    valueInteger -> data.values as values, values.value = valueInteger;
+                };
+            };
+        };
+    };
+    //Referenztranskript 5' Gen -> referenztranskript -> 4, 0, 0, lb_referencetranscript_5_end_gene
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '51958-7'" then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'lb_referencetranscript_5_end_gene';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+    //3' Gen der Fusion (2.Gen) -> 2ndGen -> 4, 0, 0, lb_3_end_gene
+    observation -> tgt.data as data then 
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '2ndGen'" then
+            {
+                component.valueCodeableConcept as valueCodeableConcept,
+                valueCodeableConcept.coding as coding, coding.code as code then 
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'lb_3_end_gene';
+                    code -> data.values as values, values.value = code;
+                };
+            };
+        };
+    };
+    //Exon des 3' Gens -> 2ndGenExon -> 4, 0, 0, lb_exon_3_end_gen
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '2ndGenExon'" then
+            {
+                component.valueInteger as valueInteger then 
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'lb_exon_3_end_gen';
+                    valueInteger -> data.values as values, values.value = valueInteger;
+                };
+            };
+        };
+    };
+    //Referenztranskript 3' Gen -> 2ndGenTranskript -> 4, 0, 0, lb_referencetranscript_3_end_gen
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '2ndGenTranskript'" then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'lb_referencetranscript_3_end_gen';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+    //HGVS c. (Mutation cDNA) -> dna-chg -> 4, 0, 0, id_1930
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48004-6'" then
+            {
+                component.valueString as valueString then 
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'id_1930';
+                    component.valueString as valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+    //HGVS p. (Mutation Protein) -> amino-acid-chg -> 4, 0, id_1932
+    observation -> tgt.data as data then
+    {
+        observation.component as component then
+        {
+            component.code where "code.coding.code = '48005-3'" then
+            {
+                component.valueString as valueString then  
+                {
+                    observation -> data.blockindex  = 4;
+                    observation -> data.groupindex  = 0;
+                    observation -> data.repeatindex = evaluate(index, '$this.sectionIndex');
+                    observation -> data.itemid      = 'id_1932';
+                    valueString -> data.values as values, values.value = valueString;
+                };
+            };
+        };
+    };
+}
+       
+group TransformLBStatusAndExtensionCDS(source observation: Observation, target tgt: BackboneElement)
+{
+    // Durchführung
+    observation.status as status where "%tgt.data.where(itemid = 'id_2520').exists().not()" -> tgt.data as data then
+    {
+        observation -> data.blockindex = 5;
+        observation -> data.groupindex = 0;
+        observation -> data.itemid = 'id_2520';
+
+        status where "$this = 'registered'" -> data.values as values, values.value = 'in Bearbeitung';
+        status where "$this = 'final'" -> data.values as values, values.value = 'abgeschlossen';
+    };
+
+    
+    observation.status as status, status.extension as statusAbschluss, statusAbschluss where "url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/statusAbschluss'" then
+    {
+        // Abschluss
+        statusAbschluss.extension as statusExtension, statusExtension where "url = 'status' and %tgt.data.where(itemid = 'id_2462').exists().not()", statusExtension.valueCodeableConcept as vcc,
+            vcc.coding as coding, coding.code as code -> tgt.data as data then
+        {
+            observation -> data.blockindex = 5;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2462';
+            observation -> data.values as values, values.value = code;
+        };
+
+        // Datum des Abschlusses
+        statusAbschluss.extension as datumExtension, datumExtension where "url = 'datum' and %tgt.data.where(itemid = 'id_2521').exists().not()", datumExtension.valueDate as date -> tgt.data as data then
+        {
+            observation -> data.blockindex = 5;
+            observation -> data.groupindex = 0;
+            observation -> data.itemid = 'id_2521';
+            observation -> data.values as values, values.value = date;
         };
     };
 }
