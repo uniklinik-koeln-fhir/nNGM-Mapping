@@ -7,6 +7,14 @@ map "http://vonk.fire.ly/fhir/StructureMap/nNGM_NGS_LUNGPANEL_CDS" = "nNGM NGS L
 uses "http://vonk.fire.ly/fhir/StructureDefinition/VCF" as source
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as target
 
+group MapVCFBundle(source src: VCF, target tgt: Bundle)
+{
+    src -> tgt.id = uuid(); 
+    src -> tgt.type = 'collection';
+
+    src -> tgt.entry as entry, entry.resource = create('CTS_Transport') as cts then MapVCF(src, cts);
+}
+
 group MapVCF(source src: VCF, target tgt: CTS_Transport)
 {
     // create repeatindex 
@@ -46,15 +54,13 @@ group MapCDSMeta(source src: VCF, target tgt : CTS_Transport)
 {
     src -> tgt.version = '1.1';
     src -> tgt.sourcesystem = 'https:\/\/nngm-qat.staging.healex.systems\/';
-    src -> tgt.operations as operations collate, operations.crfid = '*_LP1';
-    src -> tgt.operations as operations collate, operations.type = 'save';
-    
     src -> tgt.metaInformation as mI, mI.key = 'SourceSystem', mI.value = 'vcf';
 
     //PathoPro ID
     src.header as header, header.optional as optional, optional.value as pathoproid where "$this.name = 'Pathopro_ID'" then 
     {
-        pathoproid -> tgt.metaInformation as mI, mI.key = 'PathoPro_ID', mI.value = pathoproid; 
+        //replace the \" escapes from the id because they are in the value of the vcfheader and be interpreted as part of the value
+        pathoproid -> tgt.metaInformation as mI, mI.key = 'PathoPro_ID', mI.value = evaluate(pathoproid, '$this.replace(\'\"\', \'\')'); 
     };
     
     //Unteruschungs ID
@@ -242,7 +248,7 @@ group MapVCFOptionalBody(source src: BackboneElement, target tgt : CTS_Transport
                 value -> data.groupindex = 0;
                 value -> data.repeatindex = evaluate(index, '$this.sectionIndex');
                 value -> data.itemid = 'id_44';
-                value -> data.values as values, values.value = evaluate(value, '$this.split(\'|\')[33]'); 
+                value -> data.values as values, values.value = evaluate(value, '$this.customSplit(\'|\')[33]'); 
             };
 
 
