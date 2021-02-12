@@ -38,6 +38,7 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieFHIR"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR"
 
+
 group MapCDS(source src: CTS_Transport, target tgt: Bundle)
 {
     // Bundle metadata
@@ -421,7 +422,10 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
         src.operations as operations, operations.timestamp as timestamp -> compositionTherapie.date = dateOp(timestamp, 'dateTime');
 
         // Author
-        src.operations as operations, operations.editor as author -> compositionTherapie.author as author, author.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+        src.operations as operations, operations.editor as author where "%compositionTherapie.author.extension.exists().not()" then 
+        {
+            author -> compositionTherapie.author as author, author.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+        };
 
         /* ------------------------------ Section ---------------------------- */
 
