@@ -138,51 +138,10 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
 
-            // TNM (Antrag.biopsie.tnm)
-            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'tnm'" -> tgt.operations as operations then
-            {
-                let crfidLeft = append(fallNummer, '-TNM');
-
-                nestedSection -> tgt.version = '1.0';
-                nestedSection -> operations.type = 'save';
-                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
-
-                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
-                {
-                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
-                    {
-                        nestedSection then TransformTNMCDS(entry, operations);
-                    };
-                };
-            };
-            
-            // Resistenztestung (Antrag.biopsie.resistenztestung)
-            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'resistenztestung'" -> tgt.operations as operations then
-            {
-                let crfidLeft = append(fallNummer, '-RT');
-
-                nestedSection -> tgt.version = '1.0';
-                nestedSection -> operations.type = 'save';
-                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
-
-                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
-                {
-                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
-                    {
-                        nestedSection then TransformResistenztestungCDS(entry, operations);
-                    };
-                };
-
-                nestedSection then TransformCheckboxes(src, nestedSection, operations);
-            };
-
-            // // Vorbefund (Antrag.biopsie.vorbefund)
-            // biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            // // TNM (Antrag.biopsie.tnm)
+            // biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'tnm'" -> tgt.operations as operations then
             // {
-            //     let crfidLeft = append(fallNummer, '-VB');
-            //     let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
-            //     src then InitSectionIndex(src, index); // used for NGS Lung Panel
-            //     src then InitCaseIndex(src, index);  // used for Fusion NGS
+            //     let crfidLeft = append(fallNummer, '-TNM');
 
             //     nestedSection -> tgt.version = '1.0';
             //     nestedSection -> operations.type = 'save';
@@ -192,19 +151,60 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
             //     {
             //         src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
             //         {
-            //             nestedSection then TransformVorbefundCDS(entry, operations, index);
+            //             nestedSection then TransformTNMCDS(entry, operations);
+            //         };
+            //     };
+            // };
+            
+            // // Resistenztestung (Antrag.biopsie.resistenztestung)
+            // biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'resistenztestung'" -> tgt.operations as operations then
+            // {
+            //     let crfidLeft = append(fallNummer, '-RT');
 
-            //             entry where "resource is Observation 
-            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
-            //                         IncrementSectionIndex(src, index);
-            //             entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
-            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
-            //                         IncrementCaseIndex(src, index);
+            //     nestedSection -> tgt.version = '1.0';
+            //     nestedSection -> operations.type = 'save';
+            //     nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+            //     nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+            //     {
+            //         src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+            //         {
+            //             nestedSection then TransformResistenztestungCDS(entry, operations);
             //         };
             //     };
 
-            //     nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
+            //     nestedSection then TransformCheckboxes(src, nestedSection, operations);
             // };
+
+            // Vorbefund (Antrag.biopsie.vorbefund)
+            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-VB');
+                let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
+                src then InitSectionIndex(src, index); // used for NGS Lung Panel
+                src then InitCaseIndex(src, index);  // used for Fusion NGS
+
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformVorbefundCDS(entry, operations, index);
+
+                        entry where "resource is Observation 
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+                                    IncrementSectionIndex(src, index);
+                        entry where "resource is Observation and resource.code.coding.code = 'Sonstige Fusion NGS'
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+                                    IncrementCaseIndex(src, index);
+                    };
+                };
+
+                nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
+            };
         };
     };
 }
