@@ -3,7 +3,7 @@
 
 //todo: When Datum anderung (1465) is present in export, thereapie begin (1246) and ende (1247) are not mapped even if they are mapped to different target fields
 
-map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTheapieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
+map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/MedicationAdministration" as target
@@ -232,7 +232,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         {
             values.value as value where "$this.value = 'Ja'" then
             {
-                value ->    tgt.extension as studientherapie,
+                value ->    tgt.extension = create('Extension') as studientherapie,
                             studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
                             studientherapie.extension as teilnahme,
                             teilnahme.url = 'teilnahme',
@@ -244,7 +244,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
 
             values.value as value where "$this.value = 'Nein'" then
             {
-                value ->    tgt.extension as studientherapie,
+                value ->    tgt.extension = create('Extension') as studientherapie,
                             studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
                             studientherapie.extension as teilnahme,
                             teilnahme.url = 'teilnahme',
@@ -257,7 +257,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         {
             values.value as value where "$this.value.exists()" then
             {
-                value ->    tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
                 value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept,
                             medicationCodeableConcept.text = 'Therapieschema',
                             medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
@@ -289,20 +288,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
             };
         };
 
-        // Category
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1488'" then
-        {
-            values.value as value where "$this.value = 'yes'" then 
-            {
-                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C25446');
-            };
-
-            values.value as value where "$this.value = 'no'" then 
-            {
-                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C85582');
-            };
-        };
-
+        
         // Erhaltungstherapie als Option: extension:Erhaltungstherapie.extension:option
         data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1357'" then
         {
@@ -467,7 +453,6 @@ group MapStudiennameMedicationAdministrationSY(source operations: BackboneElemen
         values.value as value where "$this.value.exists()" then
         {
             value ->    tgt.extension as studientherapie collate,
-                        studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
                         studientherapie.extension as studie,
                         studie.url = 'studie',
                         studie.valueReference = create('Reference') as reference,
@@ -496,18 +481,16 @@ group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations:
         
         // Neues Therapieschema: medicationCodeableConcept
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1359'" then
-        {
-            values.value as value -> tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
-            
+        {            
             values.value as value where "$this.value.exists()" then
             {
-                value ->    tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
                 value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept,
                             medicationCodeableConcept.text = 'NeuesTherapieschema',
                             medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
             };
         };
 
+        /*
         // Datum der Änderung: effectivePeriod.start
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1465'" then
         {
@@ -515,6 +498,7 @@ group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations:
             value ->    tgt.extension = create('Extension') as anderung,
                         anderung.valueDate = dateOp(value, 'dateTime');
         };
+        */
     };
 }
 
@@ -834,10 +818,7 @@ group TransformObservationBestResponseSY(source operations: BackboneElement, tar
 
             values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
             {
-                value ->    tgt.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.extension as dataAbsentReason,
-                            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                            dataAbsentReason.valueCode = cast('not-applicable', 'FHIR.code');
+                value -> tgt.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
             };
         };
 
