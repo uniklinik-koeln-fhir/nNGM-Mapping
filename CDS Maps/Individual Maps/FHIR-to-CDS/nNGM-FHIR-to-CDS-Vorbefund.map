@@ -1,12 +1,6 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_VorbefundCTS"
 
-/* 
-    TODO
-    - "Sonstige Fusion NGS" Observation: if there is only 1 "Fusionspartner" given, it gets mapped to the "Erster Fusionspartner" (id_2255) even if it was entered 
-        in the "Zweiter Fusionspartner" field. This behaviour is because both components for the Fusionspartner are using the same code (48018-6)
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS" = nNGM_Mapping_VorbefundCDS
 
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as source
@@ -1958,24 +1952,26 @@ group TransformVBFSObservationSonstigeCDS(source observation: Observation, targe
         };
     };
 
-    // Erster Fusionspartner -> 21, 0 , id_2255 if 1 (or more) components with this code
-    observation where "$this.component.where(code.coding.code = '48018-6' and valueString.exists()).count() >= 1" -> tgt.data as data then
+    // Erster/Zweiter Fusionspartner -> 21, 0 , id_2255/id_2556
+    observation.component as component where "component.where(code.coding.where(code = '48018-6'))" then
     {
-        observation->data.blockindex = 21;
-        observation->data.groupindex = 0;
-        observation->data.repeatindex = evaluate(index, '$this.caseIndex');
-        observation->data.itemid = 'id_2255';
-        observation->data.values as values, values.value = evaluate(observation, '$this.component.where(code.coding.code = \'48018-6\')[0].valueString');
-    };
+        component as ersterFusionspartner where "code.coding.where(code = 'erster-fusionspartner') and valueString.exists()" -> tgt.data as data then
+        {
+            observation->data.blockindex = 21;
+            observation->data.groupindex = 0;
+            observation->data.repeatindex = evaluate(index, '$this.caseIndex');
+            observation->data.itemid = 'id_2255';
+            ersterFusionspartner.valueString as valueString ->data.values as values, values.value = valueString;
+        };
 
-    // Zweiter Fusionspartner -> 21, 0 , id_2256 if 2 (or more) components with this code
-    observation where "$this.component.where(code.coding.code = '48018-6' and valueString.exists()).count() >= 2" -> tgt.data as data then
-    {
-        observation->data.blockindex = 21;
-        observation->data.groupindex = 0;
-        observation->data.repeatindex = evaluate(index, '$this.caseIndex');
-        observation->data.itemid = 'id_2256';
-        observation->data.values as values, values.value = evaluate(observation, '$this.component.where(code.coding.code = \'48018-6\')[1].valueString');
+        component as zweiterFusionspartner where "code.coding.where(code = 'zweiter-fusionspartner') and valueString.exists()" -> tgt.data as data then
+        {
+            observation->data.blockindex = 21;
+            observation->data.groupindex = 0;
+            observation->data.repeatindex = evaluate(index, '$this.caseIndex');
+            observation->data.itemid = 'id_2256';
+            zweiterFusionspartner.valueString as valueString ->data.values as values, values.value = valueString;
+        };
     };
 
     //Anzahl der Fusionsreads -> anzahl-der-fusionsreads component -> 21, 0, id_2257
