@@ -1,9 +1,5 @@
-/// version = 0.1
-/// title = "nNGM: nNGMv09c - FHIR to CTS"
-
-// TODO: InitMaxIndexTherapie necessary without case id and only a form
-// TODO: Author triggered n times for each author in the export format 
-// TODO: Does the stammdaten need to go into the therapy composition, as well as into a separate composition for stammdaten?
+/// version = 1.0
+/// title = "nNGM: FHIR to CTS"
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_CdsToFhir_Master" = nNGM_Mapping_CdsToFhir_Master
 
@@ -109,274 +105,12 @@ group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
     };
 }
 
-
-// TODO
-group MapAntrag(source src: CTS_Transport, target tgt: Bundle)
-{
-    let index = create('RepeatIndex');
-
-    /* ------------------------------ Antrag ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset caseIndex
-    src then InitMaxIndexAntrag(src, index); // Reset maxIndex
-
-    src.operations as operations,
-        // Execute as many times as there are Basisangaben
-        operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
-        // Add a transaction bundle to the collection bundle
-        tgt.entry as entry,
-        entry.resource = create('Bundle') as bundleAntrag,
-        // Add a composition to the transaction bundle
-        bundleAntrag.entry as entryAntrag,
-        entryAntrag.resource = create('Composition') as compositionAntrag then
-    {
-        // Create this let because we can't check on two parameters with the same name in FHIRPath
-        let caseIndex = evaluate(index, '$this.caseIndex');
-        let maxIndex = evaluate(index, '$this.maxIndex');
-
-        /* ------------------------------ Bundle ---------------------------- */
-
-        // Meta
-        src -> bundleAntrag.id = uuid();
-        src -> bundleAntrag.type = 'transaction';
-
-        /* ------------------------------ Composition ---------------------------- */
-
-        // Meta
-        src -> compositionAntrag.title = 'nNGM - Antrag Pseudonymisiert';
-        src -> compositionAntrag.id = uuid();
-        src -> compositionAntrag.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Antrag-pseudonymisiert';
-        src -> compositionAntrag.status = cast('final', 'FHIR.code');
-        src -> entryAntrag.request as request, request.method = 'PUT', request.url = evaluate(compositionAntrag, '\'Composition/\' + $this.id');
-
-        // Identifier i.e. Case ID
-        src -> compositionAntrag.identifier = create('Identifier') as FallIdentifier,
-                                                    FallIdentifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
-                                                    FallIdentifier.value = evaluate(index, '$this.caseIndex.toString()');
-
-        // Type check for type of content
-        src -> compositionAntrag.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'antrag');
-
-        // Category idat or not idat
-        src -> compositionAntrag.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
-
-        // Subject
-        src.operations as operations, operations where "crfid = 'SD'", operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
-        {
-            src.patid as patid, values.value as value -> compositionAntrag.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
-        };
-
-        // Date
-        operations.timestamp as timestamp -> compositionAntrag.date = dateOp(timestamp, 'dateTime');
-
-        // Author
-        operations.editor as author -> compositionAntrag.author = create('Reference') as subject, subject.reference = author;
-
-        /* ------------------------------ Resources ---------------------------- */
-
-        // Basisangaben (Antrag.basisangaben)
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BA' and type = 'save'" then
-        {
-            src then TransformBundleBasisangaben(operations, bundleAntrag, compositionAntrag);
-        };
-        
-
-        // Biopsie(n) (Antrag.biopsie)
-        // create 1 biopsieSection per biopsie (in the CDS)
-        src then InitFormIndex(src, index); // the formIndex indicates which biopsie (an thus which biopsieSection) should be created
-        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionAntrag.section = create('BackboneElement') as biopsieSection then
-        {
-            /* ------------------------------ Section ---------------------------- */
-            // Meta
-            src -> biopsieSection.title = 'biopsy';
-            src -> biopsieSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections','biopsie');
-            src -> biopsieSection.entry = create('Reference') as reference, reference.identifier = create('Identifier') as formularId,
-                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
-
-            /* ------------------------------ Resources ---------------------------- */
-            // Anforderung (Antrag.biopsie.anforderung)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-AF' + %index.formIndex.toString() and type = 'save'" then
-            {
-                src then TransformBundleAnforderung(operations, bundleAntrag, compositionAntrag, biopsieSection);
-            };
-
-            // TNM (Antrag.biopsie.tnm)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-TNM' + %index.formIndex.toString() and type = 'save'" then
-            {
-                src then TransformBundleTNM(operations, bundleAntrag, compositionAntrag, biopsieSection);
-            };
-
-            // Resistenztestung (Antrag.biopsie.resistenztestung)
-            src.operations as operations, operations where "crfid = %caseIndex.toString() + '-RT' + %index.formIndex.toString() and type = 'save'" then
-            {
-                src then TransformBundleResistenztestung(operations, bundleAntrag, compositionAntrag, biopsieSection);
-            };
-
-            // // Vorbefund (Antrag.biopsie.vorbefund)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-VB' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleVorbefundFHIR(operations, bundleAntrag, compositionAntrag, biopsieSection, index);
-            // };
-
-            src then IncrementFormIndex(src, index);
-        };
-        
-        
-
-        /* ------------------------------ Increment index ---------------------------- */
-        src then IncrementCaseIndex(src, index);
-        src then InitMaxIndexAntrag(src, index); // Reset maxIndex
-        //src -> tgt.id = evaluate(index, '$this.formIndex');
-    };
-}
-
-// TODO
-group MapBefund(source src: CTS_Transport, target tgt: Bundle)
-{
-    let index = create('RepeatIndex');
-
-    /* ------------------------------ Befund ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset caseIndex
-    src then InitMaxIndexBefund(src, index); // Reset maxIndex
-
-    src.operations as operations,
-    // Execute as many times as there are Basisangaben
-    operations where "crfid = %index.caseIndex.toString() + '-BA' and type = 'save'" ->
-    // Add a transaction bundle to the collection bundle
-    tgt.entry as entry,
-    entry.resource = create('Bundle') as bundleBefund,
-    // Add a composition to the transaction bundle
-    bundleBefund.entry as entryBefund,
-    entryBefund.resource = create('Composition') as compositionBefund then
-    {
-        // Create this let because we can't check on two parameters with the same name in FHIRPath
-        let caseIndex = evaluate(index, '$this.caseIndex');
-        let maxIndex = evaluate(index, '$this.maxIndex');
-
-        /* ------------------------------ Bundle ---------------------------- */
-        // Meta
-        src -> bundleBefund.id = uuid();
-        src -> bundleBefund.type = 'transaction';
-
-        /* ------------------------------ Composition ---------------------------- */
-        // Meta
-        src -> compositionBefund.id = uuid();
-        src -> compositionBefund.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/molpatho-befund-pseudonymisiert';
-        src -> compositionBefund.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'molpatho-befund');
-
-        // Category idat or psn depends on which type of patient/consent is in the bundle
-        src -> compositionBefund.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
-
-        // Title
-        src -> compositionBefund.title = 'Befund pseudonymisiert';
-
-        // Identifier i.e. Case ID
-        src -> compositionBefund.identifier = create('Identifier') as FallIdentifier,
-                                                    FallIdentifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
-                                                    FallIdentifier.value = evaluate(index, '$this.caseIndex.toString()');
-
-        // Status
-        src -> compositionBefund.status = cast('final', 'FHIR.code');
-
-        // Subject
-        src.operations as operations, operations where "crfid = 'SD'", operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
-        {
-            src.patid as patid, values.value as value -> compositionBefund.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
-        };
-
-        // Date
-        operations.timestamp as timestamp -> compositionBefund.date = dateOp(timestamp, 'dateTime');
-
-        // Author
-        operations.editor as author -> compositionBefund.author = create('Reference') as subject, subject.reference = author;
-
-        /* ------------------------------ Resources ---------------------------- */
-
-        // Diagnostik(en) (Befund.diagnostik)
-        // create 1 diagnosticSection per diagnostik (in the CDS)
-        src then InitFormIndex(src, index); // the formIndex indicates which diagnostik (an thus which diagnosticSection) should be created
-        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionBefund.section = create('BackboneElement') as diagnosticSection then
-        {
-            /* ------------------------------ Section ---------------------------- */
-            // Meta
-            src -> diagnosticSection.title = 'diagnostik';
-            src -> diagnosticSection.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections','diagnostik');
-            src -> diagnosticSection.entry = create('Reference') as reference, reference.identifier = create('Identifier') as formularId,
-                                                formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                                                formularId.value = evaluate(index, '$this.formIndex.toString()');
-
-            /* ------------------------------ Resources ---------------------------- */
-            // Immunhistochemie (Befund.diagnostik.immunhistochemie)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-IHC' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleImmunhistochemie(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
-
-            // // Histologie (Befund.diagnostik.histologie)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-HL' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleHistologie(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
-
-            // // Molekularpathologie (Befund.diagnostik.molekularpathologie)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-MP' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleMolekularpathologie(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
-
-            // // NGS Lung Panel (Befund.diagnostik.ngs-lung-panel)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LP' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleNGSLungPanel(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
-
-            // // Fusion NGS (Befund.diagnostik.ngs-fusion-expression)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FS' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleFusionNGS(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
-
-            // // Fast Track (Befund.diagnostik.fast-track)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-FT' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleFastTrack(operations, bundleBefund, compositionBefund, diagnosticSection);
-            // };
-
-            // // Sonstige Untersuchungen (Befund.diagnostik.sonstige-untersuchungen)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-SU' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleSonstigeUntersuchungen(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
-            
-            // // Liquid Biopsy (Befund.diagnostik.liquid-biopsy)
-            // src.operations as operations, operations where "crfid = %caseIndex.toString() + '-LB' + %index.formIndex.toString() and type = 'save'" then
-            // {
-            //     src then TransformBundleLiquidBiopsy(operations, bundleBefund, compositionBefund, diagnosticSection, index);
-            // };
-
-            src then IncrementFormIndex(src, index);
-        };
-
-        // Beurteilung (Befund.beurteilung)
-        src.operations as operations, operations where "crfid = %caseIndex.toString() + '-BU' and type = 'save'" then
-        {
-            src then TransformBundleBeurteilung(operations, bundleBefund, compositionBefund, index);
-        };
-
-        /* ------------------------------ Increment index ---------------------------- */
-        src then IncrementCaseIndex(src, index);
-        src then InitMaxIndexBefund(src, index); // Reset maxIndex
-        //src -> tgt.id = evaluate(index, '$this.formIndex');
-    };
-}
-
 // TODO
 group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
 {
     let index = create('RepeatIndex');
 
     /* ------------------------------ Therapien ---------------------------- */
-    src then InitCaseIndex(src, index); // Reset index
     src then InitMaxIndexTherapie(src, index); // Reset maxIndex
     
     src ->
@@ -387,6 +121,8 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
     bundleTherapie.entry as entryTherapie,
     entryTherapie.resource = create('Composition') as compositionTherapie then
     {
+
+        let maxIndex = evaluate(index, '$this.maxIndex');
         /* ------------------------------ Bundle ---------------------------- */
 
         // Meta
@@ -428,160 +164,73 @@ group MapTherapies(source src: CTS_Transport, target tgt: Bundle)
         };
 
         /* ------------------------------ Section ---------------------------- */
+        
+        src then InitFormIndex(src, index);
 
         // Operation
-        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'operation') then
+        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionTherapie.section as compositionSection then
         {
-
-            
-            src then InitFormIndex(src, index);
-            src.operations as operations, operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'" then
+            src.operations as operations,
+                    operations where "crfid = 'OP' + %index.formIndex.toString() and type = 'save'" -> 
+                    compositionTherapie.section = create('BackboneElement') as section,
+                    section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'operation') then
             {
-                src then TransformBundleOperationTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
-                
-                // Read out and parse form index into identifier section
-                src -> sectionTherapie.entry = create('Entry') as entryFormularId,
-                       entryFormularId.display = 'operation', 
-                       entryFormularId.identifier as identifier,
-                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       identifier.value = evaluate(index, '$this.formIndex.toString()');
-                
-                src then IncrementFormIndex(src, index);                
+                operations then TransformBundleOperationTherapie(operations, bundleTherapie, compositionTherapie, section);
+                operations -> section.entry = create('Reference') as reference,
+                    reference.display = 'operation',
+                    reference.identifier = create('Identifier') as formularId,
+                    formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                    formularId.value = evaluate(index, '$this.formIndex.toString()');
             };
+        
+
+            // SystemischeTherapie
+            src.operations as operations,
+                    operations where "crfid = 'SY' + %index.formIndex.toString() and type = 'save'" -> 
+                    compositionTherapie.section = create('BackboneElement') as section,
+                    section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'systemischeTherapie') then
+            {
+                operations then TransformBundleSystemischeTherapie(operations, bundleTherapie, compositionTherapie, section);
+                operations -> section.entry = create('Reference') as reference,
+                    reference.display = 'systemischeTherapie',
+                    reference.identifier = create('Identifier') as formularId,
+                    formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                    formularId.value = evaluate(index, '$this.formIndex.toString()');
+            };
+                    
+            // Strahlentherapie
+            src.operations as operations,
+                    operations where "crfid = 'ST' + %index.formIndex.toString() and type = 'save'" -> 
+                    compositionTherapie.section = create('BackboneElement') as section,
+                    section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'strahlentherapie') then
+            {
+                operations then TransformBundleStrahlentherapie(operations, bundleTherapie, compositionTherapie, section);
+                operations -> section.entry = create('Reference') as reference,
+                    reference.display = 'strahlentherapie',
+                    reference.identifier = create('Identifier') as formularId,
+                    formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                    formularId.value = evaluate(index, '$this.formIndex.toString()');
+            };
+            
+            // Sonstige Therapie
+            src.operations as operations,
+                    operations where "crfid = 'ST' + %index.formIndex.toString() and type = 'save'" -> 
+                    compositionTherapie.section = create('BackboneElement') as section,
+                    section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'sonstigeTherapie') then
+            {
+                operations then TransformBundleSonstigeTherapie(operations, bundleTherapie, compositionTherapie, section);
+                operations -> section.entry = create('Reference') as reference,
+                    reference.display = 'sonstigeTherapie',
+                    reference.identifier = create('Identifier') as formularId,
+                    formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                    formularId.value = evaluate(index, '$this.formIndex.toString()');
+            };
+            
+            src then IncrementFormIndex(src, index);
         };
 
-        // SystemischeTherapie
-        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'systemischeTherapie') then
-        {
-            
-            src then InitFormIndex(src, index);
-            src.operations as operations, operations where "crfid = 'SY' + %index.formIndex.toString() and type = 'save'" then
-            {
-                src then TransformBundleSystemischeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
-
-                // Read out and parse form index into identifier section
-                src -> sectionTherapie.entry = create('Entry') as entryFormularId, 
-                       entryFormularId.display = 'systemischeTherapie',
-                       entryFormularId.identifier as identifier,
-                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       identifier.value = evaluate(index, '$this.formIndex.toString()');
-
-                src then IncrementFormIndex(src, index);
-            };
-        };
-
-        // StrahlenTherapie
-        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'strahlentherapie') then
-        {
-            
-            src then InitFormIndex(src, index);
-            src.operations as operations, operations where "crfid = 'ST' + %index.formIndex.toString() and type = 'save'" then
-            {
-                src then TransformBundleStrahlentherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
-
-                // Read out and parse form index into identifier section
-                src -> sectionTherapie.entry = create('Entry') as entryFormularId, 
-                       entryFormularId.display = 'strahlentherapie',
-                       entryFormularId.identifier as identifier,
-                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       identifier.value = evaluate(index, '$this.formIndex.toString()');
-
-                src then IncrementFormIndex(src, index);
-            };
-        };
-
-        // SonstigeTherapie
-        src -> compositionTherapie.section = create('BackboneElement') as sectionTherapie, sectionTherapie.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'sonstigeTherapie') then
-        {
-            
-            src then InitFormIndex(src, index);
-            src.operations as operations, operations where "crfid = 'SO' + %index.formIndex.toString() and type = 'save'" then
-            {
-                src then TransformBundleSonstigeTherapie(operations, bundleTherapie, compositionTherapie, sectionTherapie);
-
-                // Read out and parse form index into identifier section
-                src -> sectionTherapie.entry = create('Entry') as entryFormularId, 
-                       entryFormularId.display = 'sonstigeTherapie',
-                       entryFormularId.identifier as identifier,
-                       identifier.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
-                       identifier.value = evaluate(index, '$this.formIndex.toString()');
-                       
-            };
-        };
-        
-        src then IncrementFormIndex(src, index);
-        src then InitMaxIndexTherapie(src, index);
-    };
-}
-
-group MapTNM(source src: CTS_Transport, target tgt: Bundle)
-{
-    let index = create('RepeatIndex');
-
-    /* ------------------------------ TNM ---------------------------- */
-    src ->
-    // Add a transaction bundle to the collection bundle
-    tgt.entry as entry,
-    entry.resource = create('Bundle') as bundleTNM,
-    // Add a composition to the transaction bundle
-    bundleTNM.entry as entryTherapie, 
-    entryTherapie.resource = create('Composition') as compositionTNM then
-    {
-        /* ------------------------------ Bundle ---------------------------- */
-
-        // Meta
-        src -> bundleTNM.id = uuid();
-        src -> bundleTNM.type = 'transaction';
-
-
-        /* ------------------------------ Composition ---------------------------- */
-
-        // Meta
-        src -> compositionTNM.id = uuid();
-        src -> compositionTNM.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/TNM-pseudonymisiert';
-        
-        // Type
-        src -> compositionTNM.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'tnm');
-
-        // Category idat or psn depends on which type of patient/consent is in the bundle
-        src -> compositionTNM.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
-
-        // Title
-        src -> compositionTNM.title = 'TNM pseudonymisiert';
-
-        // Identifier i.e. Case ID
-        src -> compositionTNM.identifier as identifier, identifier.value = 1;
-
-        // Status
-        src -> compositionTNM.status = cast('final', 'FHIR.code');
-
-        // Subject
-        src.operations as operations, operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
-        {
-            src.patid as patid, values.value as value -> compositionTNM.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
-        };        
-
-        // Date
-        src.operations as operations, operations.timestamp as timestamp -> compositionTNM.date = dateOp(timestamp, 'dateTime');
-
-        // Author
-        //src.operations as operations, operations.editor as author -> compositionTNM.author = create('Reference') as subject, subject.reference = author;
-        
-        /* ------------------------------ Section ---------------------------- */
-
-        src -> compositionTNM.section = create('BackboneElement') as sectionTNM, sectionTNM.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'tnm') then
-        {
-            /* ------------------------------ Therapie ---------------------------- */
-        
-            // Operation
-            src then InitFormIndex(src, index);
-            src.operations as operations, operations where "crfid = 'TNM' + %index.formIndex.toString() and type = 'save'" then
-            {
-                /* ------------------------------ Resources ---------------------------- */
-                src then TransformBundleTNM(operations, bundleTNM, compositionTNM, sectionTNM);
-                src then IncrementFormIndex(src, index);
-            };
-        };  
+        /* ------------------------------ Increment index ---------------------------- */
+        src then InitMaxIndexTherapie(src, index); // Reset maxIndex
     };
 }
 
@@ -741,14 +390,11 @@ group InitMaxIndexBefund(source src: CTS_Transport, target index: RepeatIndex)
 
 group InitMaxIndexTherapie(source src: CTS_Transport, target index: RepeatIndex)
 {
-    // Create this let because we can't check on two parameters with the same name in FHIRPath
-    let caseIndex = evaluate(index, '$this.caseIndex');
-
     // init maxIndex, then find maxFormIndex
     src -> index.maxIndex = 1;
 
     // Operation
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'OP') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains('OP') and crfid.contains('-').not() and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'OP\') + \'OP\'.length()).toInteger() > %index.maxIndex"
@@ -756,7 +402,7 @@ group InitMaxIndexTherapie(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Systemische Therapie
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'SY') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains('SY') and crfid.contains('-').not() and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'SY\') + \'SY\'.length()).toInteger() > %index.maxIndex"
@@ -764,7 +410,7 @@ group InitMaxIndexTherapie(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Strahlentherapie
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'ST') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains('ST') and crfid.contains('-').not() and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'ST\') + \'ST\'.length()).toInteger() > %index.maxIndex"
@@ -772,7 +418,7 @@ group InitMaxIndexTherapie(source src: CTS_Transport, target index: RepeatIndex)
     };
 
     // Sonstige Therapie
-    src.operations as operations, operations where "crfid.contains(%caseIndex.toString() + 'SO') and type = 'save'" then
+    src.operations as operations, operations where "crfid.contains('ST') and crfid.contains('-').not() and type = 'save'" then
     {
         // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
         operations where "crfid.substring($this.crfid.indexOf(\'SO\') + \'SO\'.length()).toInteger() > %index.maxIndex"
