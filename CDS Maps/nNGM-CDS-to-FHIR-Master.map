@@ -1,10 +1,11 @@
-/// version = 1.0
-/// title = "nNGM: FHIR to CTS"
+/// version = 0.1
+/// title = "nNGM: nNGMv09c - FHIR to CTS"
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_CdsToFhir_Master" = nNGM_Mapping_CdsToFhir_Master
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+
 
 // Stammdaten
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StammdatenFHIR"
@@ -35,8 +36,6 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFH
 
 
 group MapCDS(source src: CTS_Transport, target tgt: Bundle)
-{
-    group MapCDS(source src: CTS_Transport, target tgt: Bundle)
 {
     // Bundle metadata
     src -> tgt.id = uuid();
@@ -91,7 +90,7 @@ group MapStammdaten(source src: CTS_Transport, target tgt: Bundle)
         operations.timestamp as timestamp -> compositionStammdaten.date = dateOp(timestamp, 'dateTime');
 
         // Author 
-        operations.editor as author -> compositionStammdaten.author = create('Reference') as subject, subject.reference = author; 
+        operations.editor as author -> compositionStammdaten.author as author, author.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
             
         /* ------------------------------ Resources ---------------------------- */
         operations then TransformBundleStammdaten(operations, bundleStammdaten, compositionStammdaten);
@@ -560,6 +559,82 @@ group MapTNM(source src: CTS_Transport, target tgt: Bundle)
     };
 }
 
+/* ------------------------------ TNM ---------------------------- */
+group MapTNM(source src: CTS_Transport, target tgt: Bundle)
+{
+    let index = create('RepeatIndex');
+
+    src then InitMaxIndexTNM(src, index); // Reset maxIndex
+
+    /* ------------------------------ TNM ---------------------------- */
+    src ->
+    // Add a transaction bundle to the collection bundle
+    tgt.entry as entry,
+    entry.resource = create('Bundle') as bundleTNM,
+    // Add a composition to the transaction bundle
+    bundleTNM.entry as entryTNM, 
+    entryTNM.resource = create('Composition') as compositionTNM then
+    {
+        let maxIndex = evaluate(index, '$this.maxIndex');
+
+        /* ------------------------------ Bundle ---------------------------- */
+
+        // Meta
+        src -> bundleTNM.id = uuid();
+        src -> bundleTNM.type = 'transaction';
+
+        /* ------------------------------ Composition ---------------------------- */
+
+        // Meta
+        src -> compositionTNM.id = uuid();
+        src -> compositionTNM.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/TNM-pseudonymisiert';
+        src -> entryTNM.request as request, request.method = 'PUT', request.url = evaluate(compositionTNM, '\'Composition/\' + $this.id');
+        
+        // Type
+        src -> compositionTNM.type = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/compositions', 'tnm');
+
+        // Category idat or psn depends on which type of patient/consent is in the bundle
+        src -> compositionTNM.category = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/composition-category', 'psn');
+
+        // Title
+        src -> compositionTNM.title = 'TNM Pseudonymisiert';
+
+        // Status
+        src -> compositionTNM.status = cast('final', 'FHIR.code');
+
+        // Subject
+        src.operations as operations, operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_nngm_patient'" then
+        {
+            src.patid as patid, values.value as value -> compositionTNM.subject = create('Reference') as subject, subject.reference = value, subject.identifier as identifier, identifier.system = 'http://uk-koeln.de/fhir/NamingSystem/nNGM/patient-identifier', identifier.value = patid;
+        };
+
+        // Date
+        src.operations as operations, operations.timestamp as timestamp -> compositionTNM.date = dateOp(timestamp, 'dateTime');
+
+        // Author
+        src.operations as operations, operations.editor as author -> compositionTNM.author as subject collate, subject.reference = author;
+        
+        /* ------------------------------ Section ---------------------------- */
+        src then InitFormIndex(src, index);
+        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionTNM.section as compositionSection then
+        {
+            src.operations as operations,
+                    operations where "crfid = 'TNM' + %index.formIndex.toString() and type = 'save'" -> 
+                    compositionTNM.section = create('BackboneElement') as section,
+                    section.title = 'TNM',
+                    section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'tnm') then
+            {
+                operations then CreateObservationTNM(operations, bundleTNM, compositionTNM, section);
+                operations -> section.entry = create('Reference') as reference,
+                    reference.identifier = create('Identifier') as formularId,
+                    formularId.system = 'http://uk-koeln.de/NamingSystem/nNGM/formularId',
+                    formularId.value = evaluate(index, '$this.formIndex.toString()');
+            };   
+            src then IncrementFormIndex(src, index);
+        };  
+    };
+}
+
 // Helper functions
 group InitCaseIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
@@ -768,6 +843,19 @@ group InitMaxIndexTherapie(source src: CTS_Transport, target index: RepeatIndex)
     };
 }
 
+group InitMaxIndexTNM(source src: CTS_Transport, target index: RepeatIndex)
+{
+    // init maxIndex, then find maxFormIndex
+    src -> index.maxIndex = 1;
+
+    // TNM
+    src.operations as operations, operations where "crfid.contains('TNM') and crfid.contains('-').not() and type = 'save'" then
+    {
+        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'TNM\') + \'TNM\'.length()).toInteger() > %index.maxIndex"
+            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'TNM\') + \'TNM\'.length()).toInteger()');
+    };
+}
 
 group InitFormIndex(source src: CTS_Transport, target index: RepeatIndex)
 {
