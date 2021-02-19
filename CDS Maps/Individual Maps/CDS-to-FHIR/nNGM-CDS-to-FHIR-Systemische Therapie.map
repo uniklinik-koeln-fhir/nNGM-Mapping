@@ -1,7 +1,7 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_SystemischeTherapieFHIR"
 
-//todo: When Datum anderung (1465) is present in export, thereapie begin (1246) and ende (1247) are not mapped even if they are mapped to different target fields
+// Todo: Extension(Date) needed for Datum Aenderung (id_1465)
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
 
@@ -172,17 +172,24 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
             };
         };
 
-        // Therapiebeginn: effective.start
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1246'" then
+        // Thearpiebeginn and Therapieende
+        data where "$this.where(blockindex = 2 and groupindex = 0 and (itemid = 'id_1246' or itemdid = 'id_1247')).exists()" 
+            -> tgt.effective = create('Period') as effective then
         {
-            values.value as value -> tgt.effective = create('Period') as effective, effective.start = dateOp(value, 'dateTime');
+            // Therapiebeginn: effective.start
+            operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1246'" then
+            {
+                values.value as value -> effective.start = dateOp(value, 'dateTime');
+            };
+
+            // Therapieende: effective.end
+            operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247'" then
+            {
+                values.value as value -> effective.end = dateOp(value, 'dateTime');
+            };
         }; 
 
-        // Therapieende: effective.end, only if Therapiebeginn from id_1246 exists
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247' and %tgt.effective.start.exists()" then
-        {
-            values.value as value -> tgt.effective as effective collate, effective.end = dateOp(value, 'dateTime');
-        };
+ 
 
         // Durchführende Einrichtung: performer.actor.display
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1242'" then
@@ -490,15 +497,14 @@ group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations:
             };
         };
 
-        /*
+        
         // Datum der Änderung: effectivePeriod.start
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1465'" then
         {
-            
-            value ->    tgt.extension = create('Extension') as anderung,
-                        anderung.valueDate = dateOp(value, 'dateTime');
+            values.value as value -> tgt.extension = create('Extension') as aenderung,
+                                        aenderung.url = 'ExtensionUrlMissing', // TODO: TBA
+                                        aenderung.valueDate = dateOp(value, 'dateTime');
         };
-        */
     };
 }
 

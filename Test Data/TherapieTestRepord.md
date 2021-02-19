@@ -20,7 +20,6 @@
 
 * Known Issues:
     * Todesdatum (Patient) is missing from each form (design choice) 
-    * Operation -> ResectionStatus/Art der resection would map but is not present in generated FHIR bundles (see cds -> FHIR known issues)
     * Strahlentherapie -> Ende der Bestrahlung doesn’t support multiple choices in mapping, but form does for some reason. In reverse map only 1 value can be selected 
-    * Systemische Therapie -> When Datum anderung (1465) is present in export, thereapie begin (1246) and ende (1247) are not mapped even if they are mapped to different target fields
+    * Systemische Therapie -> Extension(Date) needed for Datum Aenderung (id_1465)
     * Systemische Therapie Neues therapieschema medicationCodeableConcept overwrites Therapieschema medicationCodeableConcept, unclear if both should be stored (would require extension on medicationCodeableConcept)
