@@ -498,6 +498,8 @@ group MapTherapie(source src: Bundle, target tgt: CTS_Transport)
                     strahlentherapieSectionEntry then TransformStrahlentherapieCTS(entry, operations);
                 };
             };
+
+            strahlentherapieSection then TransformCheckboxesTherapie(src, strahlentherapieSection, operations);
         };
 
         // Sonstige Therapie
@@ -760,4 +762,26 @@ group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: Bac
             observation where "%observation.code.coding.code = 'EGFR Exon 19'" -> data.values as values, values.value = 'EGFR Exon 19-21'; 
         };
     };
+}
+
+group TransformCheckboxesTherapie(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+{
+    // Strahlentherapie
+    nestedSection where "code.coding.code = 'strahlentherapie'" -> operations.data as data then
+    {
+       nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+       src.entry as entry, entry.resource as procedure where "resource.id = %reference.split(\'/\').last() and resource is Procedure 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/Strahlentherapie'" then
+        {
+            procedure where "%data.where(itemid = 'id_1211').exists().not()" then
+            {
+                procedure -> data.blockindex = 2;
+                procedure -> data.groupindex = 0;
+                procedure -> data.itemid = 'id_1211';
+            };
+
+            procedure.statusReason as statusReason, statusReason.coding as coding,
+                coding.code as code where "system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund'" -> data.values as values, values.value = code; 
+        };
+    }; 
 }

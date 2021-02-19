@@ -1,6 +1,8 @@
 /// version = 0.1
 /// title = "StrahlentherapieMap"
 
+// TODO: Extension needed to write different status to (because CDS allows to check all boxes in id_1211)
+
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR" = nNGM_Mapping_StrahlentherapieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
@@ -228,50 +230,20 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
                             };                                                  
                     };
         };
-        
+
         //------------[Ende der Therapie]------------
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1211'" then
+        data where "$this.where(blockindex = 2 and groupindex = 0 and itemid ='id_1211').exists()"
+            -> tgt.statusReason = create('CodeableConcept') as cc then 
         {
-            values.value as value where "value = 'Reguläres Ende'" then
-            {
-                operations -> tgt.status = 'completed';
-                operations -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason', value);
-            };
-            values.value as value where "value = 'Abbruch wegen Nebenwirkungen'" then
-            {
-                operations -> tgt.status = 'stopped';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
-            };
-            values.value as value where "value = 'Pause wegen Nebenwirkungen'" then
-            {
-                operations -> tgt.status = 'on-hold';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
-            };
-            values.value as value where "value = 'Abbruch wegen Progress'" then
-            {
-                operations -> tgt.status = 'stopped';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
-            };
-            values.value as value where "value = 'Ablehnung durch den Patienten'" then
-            {
-                operations -> tgt.status = 'not-done';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
-            };
-            values.value as value where "value = 'Patient verstorben'" then
-            {
-                operations -> tgt.status = 'stopped';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
-            };
-            values.value as value where "value = 'Sonstiges'" then
-            {
-                operations -> tgt.status = 'unknown';
-                operations -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason', value);
-            };
-            values.value as value where "value = 'N/A'" then
-            {
-                operations -> tgt.status = 'unknown';
-                operations -> tgt.statusReason = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason','not-applicable','not-applicable');
-            };
+            data.values as values, values.value as value where "value != 'N/A'" -> cc.coding = c('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
+            data.values as values, values.value as value where "value = 'N/A'" -> cc.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
+
+            // TODO: Extension needed to write different status to (because CDS allows to check all boxes in id_1211)
+            data.values as values, values.value as value where "value = 'Regul\u00e4res Ende' or value = 'Reguläres Ende'" -> tgt.status = 'completed';
+            data.values as values, values.value as value where "value = 'Pause wegen Nebenwirkungen'" -> tgt.status = 'on-hold';
+            data.values as values, values.value as value where "value = 'Ablehnung durch den Patienten'" -> tgt.status = 'not-done';
+            data.values as values, values.value as value where "value = 'Abbruch wegen Nebenwirkungen' or value = 'Abbruch wegen Progress' or value = 'Patient verstorben'" -> tgt.status = 'stopped';
+            data.values as values, values.value as value where "value = 'Sonstiges' or value = 'N/A'" -> tgt.status = 'unknown';
         };
 
         //Bemerkungen
