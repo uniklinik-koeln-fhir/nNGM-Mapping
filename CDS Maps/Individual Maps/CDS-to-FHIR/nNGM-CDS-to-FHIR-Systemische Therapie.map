@@ -265,7 +265,6 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
             values.value as value where "$this.value.exists()" then
             {
                 value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept,
-                            medicationCodeableConcept.text = 'Therapieschema',
                             medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
             };
         };
@@ -320,116 +319,31 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
             };
         };
 
-        // Art des Therapieendes: status (+ statusReason)
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1356'" then
+        //------------[Ende der Therapie]------------
+        data where "$this.where(blockindex = 6 and groupindex = 0 and itemid ='id_1356').exists()"
+            -> tgt.statusReason = create('CodeableConcept') as cc then 
         {
-            values.value as value where "$this.value = 'Regul\u00e4res Ende' or $this.value = 'Reguläres Ende'" then
-            {
-                value -> tgt.status = 'completed';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'Regul\u00e4res Ende',
-                         statusReasonCoding.display = 'Regul\u00e4res Ende';
-            };
+            data.values as values, values.value as value where "value != 'N/A'" -> cc.coding = c('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
+            data.values as values, values.value as value where "value = 'N/A'" -> cc.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
 
-            values.value as value where "$this.value = 'Abbruch wegen Nebenwirkungen'" then
-            {
-                value -> tgt.status = 'stopped';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'nebenwirkungenab',
-                         statusReasonCoding.display = 'Abbruch wegen Nebenwirkungen';
-            };
+            // TODO: Extension needed to write different status to (because CDS allows to check all boxes in id_1356)
+            //If %tgt.status.exists() -> tgt.extension = create('BackboneElement') as statusExtension then {statusextension}
 
-            values.value as value where "$this.value = 'Pause wegen Nebenwirkungen'" then
-            {
-                value -> tgt.status = 'on-hold';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'nebenwirkungenpa',
-                         statusReasonCoding.display = 'Pause wegen Nebenwirkungen';
-                
-                operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
-            };
-
-            values.value as value where "$this.value = 'Abbruch wegen Progress'" then
-            {
-                value -> tgt.status = 'stopped';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'progress',
-                         statusReasonCoding.display = 'Progress';
-                
-                operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
-            };
-
-            values.value as value where "$this.value = 'Ablehnung durch den Patienten'" then
-            {
-                value -> tgt.status = 'not-done';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'ablehnungPatient',
-                         statusReasonCoding.display = 'Ablehnung durch den Patienten';
-                
-            };
-
-            values.value as value where "$this.value = 'Vielversprechendere Therapieoption'" then
-            {
-                value -> tgt.status = 'not-done';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'vielversprechendereTherapieoption',
-                         statusReasonCoding.display = 'Vielversprechendere Therapieoption';
-                
-            };
-
-            values.value as value where "$this.value = 'Patient verstorben'" then
-            {
-                value -> tgt.status = 'stopped';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'verstorben',
-                         statusReasonCoding.display = 'Patient verstorben';
-                
-            };
-
-            values.value as value where "$this.value = 'Sonstiges'" then
-            {
-                value -> tgt.status = 'unknown';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund',
-                         statusReasonCoding.code = 'sonstiges',
-                         statusReasonCoding.display = 'Sonstiges';
-                
-            };
-
-            values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
-            {
-                value -> tgt.status = 'unknown';
-                value -> tgt.statusReason as statusReason,
-                         statusReason.coding as statusReasonCoding,
-                         statusReasonCoding.system = 'http://terminology.hl7.org/CodeSystem/data-absent-reason',
-                         statusReasonCoding.code = 'not-applicable',
-                         statusReasonCoding.display = 'not-applicable';
-                
-            };
+            data.values as values, values.value as value where "value = 'Regul\u00e4res Ende' or value = 'Reguläres Ende'" -> tgt.status = 'completed';
+            data.values as values, values.value as value where "value = 'Pause wegen Nebenwirkungen'" -> tgt.status = 'on-hold';
+            data.values as values, values.value as value where "value = 'Ablehnung durch den Patienten'" -> tgt.status = 'not-done';
+            data.values as values, values.value as value where "value = 'Abbruch wegen Nebenwirkungen' or value = 'Abbruch wegen Progress' or value = 'Patient verstorben'" -> tgt.status = 'stopped';
+            data.values as values, values.value as value where "value = 'Sonstiges' or value = 'N/A'" -> tgt.status = 'unknown';
         };
 
-        // Bemerkungen: note.text
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_1205'" then
+        //Bemerkungen
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid ='id_1205'" then
         {
-            values.value as value ->    tgt.note as note,
-                                        note.text = value;
-        };        
-
+            values -> tgt.note = create('Annotation') as annotation then 
+            {
+                values.value as value -> annotation.text = value;
+            };
+        };
     };
 }
 
@@ -491,18 +405,18 @@ group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations:
         {            
             values.value as value where "$this.value.exists()" then
             {
-                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept,
-                            medicationCodeableConcept.text = 'NeuesTherapieschema',
-                            medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
+                value ->    tgt.medicationCodeableConcept as medicationCodeableConcept,
+                            medicationCodeableConcept.extension = create('Extension') as NeuesTherapieschema, 
+                            NeuesTherapieschema.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/NeuesTherapieschema',
+                            NeuesTherapieschema.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
             };
         };
-
         
-        // Datum der Änderung: effectivePeriod.start
+        // Datum der Änderung: valueDateTime
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1465'" then
         {
             values.value as value -> tgt.extension = create('Extension') as aenderung,
-                                        aenderung.url = 'ExtensionUrlMissing', // TODO: TBA
+                                        aenderung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/DatumAenderung', 
                                         aenderung.valueDate = dateOp(value, 'dateTime');
         };
     };
