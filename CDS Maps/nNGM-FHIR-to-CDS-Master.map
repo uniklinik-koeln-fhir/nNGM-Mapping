@@ -479,6 +479,7 @@ group MapTherapie(source src: Bundle, target tgt: CTS_Transport)
                     systemischeTherapieSectionEntry then TransformSystemischeTherapieCTS(entry, operations);
                 };
             };
+            systemischeTherapieSection then TransformCheckboxesSystemischeTherapie(src, systemischeTherapieSection, operations);
         };
 
 
@@ -499,7 +500,7 @@ group MapTherapie(source src: Bundle, target tgt: CTS_Transport)
                 };
             };
 
-            strahlentherapieSection then TransformCheckboxesTherapie(src, strahlentherapieSection, operations);
+            strahlentherapieSection then TransformCheckboxesStrahlentherapie(src, strahlentherapieSection, operations);
         };
 
         // Sonstige Therapie
@@ -764,7 +765,7 @@ group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: Bac
     };
 }
 
-group TransformCheckboxesTherapie(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+group TransformCheckboxesStrahlentherapie(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
 {
     // Strahlentherapie
     nestedSection where "code.coding.code = 'strahlentherapie'" -> operations.data as data then
@@ -782,6 +783,36 @@ group TransformCheckboxesTherapie(source src: Bundle, source nestedSection: Back
 
             procedure.statusReason as statusReason, statusReason.coding as coding,
                 coding.code as code where "system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund'" -> data.values as values, values.value = code; 
+
+            // Catch not-applicable values
+            procedure.statusReason as statusReason, statusReason.coding as coding,
+            coding.code as code where "system = 'http://terminology.hl7.org/CodeSystem/data-absent-reason'" -> data.values as values, values.value = 'N/A';
+        };
+    }; 
+}
+
+group TransformCheckboxesSystemischeTherapie(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+{
+    // SystemischeTherapie
+    nestedSection where "code.coding.code = 'systemischeTherapie'" -> operations.data as data then
+    {
+       nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+       src.entry as entry, entry.resource as medicationAdministration where "resource.id = %reference.split(\'/\').last() and resource is MedicationAdministration 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/MedicationAdministration'" then
+        {
+            medicationAdministration where "%data.where(itemid = 'id_1356').exists().not()" then
+            {
+                medicationAdministration -> data.blockindex = 6;
+                medicationAdministration -> data.groupindex = 0;
+                medicationAdministration -> data.itemid = 'id_1356';
+            };
+
+            medicationAdministration.statusReason as statusReason, statusReason.coding as coding,
+                coding.code as code where "system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund'" -> data.values as values, values.value = code; 
+
+            // Catch not-applicable values
+            medicationAdministration.statusReason as statusReason, statusReason.coding as coding,
+            coding.code as code where "system = 'http://terminology.hl7.org/CodeSystem/data-absent-reason'" -> data.values as values, values.value = 'N/A';
         };
     }; 
 }
