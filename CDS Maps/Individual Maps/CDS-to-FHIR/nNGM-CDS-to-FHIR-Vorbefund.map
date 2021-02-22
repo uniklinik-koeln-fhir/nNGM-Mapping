@@ -1,17 +1,9 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_VorbefundFHIR"
+
 /*
     TODO 
-    - repeatindex is off by +1
-    - creation and reference to Specimen is commented out until clarification 
     - Device: has no uuid and therefore cannot be referenced in BservationNGSPanel
-    
-    repeatindex is off by +1
-    Specimen is currently commented out until clarification.
-    NGSPanel: clarify what uuid_ngsPanel_research is meant for
-    FastTrack: what to do with uuid_fasttrack_egfr1921?
-    Device: has no uuid and therefore cannot be referenced in ObservationNGSPanel
-
 */
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundFHIR" = nNGM_Mapping_VorbefundFHIR
@@ -27,7 +19,8 @@ group TransformBundleVorbefundFHIR(source operations: BackboneElement, target bu
 {
     operations -> biopsieSection.section = create('BackboneElement') as section, section.title = 'vorbefund', section.code = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/sections', 'vorbefund') then
     {
-        // operations then CreateSpecimenVorbefund(operations, bundle, composition, section);
+        operations then CreateSpecimenVorbefund(operations, bundle, composition, section);
+        operations then CreateObservationHistologieVorbefund(operations, bundle, composition, section);
         operations then CreateObservationIHCVorbefund(operations, bundle, composition, section);
         operations then CreateObservationMPVorbefund(operations, bundle, composition, section);
         operations then CreateObservationFastTrackVorbefund(operations, bundle, composition, section);
@@ -43,18 +36,10 @@ group TransformBundleVorbefundFHIR(source operations: BackboneElement, target bu
 /* ------------------------------ Specimen ---------------------------- */
 group CreateSpecimenVorbefund(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
-    let resourceIsCreated = create('Boolean');
-    operations then SetBooleanToFalse(operations, resourceIsCreated);
-
-    operations.data as data, data.values as values where "blockindex = 27 and groupindex = 0 and itemid = 'id_1601'
-                                                        or blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
+    operations.data as data, data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then
     {
-        operations where "%resourceIsCreated.valueBoolean = false" -> bundle.entry as entry, entry.resource = create('Specimen') as specimen then 
-        {
-            operations then TransformSpecimenVorbefund(operations, specimen, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
-            operations then SetBooleanToTrue(operations, resourceIsCreated);
-        };     
+        operations then TransformSpecimenVorbefund(operations, specimen, composition, section);
+        operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(specimen, '\'Specimen/\' + $this.id');
     };    
 }
 /* ------------------------------ Specimen ---------------------------- */
@@ -65,11 +50,13 @@ group TransformSpecimenVorbefund(source operations: BackboneElement, target tgt:
     // Type : Item required on simplifier
     operations -> tgt.type as type, type.coding as snomedGlobalPatientSet, snomedGlobalPatientSet.system  = 'http://snomed.info/sct',
                                                                     snomedGlobalPatientSet.version = 'http://snomed.info/sct/900000000000207008',
-                                                                    snomedGlobalPatientSet.code    = 'UNKNOWN';
+                                                                    snomedGlobalPatientSet.code as code, code.extension as dataAbsentReason,
+                                                                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
+                                                                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
 
-    // Sbject 
+    // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
-    
+
     // Access data
     operations.data as data then
     {
@@ -80,6 +67,7 @@ group TransformSpecimenVorbefund(source operations: BackboneElement, target tgt:
             values.value as value -> section.entry = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
         };
 
+        // Eingang des Tumormaterials am nNGM-Standort
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_2471'" then
         {
             values.value as value -> tgt.receivedTime = dateOp(value, 'dateTime');
@@ -108,22 +96,13 @@ group CreateDiagnosticReportVorbefund(source operations: BackboneElement, target
 /* ------------------------- DiagnosticReport ------------------------- */
 group TransformDiagnosticReportVorbefund(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
-    // since there can be more than 1 instance of the NGS Lung Panel and Sonstiges (FusionNGS) we need an index to assign the corresponding data to each observation
-    operations then InitSectionIndex(operations, index); // (re)set index to 0
-
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     // status: Item required on simplifier
-    operations ->  tgt.status as status, 
-                    status.extension as dataAbsentReason, 
-                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.status = 'final';
 
     // code: Item required on simplifier
-    operations ->  tgt.code as code, 
-                    code.extension as dataAbsentReason, 
-                    dataAbsentReason.url       = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.code = cc('http://loinc.org', '50398-7'); 
 
     // Subject 
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -138,14 +117,6 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
             values.value as value -> section.entry = create('Reference') as diagnosticReport, diagnosticReport.reference = evaluate(value, '\'DiagnosticReport/\' + $this');
         };
 
-        /* ------------------------- EXTERNES TUMORMATERIAL ----------------------------- */
-        // Befunddatum
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1653'" then
-        {
-            values.value as value -> tgt.issued =  dateOp(value, 'date');
-        };
-
-        // Referenzen
         // Befundnummer 
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1654'" then
         {
@@ -154,11 +125,19 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
                                                           befundNummer.value  = id;
         };
 
+        /* ------------------------- EXTERNES TUMORMATERIAL ----------------------------- */
+        // Befunddatum
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1653'" then
+        {
+            values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
+        };
+
+        // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
 
         // Observations
         // Histologie
@@ -174,15 +153,14 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
         // MP: CISH and FISH
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2509'" then
         {
-            let cish = 'CISH';
-            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationMPVorbefund(operations, cish, value, reference);
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationCISHMPVorbefund(operations, value, reference);
         };
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2510'" then
         {
-            let fish = 'FISH';
-            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationMPVorbefund(operations, fish, value, reference);
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFISHMPVorbefund(operations, value, reference);
         };
         // FusionNGS
+        operations then InitSectionIndex(operations, index); // (re)set index to 0
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2511'" then
         {
             // if Sonstiges: create n observation references (with n according to repeatindex)
@@ -202,23 +180,14 @@ group TransformDiagnosticReportVorbefund(source operations: BackboneElement, tar
         // FastTrack
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2512'" then
         {
-            // if EGFR Exon 19-21: create 3 observation references
-            values.value where "$this.value = 'EGFR Exon 19-21'" then
-            {
-                let EGFFR19 = 'EGFR Exon 19';
-                let EGFFR20 = 'EGFR Exon 20';
-                let EGFFR21 = 'EGFR Exon 21';
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, EGFFR19, reference);
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, EGFFR20, reference);
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, EGFFR21, reference);
-            };
-            values.value where "$this.value != 'EGFR Exon 19-21'" then
-            {
-                values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, value, reference);
-            };
+            values.value as value -> tgt.result = create('Reference') as reference then SetReferenceToObservationFastTrackVorbefund(operations, value, tgt);
         };
-        // NGS Lung Panel
-        operations then InitSectionIndex(operations, index); // (re)set index to 0
+    };
+
+    // NGS Lung Panel
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+    operations.data as data then
+    {
         data.values as values where "blockindex = 26 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
         {
             values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
@@ -245,14 +214,14 @@ group CreateObservationHistologieVorbefund(source operations: BackboneElement, t
     };          
 }
 /* ---------------------- ObservationHistologie ----------------------- */
-group TransformObservationHistologieVorbefund(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
+group TransformObservationHistologieVorbefund(source operations: BackboneElement, target tgt: Observation, target composition: Composition, target section: BackboneElement)
 {
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nngm/histologie';
     
-    //status: Item required on simplifier
+    // Status 
     operations ->  tgt.status = cast('final', 'FHIR.code');
 
-    //code: Item required on simplifier
+    // Code
     operations -> tgt.code = cc('http://ncit.nci.nih.gov','C18000');
 
     // Subject
@@ -297,10 +266,10 @@ group TransformObservationHistologieVorbefund(source operations: BackboneElement
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 
@@ -422,7 +391,7 @@ group TransformObservationBRAFIHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -451,31 +420,27 @@ group TransformObservationBRAFIHCVorbefund(source operations: BackboneElement, t
             };
         };
 
-        //Ergebnis 
-        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'braf_ihc_result'" then
+        // Ergebnis
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_result'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
+        // Antikörper
+        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'braf_ihc_ab'" then
+        {
+            values.value as antikoerper -> tgt.component = create('BackboneElement') as componentAntikoerper then
+            {
+                antikoerper -> componentAntikoerper.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ihc-antikoerper', antikoerper);
+                antikoerper -> componentAntikoerper.code = cc('http://ncit.nci.nih.gov', 'C16295');
+            };
+        };
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        }; 
     };
 }
 /* ---------------------- Observation CK7 IHC ------------------------ */
@@ -510,7 +475,7 @@ group TransformObservationCK7IHCVorbefund(source operations: BackboneElement, ta
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -539,31 +504,18 @@ group TransformObservationCK7IHCVorbefund(source operations: BackboneElement, ta
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 5 and groupindex = 0 and itemid = 'id_2045'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ---------------------- Observation MIB1 IHC ------------------------ */
@@ -598,7 +550,7 @@ group TransformObservationMIB1IHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -627,31 +579,18 @@ group TransformObservationMIB1IHCVorbefund(source operations: BackboneElement, t
             };
         };
         
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_2063'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation NapsinA IHC ---------------------- */
@@ -686,7 +625,7 @@ group TransformObservationNapsinAIHCVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -715,31 +654,18 @@ group TransformObservationNapsinAIHCVorbefund(source operations: BackboneElement
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 14 and groupindex = 0 and itemid = 'id_2072'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ---------------------- Observation P40 IHC ------------------------- */
@@ -768,12 +694,13 @@ group TransformObservationP40IHCVorbefund(source operations: BackboneElement, ta
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         //Phänotyp -> phaenotyp component
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2074'" then
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -801,31 +728,19 @@ group TransformObservationP40IHCVorbefund(source operations: BackboneElement, ta
                 };
             };
         };
-        //Ergebnis 
+
+        // Ergebnis
         data.values as values where "blockindex = 15 and groupindex = 0 and itemid = 'id_2079'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ----------------- Observation Synaptophysin IHC -------------------- */
@@ -860,7 +775,7 @@ group TransformObservationSynaptophysinIHCVorbefund(source operations: BackboneE
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -889,31 +804,18 @@ group TransformObservationSynaptophysinIHCVorbefund(source operations: BackboneE
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 18 and groupindex = 0 and itemid = 'id_2088'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation TTF1 IHC ------------------------- */
@@ -948,7 +850,7 @@ group TransformObservationTTF1IHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -977,31 +879,18 @@ group TransformObservationTTF1IHCVorbefund(source operations: BackboneElement, t
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 19 and groupindex = 0 and itemid = 'id_2097'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation ALK IHC --------------------------- */
@@ -1028,36 +917,18 @@ group TransformObservationALKIHCVorbefund(source operations: BackboneElement, ta
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2106'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation MET IHC --------------------------- */
@@ -1083,28 +954,10 @@ group TransformObservationMETIHCVorbefund(source operations: BackboneElement, ta
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2139'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         //Klassifikation -> Klassifikation component
@@ -1124,7 +977,7 @@ group TransformObservationMETIHCVorbefund(source operations: BackboneElement, ta
             {
                 value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueBoolean	 = cast(true, 'FHIR.boolean');
+                    value -> component.valueBoolean	 = 'true';
                     value -> component.code          = cc('http://ncit.nci.nih.gov', 'C129474');
                 };
             };
@@ -1132,7 +985,7 @@ group TransformObservationMETIHCVorbefund(source operations: BackboneElement, ta
             {
                 value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueBoolean	 = cast(false, 'FHIR.boolean');
+                    value -> component.valueBoolean	 = 'false';
                     value -> component.code          = cc('http://ncit.nci.nih.gov', 'C129474');
                 };
             };
@@ -1140,10 +993,10 @@ group TransformObservationMETIHCVorbefund(source operations: BackboneElement, ta
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation PD-L1 IHC ------------------------- */
@@ -1152,7 +1005,7 @@ group TransformObservationPDL1IHCVorbefund(source operations: BackboneElement, t
     operations then MapIHCStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code -> PD-L1: Item required in Simplifier
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes', 'PD-L1');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'PD-L1');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -1178,7 +1031,7 @@ group TransformObservationPDL1IHCVorbefund(source operations: BackboneElement, t
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -1207,18 +1060,10 @@ group TransformObservationPDL1IHCVorbefund(source operations: BackboneElement, t
             };
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 16 and groupindex = 0 and itemid = 'id_2180'" then
         {
-            values.value as value where "value = 'auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         //Menge der Tumorzellen (% positive Tumorzellen TPS) -> menge-tumorzellen component
@@ -1243,10 +1088,10 @@ group TransformObservationPDL1IHCVorbefund(source operations: BackboneElement, t
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation ROS1 IHC -------------------------- */
@@ -1273,36 +1118,18 @@ group TransformObservationROS1IHCVorbefund(source operations: BackboneElement, t
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        //Ergebnis 
+        // Ergebnis
         data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'id_2219'" then
         {
-            values.value as value where "value = 'positiv'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
-            };
-
-            values.value as value where "value = 'fraglich'" then 
-            {
-                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
-            };
-
-            values.value as value where "value = 'negativ'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
-            };
+            values.value as value -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', value, value);
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 
@@ -1424,10 +1251,10 @@ group TransformObservationALKCISHVorbefund(source operations: BackboneElement, t
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation MET CISH -------------------------- */
@@ -1454,27 +1281,23 @@ group TransformObservationMETCISHVorbefund(source operations: BackboneElement, t
             values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
         };
 
-        //Ergebnis 
+        //Ergebnis
         data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2147'" then
         {
-            values.value as value where "value = 'positiv (high-level amplification)'" then 
+            values.value where "$this.value = 'positiv (high-level amplification)'
+                               or $this.value = 'positiv (moderate-level amplification)'" then 
             {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6576-8', 'Positive');
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', ergebnis, ergebnis);
             };
 
-            values.value as value where "value = 'positiv (moderate-level amplification)'" then 
+            values.value where "$this.value = 'negativ'" then 
             {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
             };
 
-            values.value as value where "value = 'negativ'" then 
+            values.value where "$this.value = 'nicht auswertbar'" then 
             {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA6577-6', 'Negative');
-            };
-
-            values.value as value where "value = 'nicht auswertbar'" then 
-            {
-                value ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
+                values.value as ergebnis ->  tgt.valueCodeableConcept = cc('http://loinc.org', 'LA18198-4', 'No call');
             };
         };
         
@@ -1485,7 +1308,7 @@ group TransformObservationMETCISHVorbefund(source operations: BackboneElement, t
             {
                value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA6576-8', 'Positive');
+                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA9193-9', 'High');
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -1493,7 +1316,7 @@ group TransformObservationMETCISHVorbefund(source operations: BackboneElement, t
             {
                value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
+                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA8982-6', 'Medium');
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -1509,10 +1332,10 @@ group TransformObservationMETCISHVorbefund(source operations: BackboneElement, t
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation RET CISH -------------------------- */
@@ -1570,10 +1393,10 @@ group TransformObservationRETCISHVorbefund(source operations: BackboneElement, t
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation ROS1 CISH ------------------------- */
@@ -1641,10 +1464,10 @@ group TransformObservationROS1CISHVorbefund(source operations: BackboneElement, 
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation ALK FISH -------------------------- */
@@ -1711,10 +1534,10 @@ group TransformObservationALKFISHVorbefund(source operations: BackboneElement, t
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation MET FISH -------------------------- */
@@ -1767,7 +1590,7 @@ group TransformObservationMETFISHVorbefund(source operations: BackboneElement, t
             {
                value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA6576-8', 'Positive');
+                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA9193-9', 'High');
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -1775,16 +1598,15 @@ group TransformObservationMETFISHVorbefund(source operations: BackboneElement, t
             {
                value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
+                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA8982-6', 'Medium');
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
-            //TODO:Please verify the value code to change to right  value
             values.value as value where "value = 'Amplifikation low-level'" then 
             {
                value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA32-8', 'No');
+                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA9194-7', 'Low');
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -1792,7 +1614,7 @@ group TransformObservationMETFISHVorbefund(source operations: BackboneElement, t
             {
                 value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA6577-6', 'Negative');
+                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA32-8', 'No');
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -1800,7 +1622,7 @@ group TransformObservationMETFISHVorbefund(source operations: BackboneElement, t
             {
                value -> tgt.component = create('BackboneElement') as component then
                 {
-                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA18198-4', 'No call');
+                    value -> component.valueCodeableConcept    = cc('http://loinc.org', 'LA11884-6', 'Indeterminate');
                     value -> component.code                    = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'amplification-level');
                 };
             };
@@ -1907,10 +1729,10 @@ group TransformObservationMETFISHVorbefund(source operations: BackboneElement, t
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation RET FISH -------------------------- */
@@ -1979,10 +1801,10 @@ group TransformObservationRETFISHVorbefund(source operations: BackboneElement, t
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* --------------------- Observation ROS1 FISH ------------------------- */
@@ -2050,10 +1872,10 @@ group TransformObservationROS1FISHVorbefund(source operations: BackboneElement, 
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 
@@ -2228,10 +2050,10 @@ group TransformObservationALKFusionNGSVorbefund(source operations: BackboneEleme
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ------------------ Observation RET FusionNGS ------------------------ */
@@ -2319,10 +2141,10 @@ group TransformObservationRETFusionNGSVorbefund(source operations: BackboneEleme
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ---------------- Observation ROS1 FusionNGS ------------------------- */
@@ -2410,10 +2232,10 @@ group TransformObservationROS1FusionNGSVorbefund(source operations: BackboneElem
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 } 
 /* ----------------- Observation NTRK1 FusionNGS ----------------------- */
@@ -2494,10 +2316,10 @@ group TransformObservationNTRK1FusionNGSVorbefund(source operations: BackboneEle
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ---------------- Observation NTRK2 FusionNGS ------------------------ */
@@ -2578,10 +2400,10 @@ group TransformObservationNTRK2FusionNGSVorbefund(source operations: BackboneEle
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ----------------- Observation NTRK3 FusionNGS ----------------------- */
@@ -2662,10 +2484,10 @@ group TransformObservationNTRK3FusionNGSVorbefund(source operations: BackboneEle
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ---------------- Observation FGFR1 FusionNGS ------------------------ */
@@ -2746,10 +2568,10 @@ group TransformObservationFGFR1FusionNGSVorbefund(source operations: BackboneEle
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ----------------- Observation FGFR2 FusionNGS ----------------------- */
@@ -2831,10 +2653,10 @@ group TransformObservationFGFR2FusionNGSVorbefund(source operations: BackboneEle
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ----------------- Observation FGFR3 FusionNGS ----------------------- */
@@ -2915,10 +2737,10 @@ group TransformObservationFGFR3FusionNGSVorbefund(source operations: BackboneEle
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
     };
 }
 /* ---------------- Observation Sonstiges FusionNGS -------------------- */
@@ -2927,7 +2749,7 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
     operations then MapFusionNGSStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code -> Sonstiges: Item required in Simplifier
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'Sonstiges');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'Sonstige Fusion NGS');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -2972,8 +2794,9 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
         {
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
-                value -> component.valueCodeableConcept = cc('http://www.genenames.org',value);
-                value -> component.code                 = cc('http://loinc.org', '48018-6');
+                value -> component.valueString = value;
+                value -> component.code        = cc('http://loinc.org', '48018-6')  as codeableConcept,
+                                                    codeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner');
             };
         };
 
@@ -2983,7 +2806,8 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
                 value -> component.valueString = value;
-                value -> component.code        = cc('http://ncit.nci.nih.gov', 'C28510');
+                value -> component.code        = cc('http://loinc.org', '48018-6')  as codeableConcept,
+                                                codeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'zweiter-fusionspartner');
             };
         };
 
@@ -3002,8 +2826,8 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
         {
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
-                value -> component.valueInteger  = cast(value, 'FHIR.integer');
-                value -> component.code          = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
+                value -> component.valueString  = value;
+                value -> component.code         = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'erster-fusionspartner-exon');
             };
         };
         
@@ -3012,17 +2836,17 @@ group TransformObservationSonstigesFusionNGSVorbefund(source operations: Backbon
         {
             values.value as value -> tgt.component = create('BackboneElement') as component then
             {
-                value -> component.valueInteger  = cast(value, 'FHIR.integer');
-                value -> component.code          = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'zweiter-fusionspartner-exon');
+                value -> component.valueString  = value;
+                value -> component.code         = cc('http://uk-koeln.de/fhir/CodeSystem/tbd-codes', 'zweiter-fusionspartner-exon');
             };
         };
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };    
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };    
     };
 }
 
@@ -3073,7 +2897,7 @@ group TransformObservationBRAFExon15Vorbefund(source operations: BackboneElement
     operations then MapFastTrackStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code: Item required on Simplifier
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C158854', 'BRAF Exon 15 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'BRAF Exon 15', 'BRAF Exon 15');
 
     // Patient reference
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -3097,7 +2921,7 @@ group TransformObservationBRAFExon15Vorbefund(source operations: BackboneElement
         // Ergebnis
         data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'id_1946'" then
         {
-            values.value as value -> tgt.valueCodeableConcept = cc(' http://loinc.org', value);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', ergebnis);
         };
 
         //Change DNA -> dna-chg component
@@ -3122,10 +2946,10 @@ group TransformObservationBRAFExon15Vorbefund(source operations: BackboneElement
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        }; 
     };
 }
 /* ------------ Observation EGFR Exon 19 Fast Track -------------------- */
@@ -3134,7 +2958,7 @@ group TransformObservationEGFRExon19Vorbefund(source operations: BackboneElement
     operations then MapFastTrackStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code: Item required on Simplifier
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C128662','EGFR Exon 19 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'EGFR Exon 19', 'EGFR Exon 19');
 
     //Date of Assessment, Assay, Hersteller
     operations then MapObservationFastTrackDateAssayHerstellerEGFREXO1921Vorbefund(operations, tgt);
@@ -3148,15 +2972,19 @@ group TransformObservationEGFRExon19Vorbefund(source operations: BackboneElement
         // ID + Composition insert
         data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr19'" then
         {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+            values.value as value where "unit.exists().not()" then // to not use the unit = 21 value element
+            {
+                values.value as value -> tgt.id = value;
+                values.value as value -> section.entry = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
+            };
         };
 
         // Ergebnis
         data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1950'" then
         {
-            values.value as value -> tgt.valueCodeableConcept = cc(' http://loinc.org', value);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', ergebnis, ergebnis);
         };
+
         //Change DNA -> dna-chg component
         data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1951'" then
         {
@@ -3178,10 +3006,10 @@ group TransformObservationEGFRExon19Vorbefund(source operations: BackboneElement
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        }; 
     };
 }
 /* ------------ Observation EGFR Exon 20 Fast Track -------------------- */
@@ -3190,7 +3018,7 @@ group TransformObservationEGFRExon20Vorbefund(source operations: BackboneElement
     operations then MapFastTrackStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code: Item required on Simplifier
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C128663','EGFR Exon 20 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'EGFR Exon 20', 'EGFR Exon 20');
 
     //Date of Assessment, Assay, Hersteller
     operations then MapObservationFastTrackDateAssayHerstellerEGFREXO1921Vorbefund(operations, tgt);
@@ -3211,7 +3039,7 @@ group TransformObservationEGFRExon20Vorbefund(source operations: BackboneElement
         // Ergebnis
         data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1954'" then
         {
-            values.value as value -> tgt.valueCodeableConcept = cc(' http://loinc.org', value);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', ergebnis, ergebnis);
         };
 
         //Change DNA -> dna-chg component
@@ -3236,10 +3064,10 @@ group TransformObservationEGFRExon20Vorbefund(source operations: BackboneElement
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        }; 
     };
 }
 /* ------------ Observation EGFR Exon 21 Fast Track -------------------- */
@@ -3248,7 +3076,7 @@ group TransformObservationEGFRExon21Vorbefund(source operations: BackboneElement
     operations then MapFastTrackStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code: Item required on Simplifier
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C128666','EGFR Exon 21 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'EGFR Exon 21', 'EGFR Exon 21');
 
     //Date of Assessment, Assay, Hersteller
     operations then MapObservationFastTrackDateAssayHerstellerEGFREXO1921Vorbefund(operations, tgt);
@@ -3269,7 +3097,7 @@ group TransformObservationEGFRExon21Vorbefund(source operations: BackboneElement
         // Ergebnis
         data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_1958'" then
         {
-            values.value as value -> tgt.valueCodeableConcept = cc(' http://loinc.org', value);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', ergebnis, ergebnis);
         };
 
         //Change DNA -> dna-chg component
@@ -3294,10 +3122,10 @@ group TransformObservationEGFRExon21Vorbefund(source operations: BackboneElement
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        }; 
     };
 }
 /* -------------- Observation KRAS Exon Fast Track --------------------- */
@@ -3306,7 +3134,7 @@ group TransformObservationKRASExon2Vorbefund(source operations: BackboneElement,
     operations then MapFastTrackStatusCategoryMethodVorbefund(operations, tgt);
 
     //Code: Item required on Simplifier
-    operations -> tgt.code = cc('http://ncit.nci.nih.gov', 'C135715','KRAS Exon 2 Mutation');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes', 'KRAS Exon 2', 'KRAS Exon 2');
 
     // Patient reference
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -3330,8 +3158,9 @@ group TransformObservationKRASExon2Vorbefund(source operations: BackboneElement,
         // Ergebnis
         data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'id_1962'" then
         {
-            values.value as value -> tgt.valueCodeableConcept = cc(' http://loinc.org', value);
+            values.value as ergebnis -> tgt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/ergebnis', ergebnis, ergebnis);
         };
+
         //Change DNA -> dna-chg component
         data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'id_1963'" then
         {
@@ -3354,10 +3183,10 @@ group TransformObservationKRASExon2Vorbefund(source operations: BackboneElement,
 
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // }; 
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        }; 
     };
 }
 
@@ -3381,8 +3210,9 @@ group TransformDeviceNGSPanelVorbefund(source operations: BackboneElement, targe
 {
     // TODO: may need to be replaced by uuid_device
     operations -> tgt.id = uuid();
+    operations -> section.entry = create('Reference') as device, device.reference = evaluate(tgt, '\'Device/\' + $this.id');
     
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device';
+    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Device/nNGM/ngs-panel';
     
     // Access data
     operations.data as data then
@@ -3439,7 +3269,7 @@ group TransformObservationNGSPanelVorbefund(source operations: BackboneElement, 
     operations ->  tgt.status = cast('final', 'FHIR.code');
 
     // Code : Item required on simplifier : there is not code for NGS Lung Panel
-    operations -> tgt.code = cc('http://uk-koeln.de/fhir/ValueSet/nNGM/molpatho-obs-codes','NGS Panel');
+    operations -> tgt.code = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/molpatho-obs-codes','NGS Panel');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -3554,10 +3384,10 @@ group TransformObservationNGSPanelVorbefund(source operations: BackboneElement, 
     
         // Referenzen
         // Specimen
-        // data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
-        // {
-        //     values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
-        // };
+        data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'uuid_specimen_nngm3'" then
+        {
+            values.value as value -> tgt.specimen = create('Reference') as specimen, specimen.reference = evaluate(value, '\'Specimen/\' + $this');
+        };
 
         // Device
         // data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_device'" then
@@ -3574,7 +3404,7 @@ group MapPercentageValueVorbefund(source src: string, target tgt: Quantity)
 {
     src -> tgt.value   = src,
             tgt.system = 'http://unitsofmeasure.org',
-            tgt.unit   = 'percentage',
+            tgt.unit   = '%',
             tgt.code   = '%';
 }
 group MapStatusCategoryVorbefund(source operations: BackboneElement, target tgt: Observation)
@@ -3608,7 +3438,7 @@ group MapObservationALKDatePhaenotypVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -3652,7 +3482,7 @@ group MapObservationMETDatePhaenotypVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -3696,7 +3526,7 @@ group MapObservationRETDatePhaenotypVorbefund(source operations: BackboneElement
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -3740,7 +3570,7 @@ group MapObservationROS1DatePhaenotypVorbefund(source operations: BackboneElemen
         {
             values.value where "%tgt.component.code.where(coding.code = 'C16977').exists().not()" then
             {
-                values.value as phaenotyp where "value = 'Expresssion'" then
+                values.value as phaenotyp where "value = 'Expression'" then
                 {
                     phaenotyp->tgt.component = create('BackboneElement') as componentPhaenotyp then
                     {
@@ -3815,6 +3645,7 @@ group MapObservationFastTrackDateAssayHerstellerEGFREXO1921Vorbefund(source oper
         {
             values.value as effectiveDT -> tgt.effectiveDateTime = dateOp(effectiveDT, 'date');
         };
+
         // Assay -> assay component
         data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'id_2608'" then
         {
@@ -3927,71 +3758,67 @@ group SetReferenceToObservationIHCVorbefund(source operations: BackboneElement, 
         };     
     };
 }
-group SetReferenceToObservationMPVorbefund(source operations: BackboneElement, source cishFish: string, source name: string, target tgt: Reference)
+group SetReferenceToObservationCISHMPVorbefund(source operations: BackboneElement, source name: string, target tgt: Reference)
 {
     // Check which CISH observation should be referenced
-    cishFish where "%cishFish = 'CISH'" then 
+    name where "%name = 'ALK'" then 
     {
-        name where "%name = 'ALK'" then 
+        operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_ish_alk'" then
         {
-            operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_ish_alk'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
-        name where "%name = 'MET'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ish_met'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'RET'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_ish_ret'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'ROS1'" then 
-        {
-            operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_ish_ros1'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
     };
-
-    // Check which FISH observation should be referenced
-    cishFish where "%cishFish = 'FISH'" then 
+    name where "%name = 'MET'" then 
     {
-        name where "%name = 'ALK'" then 
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_ish_met'" then
         {
-            operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_fish_alk'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
-        name where "%name = 'MET'" then 
+    }; 
+    name where "%name = 'RET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_ish_ret'" then
         {
-            operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fish_met'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'RET'" then 
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_ish_ros1'" then
         {
-            operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_fish_ret'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
-        }; 
-        name where "%name = 'ROS1'" then 
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+}
+group SetReferenceToObservationFISHMPVorbefund(source operations: BackboneElement, source name: string, target tgt: Reference)
+{
+    // Check which FISH observation should be referenced
+    name where "%name = 'ALK'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_fish_alk'" then
         {
-            operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_fish_ros1'" then
-            {
-                values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-            };
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    };
+    name where "%name = 'MET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_fish_met'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'RET'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 20 and groupindex = 0 and itemid = 'uuid_fish_ret'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+    }; 
+    name where "%name = 'ROS1'" then 
+    {
+        operations.data as data, data.values as values where "blockindex = 17 and groupindex = 0 and itemid = 'uuid_fish_ros1'" then
+        {
+            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
 }
@@ -4062,42 +3889,46 @@ group SetReferenceToObservationNGSFusionVorbefund(source operations: BackboneEle
         };
     };
 }
-group SetReferenceToObservationFastTrackVorbefund(source operations: BackboneElement, source name: string, target tgt: Reference)
+group SetReferenceToObservationFastTrackVorbefund(source operations: BackboneElement, source name: string, target tgt: DiagnosticReport)
 {
     // Check which observation should be referenced
     name where "%name = 'BRAF Exon 15'" then 
     {
-        operations.data as data, data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'uuid_fasttrack_braf15'" then
+        operations.data as data, data.values as values where "blockindex = 22 and groupindex = 0 and itemid = 'uuid_fasttrack_braf15'" 
+            -> tgt.result = create('Reference') as reference then
         {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
-    name where "%name = 'EGFR Exon 19'" then 
+    name where "%name = 'EGFR Exon 19-21'" then
     {
-        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr19'" then
+        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr19'" then            
         {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+            values.value as value where "unit.exists().not()" -> tgt.result = create('Reference') as reference then // to not use the unit = 21 value element
+            {
+                values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
+            };
+        };
+
+        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr20'"
+            -> tgt.result = create('Reference') as reference then
+        {
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
+        };
+
+        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr21'"  
+            -> tgt.result = create('Reference') as reference then
+        {
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
-    name where "%name = 'EGFR Exon 20'" then 
-    {
-        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr20'" then
-        {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-        };
-    };
-    name where "%name = 'EGFR Exon 21'" then 
-    {
-        operations.data as data, data.values as values where "blockindex = 23 and groupindex = 0 and itemid = 'uuid_fasttrack_egfr21'" then
-        {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
-        };
-    };
+
     name where "%name = 'KRAS Exon 2'" then 
     {
-        operations.data as data, data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'uuid_fasttrack_kras2'" then
+        operations.data as data, data.values as values where "blockindex = 24 and groupindex = 0 and itemid = 'uuid_fasttrack_kras2'"  
+            -> tgt.result = create('Reference') as reference then
         {
-            values.value as value -> tgt.reference = evaluate(value, '\'Observation/\' + $this');
+            values.value as value -> reference.reference = evaluate(value, '\'Observation/\' + $this');
         };
     };
 }

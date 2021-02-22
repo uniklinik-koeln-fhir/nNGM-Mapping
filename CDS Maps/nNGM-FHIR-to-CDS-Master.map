@@ -14,7 +14,7 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BasisangabenCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_AnforderungCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_TNMCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_ResistenztestungCDS"
-// imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
+imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_VorbefundCDS"
 
 // Befund
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_BeurteilungCDS"
@@ -176,35 +176,35 @@ group MapAntrag(source src: Bundle, target tgt: CTS_Transport)
                 nestedSection then TransformCheckboxes(src, nestedSection, operations);
             };
 
-            // // Vorbefund (Antrag.biopsie.vorbefund)
-            // biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
-            // {
-            //     let crfidLeft = append(fallNummer, '-VB');
-            //     let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
-            //     src then InitSectionIndex(src, index); // used for NGS Lung Panel
-            //     src then InitCaseIndex(src, index);  // used for Fusion NGS
+            // Vorbefund (Antrag.biopsie.vorbefund)
+            biopsieSection.section as nestedSection, nestedSection where "code.coding.code = 'vorbefund'" -> tgt.operations as operations then
+            {
+                let crfidLeft = append(fallNummer, '-VB');
+                let index = create('RepeatIndex'); // repeatindex needed for NGS Lung Panel and Fusion NGS
+                src then InitSectionIndex(src, index); // used for NGS Lung Panel
+                src then InitCaseIndex(src, index);  // used for Fusion NGS
 
-            //     nestedSection -> tgt.version = '1.0';
-            //     nestedSection -> operations.type = 'save';
-            //     nestedSection -> operations.crfid = append(crfidLeft, formNummer);
+                nestedSection -> tgt.version = '1.0';
+                nestedSection -> operations.type = 'save';
+                nestedSection -> operations.crfid = append(crfidLeft, formNummer);
 
-            //     nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
-            //     {
-            //         src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
-            //         {
-            //             nestedSection then TransformVorbefundCDS(entry, operations, index);
+                nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference then
+                {
+                    src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                    {
+                        nestedSection then TransformVorbefundCDS(entry, operations, index);
 
-            //             entry where "resource is Observation 
-            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
-            //                         IncrementSectionIndex(src, index);
-            //             entry where "resource is Observation and resource.code.coding.code = 'Sonstiges'
-            //                         and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
-            //                         IncrementCaseIndex(src, index);
-            //         };
-            //     };
+                        entry where "resource is Observation 
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+                                    IncrementSectionIndex(src, index);
+                        entry where "resource is Observation and resource.code.coding.code = 'Sonstige Fusion NGS'
+                                    and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-fusion-expression'" then
+                                    IncrementCaseIndex(src, index);
+                    };
+                };
 
-            //     nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
-            // };
+                nestedSection then TransformCheckboxesVorbefund(src, nestedSection, operations);
+            };
         };
     };
 }
@@ -682,6 +682,23 @@ group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: Bac
             observation where "%observation.code.coding.code = 'KRAS Exon 2'" -> data.values as values, values.value = 'KRAS Exon 2';
             // need to only check for EGFR Exon 19 since 19, 20 and 21 are selected/identified via this one value below
             observation where "%observation.code.coding.code = 'EGFR Exon 19'" -> data.values as values, values.value = 'EGFR Exon 19-21'; 
+        };
+    };
+
+    // LP
+    nestedSection where "code.coding.code = 'vorbefund'" -> operations.data as data then
+    {
+        nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+        src.entry as entry, entry.resource as observation where "resource.id = %reference.split(\'/\').last() and resource is Observation 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/ngs-panel'" then
+        {
+            observation where "%data.where(itemid = 'id_2513').exists().not()" then
+            {
+                observation -> data.blockindex = 2;
+                observation -> data.groupindex = 0;
+                observation -> data.itemid = 'id_2513';
+                observation -> data.values as values, values.value = 'yes';
+            };
         };
     };
 }
