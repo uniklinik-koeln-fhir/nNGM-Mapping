@@ -132,31 +132,12 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
         };
 
         // Lokalisation (Auswahl) - bodySite.coding
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2335'" then
+        data where "$this.where(blockindex = 1 and groupindex = 0 and itemid ='id_2335').exists()"
+            -> tgt.bodySite = create('CodeableConcept') as cc then 
         {
-            values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then 
-            {
-                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
-
-            };
-
-            values.value as value where "$this.value != 'N/A' and $this.value != 'N\/A' and $this.value != 'other'" then 
-            {
-                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/OperationLokalisation', value);
-            };
-
-            values.value as value where "$this.isother = true" -> tgt.bodySite as bodySite then 
-            {
-                value -> bodySite.coding = c('http://ncit.nci.nih.gov', 'C17649');
-                // Lokalisation (Freitext) - bodySite.text
-                data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2335'" then
-                {
-                    values.value as value where "$this.isother.exists()" then 
-                    {
-                        value -> bodySite.text = value;
-                    };
-                };
-            };
+            data.values as values, values.value as value where "value = 'Lunge' or value = 'Leber' or value = 'Gehirn' or value = 'Nebenniere' or value = 'other'" -> cc.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/OperationLokalisation', value);
+            data.values as values, values.value as value where "value = 'N/A'" -> cc.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
+            data.values as values, values.value as value where "$this.isother = true" -> cc.coding = c('http://ncit.nci.nih.gov', 'C17649'), cc.text = value;
         };
 
         // Seitenlokalisation - extension:seitenlokalisation
