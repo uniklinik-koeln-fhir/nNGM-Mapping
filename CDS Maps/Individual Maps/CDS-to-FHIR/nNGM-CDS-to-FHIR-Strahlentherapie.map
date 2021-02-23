@@ -15,7 +15,6 @@ group TransformBundleStrahlentherapie(source operations: BackboneElement, target
 {
     operations then CreateProcedureStrahlentherapie(operations, bundle, composition, section);
     operations then CreateEpisodeOfCareStrahlentherapie(operations, bundle, composition, section);
-    // operations then CreatePatientStrahlentherapie(operations, bundle, section);
 }
 
 /* ------------------------------ Check whether Procedure needs to be created ---------------------------- */
@@ -305,51 +304,6 @@ group TransformEpisodeOfCareStrahlentherapie(source operations: BackboneElement,
             values.value as value ->    tgt.extension as datumProgress,
                                         datumProgress.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumProgress',
                                         datumProgress.valueDate = dateOp(value, 'date');
-        };
-    };
-}
-
-/* ------------------------------ Check whether Patient needs to be created ---------------------------- */
-group CreatePatientStrahlentherapie(source operations: BackboneElement, target bundle: Bundle, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1544'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
-        {
-            operations then TransformPatientStrahlentherapie(operations, patient, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
-        };
-    };
-}
-
-/* ------------------------------ Patient ---------------------------- */
-group TransformPatientStrahlentherapie(source operations: BackboneElement, target tgt: Patient, target section: BackboneElement)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM/patient';
-
-    // Name
-    operations -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Gender
-    operations -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // BirthDate
-    operations -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_patient4'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as patient, patient.reference = evaluate(value, '\'Patient/\' + $this');
-        };
-
-        //Todesdatum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1544'" then
-        {
-            values.value as value -> tgt.deceasedDateTime = dateOp(value, 'date');
         };
     };
 }

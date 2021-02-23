@@ -7,14 +7,12 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR" 
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/MedicationAdministration" as target
-uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 
 group TransformBundleSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations then CreateMedicationAdministrationSY(operations, bundle, composition, section);
-    // operations then CreatePatientSY(operations, bundle, composition, section);
     operations then CreateEpisodeOfCareSY(operations, bundle, composition, section);
     operations then CreateObservationEcogSY(operations, bundle, composition, section);
     operations then CreateObservationBestResponseSY(operations, bundle, composition, section);
@@ -476,52 +474,6 @@ group MapNebenwirkungenGradMedicationAdministrationSY(source operations: Backbon
                         valueBoolean.extension as dataAbsentReason,
                         dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
                         dataAbsentReason.valueCode = cast('not-applicable', 'FHIR.code');
-        };
-    };
-}
-
-/* ------------------------------ Check if Patient needs to be created ---------------------------- */
-group CreatePatientSY(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
-        {
-            operations then TransformPatientSY(operations, patient, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
-        };
-    };
-}
-
-/* ------------------------------ Patient ---------------------------- */
-group TransformPatientSY(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
-{
-    // Profile url
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM/patient';
-
-    // Name
-    operations -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Gender
-    operations -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // BirthDate
-    operations -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_nngm_patient3'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as patient, patient.reference = evaluate(value, '\'Patient/\' + $this');
-        };
-
-        // Todesdatum: deceased.deceasedDateTime
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
-        {
-            values.value as value -> tgt.deceasedDateTime = dateOp(value, 'dateTime');
         };
     };
 }
