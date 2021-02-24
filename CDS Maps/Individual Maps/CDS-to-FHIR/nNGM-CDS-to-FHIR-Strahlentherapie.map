@@ -1,25 +1,17 @@
 /// version = 0.1
 /// title = "StrahlentherapieMap"
 
-/*
-    TODO
-    - unclear what to do with newly created patient, should this one be referenced as subject?
-    - EpisodeOfCare: nngmFallnummer missing or rather unclear which value to use here
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieFHIR" = nNGM_Mapping_StrahlentherapieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
-uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 
 
 group TransformBundleStrahlentherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations then CreateProcedureStrahlentherapie(operations, bundle, composition, section);
     operations then CreateEpisodeOfCareStrahlentherapie(operations, bundle, composition, section);
-    operations then CreatePatientStrahlentherapie(operations, bundle, section);
 }
 
 /* ------------------------------ Check whether Procedure needs to be created ---------------------------- */
@@ -46,7 +38,7 @@ group CreateProcedureStrahlentherapie(source operations: BackboneElement, target
             operations then TransformProcedureStrahlentherapie(operations, procedure, composition, section);
             operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(procedure, '\'Procedure/\' + $this.id');
             operations then SetBooleanToTrue(operations, resourceIsCreated);
-        };
+        }; 
     };
 }
 
@@ -105,7 +97,7 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
         {
             values.value as value where "value =  'N/A'" then 
             {
-                value -> tgt.bodySite = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/Strahlentherapie_Bestrahlungsziel','not-applicable','Not Applicable');
+                value -> tgt.bodySite = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason','not-applicable','Not Applicable');
             };
             values.value as value where "value !=  'N/A'" then 
             {
@@ -134,12 +126,14 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
             {
                 value -> tgt.code as code,
                         code.extension as artDerBestrahlung,
+                        artDerBestrahlung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/art-der-bestrahlung',
                         artDerBestrahlung.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason','unknown','Unknown');
             };
             values.value as value where "value !=  'N/A'" then 
             {
                  value -> tgt.code as code,
                         code.extension as artDerBestrahlung,
+                        artDerBestrahlung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/art-der-bestrahlung',
                         artDerBestrahlung.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/StrahlentherapieArtDerBestrahlung',value,value);
             };           
         };
@@ -166,7 +160,7 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
         //Gesamtdosis (Gy)
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1199'" then
         {
-            values -> tgt.extension as dosis, 
+            values -> tgt.extension as dosis collate, 
                         dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
                         dosis.extension as gesamtdosis then
                         {
@@ -186,7 +180,7 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
         {
             values.value as value where "value =  'ja'" then 
             {
-                value -> tgt.extension as dosis,
+                value -> tgt.extension as dosis collate,
                         dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
                         dosis.extension as boost then
                         {
@@ -196,7 +190,7 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
             };
             values.value as value where "value =  'nein'" then 
             {
-                value -> tgt.extension as dosis,
+                value -> tgt.extension as dosis collate,
                         dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
                         dosis.extension as boost then
                         {
@@ -206,7 +200,7 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
             };
             values.value as value where "value =  'ja, Boostdosis in Gesamtdosis enthalten'" then 
             {
-                value -> tgt.extension as dosis,
+                value -> tgt.extension as dosis collate,
                         dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
                         dosis.extension as boostdosis then
                         {
@@ -219,7 +213,7 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
         //Boostdosis (Gy)
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid ='id_1364'" then
         {
-            values -> tgt.extension as dosis, 
+            values -> tgt.extension as dosis collate, 
                     dosis.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/strahlentherapie-dosis',
                     dosis.extension as boostdosis then
                     {
@@ -232,50 +226,19 @@ group TransformProcedureStrahlentherapie(source operations: BackboneElement, tar
                             };                                                  
                     };
         };
-        
+
         //------------[Ende der Therapie]------------
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1211'" then
+        data where "$this.where(blockindex = 2 and groupindex = 0 and itemid ='id_1211').exists()"
+            -> tgt.statusReason = create('CodeableConcept') as cc then 
         {
-            values.value as value where "value = 'Reguläres Ende'" then
-            {
-                operations -> tgt.status = 'completed';
-                operations -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason', value);
-            };
-            values.value as value where "value = 'Abbruch wegen Nebenwirkungen'" then
-            {
-                operations -> tgt.status = 'stopped';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund','nebenwirkungen','nebenwirkungen');
-            };
-            values.value as value where "value = 'Pause wegen Nebenwirkungen'" then
-            {
-                operations -> tgt.status = 'on-hold';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund','nebenwirkungen','nebenwirkungen');
-            };
-            values.value as value where "value = 'Abbruch wegen Progress'" then
-            {
-                operations -> tgt.status = 'stopped';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund','progress','Progress');
-            };
-            values.value as value where "value = 'Ablehnung durch den Patienten'" then
-            {
-                operations -> tgt.status = 'not-done';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund','ablehnungPatient','ablehnungPatient');
-            };
-            values.value as value where "value = 'Patient verstorben'" then
-            {
-                operations -> tgt.status = 'stopped';
-                operations -> tgt.statusReason = cc('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund','verstorben','verstorben');
-            };
-            values.value as value where "value = 'Sonstiges'" then
-            {
-                operations -> tgt.status = 'unknown';
-                operations -> tgt.statusReason = cc('http://uk-koeln.de/fhir/ValueSet/cancer-base/therapie-statusreason', value);
-            };
-            values.value as value where "value = 'N/A'" then
-            {
-                operations -> tgt.status = 'unknown';
-                operations -> tgt.statusReason = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason','not-applicable','not-applicable');
-            };
+            data.values as values, values.value as value where "value != 'N/A'" -> cc.coding = c('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
+            data.values as values, values.value as value where "value = 'N/A'" -> cc.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
+
+            data.values as values, values.value as value where "value = 'Regul\u00e4res Ende' or value = 'Reguläres Ende'" -> tgt.status = 'completed';
+            data.values as values, values.value as value where "value = 'Pause wegen Nebenwirkungen'" -> tgt.status = 'on-hold';
+            data.values as values, values.value as value where "value = 'Ablehnung durch den Patienten'" -> tgt.status = 'not-done';
+            data.values as values, values.value as value where "value = 'Abbruch wegen Nebenwirkungen' or value = 'Abbruch wegen Progress' or value = 'Patient verstorben'" -> tgt.status = 'stopped';
+            data.values as values, values.value as value where "value = 'Sonstiges' or value = 'N/A'" -> tgt.status = 'unknown';
         };
 
         //Bemerkungen
@@ -305,13 +268,22 @@ group CreateEpisodeOfCareStrahlentherapie(source operations: BackboneElement, ta
 /* ------------------------------ EpisodeOfCare ---------------------------- */
 group TransformEpisodeOfCareStrahlentherapie(source operations: BackboneElement, target tgt: EpisodeOfCare, target composition: Composition, target section: BackboneElement)
 {
+    // Profile url
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/EpisodeOfCare/nNGM';
-    
-    // Status
+
+    // Identifier.system and Identifier.value: items required on simplifier
+    operations ->  tgt.identifier = create('Identifier') as nngmFallnummer,
+                    nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
+                    nngmFallnummer.value as value,
+                    value.extension as dataAbsentReason,
+                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
+                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+
+    // Status: item required on simplifier
     operations -> tgt.status = 'active';
 
     // Patient
-    operations -> tgt.patient = create('Reference') as patient, patient.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
+    operations -> tgt.patient = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Access data
     operations.data as data then
@@ -323,70 +295,12 @@ group TransformEpisodeOfCareStrahlentherapie(source operations: BackboneElement,
             values.value as value -> section.entry = create('Reference') as episodeOfCare, episodeOfCare.reference = evaluate(value, '\'EpisodeOfCare/\' + $this');
         };
 
-        // nngmFallnummer
-        // TODO: which number should be used here?
-        operations -> tgt.identifier = create('Identifier') as nngmFallnummer,
-                                                                nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
-                                                                nngmFallnummer.value as value,
-                                                                value.extension as dataAbsentReason, 
-                                                                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', 
-                                                                dataAbsentReason.valueCode = cast('unknown', 'FHIR.code');
-        // data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'assessment_id'" then
-        // {
-        //     values.value as id -> tgt.identifier = create('identifier') as nngmFallnummer,
-        //                                                                     nngmFallnummer.system = 'http://uk-koeln.de/NamingSystem/nNGM/fallnummer',
-        //                                                                     nngmFallnummer.value  = id;
-        // };
-
         //Datum Progress
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1543'" then
         {
-            values.value as value -> tgt.extension as datumProgress, datumProgress.valueDate = dateOp(value, 'date');
-        };
-    };
-}
-
-/* ------------------------------ Check whether Patient needs to be created ---------------------------- */
-group CreatePatientStrahlentherapie(source operations: BackboneElement, target bundle: Bundle, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1544'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
-        {
-            operations then TransformPatientStrahlentherapie(operations, patient, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
-        };
-    };
-}
-
-/* ------------------------------ Patient ---------------------------- */
-group TransformPatientStrahlentherapie(source operations: BackboneElement, target tgt: Patient, target section: BackboneElement)
-{
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
-
-    // Name
-    operations -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Gender
-    operations -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // BirthDate
-    operations -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_patient4'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as patient, patient.reference = evaluate(value, '\'Patient/\' + $this');
-        };
-
-        //Todesdatum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid ='id_1544'" then
-        {
-            values.value as value -> tgt.deceasedDateTime = dateOp(value, 'date');
+            values.value as value ->    tgt.extension as datumProgress,
+                                        datumProgress.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/datumProgress',
+                                        datumProgress.valueDate = dateOp(value, 'date');
         };
     };
 }

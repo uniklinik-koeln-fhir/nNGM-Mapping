@@ -1,10 +1,6 @@
 /// version = 0.1
 /// title = "NGS Lung Panel"
 
-/*
-TODO  
-    - [Observation] adding bundle.entry.request is currently commented out due to a missing repeatindex in the CDS-Export which would result in an error for evaluate()
-*/
 
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_NGSLungPanelFHIR" = nNGM_Mapping_NGSLungPanelFHIR
 
@@ -44,6 +40,8 @@ group CreateDiagnosticReportNGSLungPanel(source operations: BackboneElement, tar
 /* -------------------------- DiagnosticReport ------------------------ */
 group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, target tgt: DiagnosticReport, target composition: Composition, target section: BackboneElement, target index: RepeatIndex)
 {
+    operations then InitSectionIndex(operations, index); // (re)set index to 0
+
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/DiagnosticReport/nNGM/befund';
 
     // status
@@ -77,7 +75,6 @@ group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, 
         // Specimen is set in Master.map
 
         // Observations
-        operations then InitSectionIndex(operations, index); // (re)set index to 0
         data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel'" then
         {
             values.value as value where "unit.exists().not()" then // to not use the unit = _research uuid value element
@@ -85,13 +82,6 @@ group TransformDiagnosticReportNGSLungPanel(source operations: BackboneElement, 
                 values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
                 operations then IncrementSectionIndex(operations, index);
             };
-        };
-
-        operations then InitSectionIndex(operations, index); // (re)set index to 0
-        data.values as values where "blockindex = 4 and groupindex = 0 and repeatindex = %index.sectionIndex and itemid = 'uuid_ngsPanel_research'" then
-        {
-            values.value as value -> tgt.result = create('Reference') as observation, observation.reference = evaluate(value, '\'Observation/\' + $this');
-            operations then IncrementSectionIndex(operations, index);
         };
 
         // Organization
@@ -231,7 +221,7 @@ group CreateObservationNGSPanel(source operations: BackboneElement, target bundl
         operations -> bundle.entry as entry, entry.resource = create('Observation') as observation then
         {
             operations then TransformObservationNGSLungPanel(operations, observation, composition, section, index);
-            // operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
+            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(observation, '\'Observation/\' + $this.id');
         };
         operations then IncrementSectionIndex(operations, index);
     };
