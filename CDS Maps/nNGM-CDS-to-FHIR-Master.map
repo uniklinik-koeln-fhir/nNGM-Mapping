@@ -447,19 +447,18 @@ group MapTNM(source src: CTS_Transport, target tgt: Bundle)
 {
     let index = create('RepeatIndex');
 
-    src then InitMaxIndexTNM(src, index); // Reset maxIndex
+    src then InitMaxFormIndexTNM(src, index); // Reset maxFormIndex, starts at 0
 
     /* ------------------------------ TNM ---------------------------- */
-    src ->
-    // Add a transaction bundle to the collection bundle
-    tgt.entry as entry,
-    entry.resource = create('Bundle') as bundleTNM,
-    // Add a composition to the transaction bundle
-    bundleTNM.entry as entryTNM, 
-    entryTNM.resource = create('Composition') as compositionTNM then
+    // Execute once if there are any TNM forms
+    src where "%index.maxFormIndex > 0" ->
+        // Add a transaction bundle to the collection bundle
+        tgt.entry as entry,
+        entry.resource = create('Bundle') as bundleTNM,
+        // Add a composition to the transaction bundle
+        bundleTNM.entry as entryTNM, 
+        entryTNM.resource = create('Composition') as compositionTNM then
     {
-        let maxIndex = evaluate(index, '$this.maxIndex');
-
         /* ------------------------------ Bundle ---------------------------- */
 
         // Meta
@@ -499,7 +498,7 @@ group MapTNM(source src: CTS_Transport, target tgt: Bundle)
         
         /* ------------------------------ Section ---------------------------- */
         src then InitFormIndex(src, index);
-        src.operations as operations, operations where "%index.formIndex <= %maxIndex" -> compositionTNM.section as compositionSection then
+        src.operations as operations, operations where "%index.where(formIndex <= maxFormIndex)" -> compositionTNM.section as compositionSection then
         {
             src.operations as operations,
                     operations where "crfid = 'TNM' + %index.formIndex.toString() and type = 'save' and data.exists()" -> 
@@ -701,17 +700,18 @@ group InitMaxFormIndexBefund(source src: CTS_Transport, target index: RepeatInde
     };
 }
 
-group InitMaxIndexTNM(source src: CTS_Transport, target index: RepeatIndex)
+// highest formIndex, 0 if no TNM forms exists
+group InitMaxFormIndexTNM(source src: CTS_Transport, target index: RepeatIndex)
 {
-    // init maxIndex, then find maxFormIndex
-    src -> index.maxIndex = 1;
+    // init maxFormIndex, then find maxFormIndex
+    src -> index.maxFormIndex = 0;
 
     // TNM
     src.operations as operations, operations where "crfid.contains('TNM') and crfid.contains('-').not() and type = 'save' and data.exists()" then
     {
-        // isolate formIndex from crfid, if this formIndex is bigger than maxIndex: assign it to maxIndex
-        operations where "crfid.substring($this.crfid.indexOf(\'TNM\') + \'TNM\'.length()).toInteger() > %index.maxIndex"
-            -> index.maxIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'TNM\') + \'TNM\'.length()).toInteger()');
+        // isolate formIndex from crfid, if this formIndex is bigger than maxFormIndex: assign it to maxFormIndex
+        operations where "crfid.substring($this.crfid.indexOf(\'TNM\') + \'TNM\'.length()).toInteger() > %index.maxFormIndex"
+            -> index.maxFormIndex = evaluate(operations, '$this.crfid.substring($this.crfid.indexOf(\'TNM\') + \'TNM\'.length()).toInteger()');
     };
 }
 
