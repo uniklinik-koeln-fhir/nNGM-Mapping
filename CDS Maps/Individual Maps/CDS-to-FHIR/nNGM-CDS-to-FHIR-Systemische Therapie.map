@@ -1,33 +1,16 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_SystemischeTherapieFHIR"
 
-/*
-    TODO
-    MedicationAdministration
-    - what to do with uuid_nngm_MedicationAdministration_changed?
-    - Missing extension.url for Anzahl der Zyklen (id_1250)
-        profile requires dosage.rate.value, .system and .code
-    - Missing valueSet for id_2342
-    - When 'Abbruch wegen Progress' option is checked in Art des Therapieendes (id_1356), it displays a field named 'Datum Progess' (blockindex = 6, groupindex = 0, itemid = 'sy_date_progress'),
-        but its information is not on Seatable nor Master excel file, so it's not being mapped
-    - id_1465 isn't mapping properly because it cannot override value already set by id_1246, even though it's effectivePeriod.start and id_1246 it's effective.start
-
-    EpisodeOfCare
-    - what to do with uuid_nngm_dateOfProgress (and/or uuid_nngm_dateOfProgress2)?
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieFHIR" = nNGM_Mapping_SystemischeTherapieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/MedicationAdministration" as target
-uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 uses "http://hl7.org/fhir/StructureDefinition/EpisodeOfCare" as target
 uses "http://hl7.org/fhir/StructureDefinition/Observation" as target
 
 group TransformBundleSystemischeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations then CreateMedicationAdministrationSY(operations, bundle, composition, section);
-    operations then CreatePatientSY(operations, bundle, composition, section);
     operations then CreateEpisodeOfCareSY(operations, bundle, composition, section);
     operations then CreateObservationEcogSY(operations, bundle, composition, section);
     operations then CreateObservationBestResponseSY(operations, bundle, composition, section);
@@ -53,9 +36,7 @@ group CreateMedicationAdministrationSY(source operations: BackboneElement, targe
                                                         or blockindex = 2 and groupindex = 0 and itemid = 'id_1244'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'id_1241'
                                                         or blockindex = 3 and groupindex = 0 and itemid = 'id_1250'
-                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1464'
-                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1359'
-                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1465'
+                                                        or blockindex = 3 and groupindex = 0 and itemid = 'id_1488'
                                                         or blockindex = 4 and groupindex = 0 and itemid = 'id_1357'
                                                         or blockindex = 4 and groupindex = 0 and itemid = 'id_2342'
                                                         or blockindex = 6 and groupindex = 0 and itemid = 'id_1356'
@@ -81,15 +62,14 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
-    // Category: item required on simplifier
-    operations ->  tgt.category as category,
-                    category.extension as dataAbsentReason,
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    
+    // Category
+    operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
 
     // Access data
     operations.data as data then
     {
+
         // ID + Composition insert
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_nngm_MedicationAdministration'" then
         {
@@ -104,8 +84,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         data.values as values where "blockindex = 0 and groupindex = 0 and itemid = 'id_1600'" then
         {
             values.value as value -> tgt.context = create('Reference') as context,
-                                    context.identifier = create('Identifier') as identifier,
-                                    identifier.value = value;
+                                    context.identifier = id('http://www.acme.com/identifiers/patient', value);
         };
 
         // Therapieinformationen: supportingInformation.display
@@ -192,17 +171,24 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
             };
         };
 
-        // Therapiebeginn: effective.start
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1246'" then
+        // Thearpiebeginn and Therapieende
+        data where "$this.where(blockindex = 2 and groupindex = 0 and (itemid = 'id_1246' or itemdid = 'id_1247')).exists()" 
+            -> tgt.effective = create('Period') as effective then
         {
-            values.value as value -> tgt.effective = create('Period') as effective, effective.start = dateOp(value, 'dateTime');
+            // Therapiebeginn: effective.start
+            operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1246'" then
+            {
+                values.value as value -> effective.start = dateOp(value, 'dateTime');
+            };
+
+            // Therapieende: effective.end
+            operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247'" then
+            {
+                values.value as value -> effective.end = dateOp(value, 'dateTime');
+            };
         }; 
 
-        // Therapieende: effective.end
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1247'" then
-        {
-            values.value as value -> tgt.effective = create('Period') as effective, effective.end = dateOp(value, 'dateTime');
-        };
+ 
 
         // Durchführende Einrichtung: performer.actor.display
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1242'" then
@@ -252,7 +238,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         {
             values.value as value where "$this.value = 'Ja'" then
             {
-                value ->    tgt.extension as studientherapie,
+                value ->    tgt.extension = create('Extension') as studientherapie,
                             studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
                             studientherapie.extension as teilnahme,
                             teilnahme.url = 'teilnahme',
@@ -264,7 +250,7 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
 
             values.value as value where "$this.value = 'Nein'" then
             {
-                value ->    tgt.extension as studientherapie,
+                value ->    tgt.extension = create('Extension') as studientherapie,
                             studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
                             studientherapie.extension as teilnahme,
                             teilnahme.url = 'teilnahme',
@@ -275,16 +261,21 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         // Therapieschema: medicationValueCodeableConcept
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1241'" then
         {
-            values.value as value -> tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value, 'Therapieschema');
+            values.value as value where "$this.value.exists()" then
+            {
+                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept,
+                            medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
+            };
         };
 
-        // Anzahl der Zyklen (ohne Erhaltung): dosage.extension:anzahlZyklen.valueIntegerid_1250
-        // TODO: profil asks for dosage.rate.value, .system and .code
+        // Anzahl der Zyklen (ohne Erhaltung): dosage.valueInteger id_1250
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1250'" then
         {
             values.value as value ->    tgt.dosage as dosage,
-                                        dosage.extension = create('BackboneElement') as anzahlZyklen,
-                                        anzahlZyklen.valueInteger = cast(value, 'FHIR.integer');
+                                        dosage.rateQuantity as anzahlZyklen,
+                                        anzahlZyklen.system = 'http://unitsofmeasure.org',
+                                        anzahlZyklen.code = '1',
+                                        anzahlZyklen.value = value;
         };
         
         //  Änderung des Schemas
@@ -292,104 +283,83 @@ group TransformMedicationAdministrationSY(source operations: BackboneElement, ta
         {
             values.value as value where "$this.value = 'yes'" then
             {
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C25446');
                 operations then MapAnderungDesSchemasElementsMedicationAdministrationSY(operations, tgt);
             };
-        };
 
-        // Erhaltungstherapie als Option: extension:Erhaltungstherapie.extension:option
-        data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_1357'" then
-        {
-            values.value as value where "$this.value = 'Ja'" then
+            values.value as value where "$this.value = 'no'" then 
             {
-                value ->    tgt.extension as erhaltungstherapie,
-                            erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie',
-                            erhaltungstherapie.extension as option,
-                            option.url = 'option',
-                            option.valueBoolean = true;
-
-                operations then MapErhaltungstherapieElementMedicationAdministrationSY(operations, tgt);
-            };
-            
-            values.value as value where "$this.value = 'Nein'" then
-            {
-                value ->    tgt.extension as erhaltungstherapie,
-                            erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie',
-                            erhaltungstherapie.extension as option,
-                            option.url = 'option',
-                            option.valueBoolean = false;
+                value -> tgt.category = cc('http://ncit.nci.nih.gov', 'C85582');
             };
         };
 
-        // Art des Therapieendes: status (+ statusReason)
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_1356'" then
+         // Erhaltungstherapie als Option: extension:Erhaltungstherapie.extension:option
+         data where "$this.where((blockindex = 4 and groupindex = 0 and itemid ='id_1357').exists()
+                or (blockindex = 4 and groupindex = 0 and itemid = 'id_2342').exists()).exists() and %tgt.extension.extension.exists().not()" -> tgt.extension = create('BackboneElement') as erhaltungstherapie, erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie' then 
+            {
+            // Erhaltungstherapie als Option: extension:Erhaltungstherapie.extension:option
+            operations.data as data, data where "$this.where(blockindex = 4 and groupindex = 0 and itemid = 'id_1357').exists()" then
+            {
+                data.values as values, values.value as value where "$this.value = 'Ja'" then 
+                {   
+                    value -> erhaltungstherapie.extension as option, option.url = 'option', option.valueBoolean = true;
+                };
+                
+                data.values as values, values.value as value where "$this.value = 'Nein'" then 
+                {
+                    value -> erhaltungstherapie.extension as option, option.url = 'option', option.valueBoolean = false;
+                };
+            };
+
+            // Für die Erhaltungstherapie verabreichtes Medikament: extension:Erhaltungstherapie.extension:medikament
+            operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2342'" then
+            {
+                values.value as value where "$this.value.exists()" then
+                {
+                    value -> erhaltungstherapie.extension as medikament , medikament.url = 'medikament', medikament.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
+                };    
+            };
+        };
+
+        data where "$this.where((blockindex = 6 and groupindex = 0 and itemid ='id_1356').exists()
+                or (blockindex = 3 and groupindex = 0 and itemid = 'id_1464').exists()).exists() and %tgt.statusReason.exists().not()" -> tgt.statusReason as cc then 
         {
-            values.value as value where "$this.value = 'Regul\u00e4res Ende' or $this.value = 'Reguläres Ende'" then
+            //------------[Ende der Therapie]------------
+            operations.data as data, data where "$this.where(blockindex = 6 and groupindex = 0 and itemid ='id_1356').exists()" then    
             {
-                value -> tgt.status = 'completed';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'Regul\u00e4res Ende', 'Regul\u00e4res Ende');
-            };
+                data.values as values, values.value as value where "value != 'N/A'" -> cc.coding = c('https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund', value);
+                data.values as values, values.value as value where "value = 'N/A'" -> cc.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
 
-            values.value as value where "$this.value = 'Abbruch wegen Nebenwirkungen'" then
-            {
-                value -> tgt.status = 'stopped';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'nebenwirkungen', 'Abbruch wegen Nebenwirkungen');
-            };
+                data.values as values, values.value as value where "value = 'Regul\u00e4res Ende' or value = 'Reguläres Ende'" -> tgt.status = 'completed';
+                data.values as values, values.value as value where "value = 'Pause wegen Nebenwirkungen'" -> tgt.status = 'on-hold';
+                data.values as values, values.value as value where "value = 'Ablehnung durch den Patienten'" -> tgt.status = 'not-done';
+                data.values as values, values.value as value where "value = 'Abbruch wegen Nebenwirkungen' or value = 'Abbruch wegen Progress' or value = 'Patient verstorben'" -> tgt.status = 'stopped';
+                data.values as values, values.value as value where "value = 'Sonstiges' or value = 'N/A'" -> tgt.status = 'unknown';
 
-            values.value as value where "$this.value = 'Pause wegen Nebenwirkungen'" then
-            {
-                value -> tgt.status = 'on-hold';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'nebenwirkungen', 'Pause wegen Nebenwirkungen');
                 operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
             };
 
-            values.value as value where "$this.value = 'Abbruch wegen Progress'" then
+            // Grund für die Änderung des Therapieschemas: statusReason.extension
+            operations.data as data, data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1464'" then
             {
-                value -> tgt.status = 'stopped';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'progress', 'Progress');
-                operations then MapNebenwirkungenGradMedicationAdministrationSY(operations, tgt);
-            };
-
-            values.value as value where "$this.value = 'Ablehnung durch den Patienten'" then
-            {
-                value -> tgt.status = 'not-done';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'ablehnungPatient', 'Ablehnung durch den Patienten');
-            };
-
-            values.value as value where "$this.value = 'Vielversprechendere Therapieoption'" then
-            {
-                value -> tgt.status = 'not-done';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'vielversprechendereTherapieoption', 'Vielversprechendere Therapieoption');
-            };
-
-            values.value as value where "$this.value = 'Patient verstorben'" then
-            {
-                value -> tgt.status = 'stopped';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'verstorben', 'Patient verstorben');
-            };
-
-            values.value as value where "$this.value = 'Sonstiges'" then
-            {
-                value -> tgt.status = 'unknown';
-                value -> tgt.statusReason = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SystemischeTherapieStatusTherapie', 'sonstiges', 'Sonstiges');
-            };
-
-            values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
-            {
-                value -> tgt.status = 'unknown';
-                value -> tgt.statusReason = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable', 'not-applicable');
+                values.value as value where "$this.value.exists()" then
+                {
+                    value -> cc.extension as grundaenderung,
+                            grundaenderung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/grundAenderung',
+                            grundaenderung.valueCodeableConcept =  cc('http://uk-koeln.de/fhir/CodeSystem/nngm/GrundAenderung', value);
+                };
             };
         };
+        
 
-        // Bemerkungen: note.text
-        data.values as values where "blockindex = 7 and groupindex = 0 and itemid = 'id_1205'" then
+        //Bemerkungen
+        data.values as values where "blockindex = 7 and groupindex = 0 and itemid ='id_1205'" then
         {
-            values.value as value ->    tgt.note as note,
-                                        note.text = value;
+            values -> tgt.note = create('Annotation') as annotation then 
+            {
+                values.value as value -> annotation.text = value;
+            };
         };
-
-        // Referenzen
-        // Observation
-
     };
 }
 
@@ -419,8 +389,7 @@ group MapStudiennameMedicationAdministrationSY(source operations: BackboneElemen
     {
         values.value as value where "$this.value.exists()" then
         {
-            value ->    tgt.extension as studientherapie,
-                        studientherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/cancer-base/studientherapie',
+            value ->    tgt.extension as studientherapie collate,
                         studientherapie.extension as studie,
                         studie.url = 'studie',
                         studie.valueReference = create('Reference') as reference,
@@ -430,61 +399,31 @@ group MapStudiennameMedicationAdministrationSY(source operations: BackboneElemen
     };
 }
 
+
 /* ------------------------------ MedicationAdministration - Elements displayed when Änderung des Schemas is 'Ja' ---------------------------- */
 group MapAnderungDesSchemasElementsMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
 {
     operations.data as data then
-    {
-        // Grund für die Änderung des Therapieschemas: statusReason.text
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1464'" then
-        {
-            values.value as value where "$this.value.exists()" then
-            {
-                value ->    tgt.statusReason as statusReason,
-                            statusReason.text =  value;
-            };
-        };
-
+    {     
+        
         // Neues Therapieschema: medicationCodeableConcept
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1359'" then
-        {
+        {            
             values.value as value where "$this.value.exists()" then
             {
-                value ->    tgt.medicationCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value, 'NeuesTherapieschema');
-                value ->    tgt.medicationCodeableConcept = create('CodeableConcept') as medicationCodeableConcept collate,
-                            medicationCodeableConcept.text = 'NeuesTherapieschema',
-                            medicationCodeableConcept.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value, 'NeuesTherapieschema');
+                value ->    tgt.medicationCodeableConcept as medicationCodeableConcept,
+                            medicationCodeableConcept.extension = create('Extension') as NeuesTherapieschema, 
+                            NeuesTherapieschema.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/NeuesTherapieschema',
+                            NeuesTherapieschema.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
             };
         };
-
-        // Datum der Änderung: effectivePeriod.start
+        
+        // Datum der Änderung: valueDate
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1465'" then
         {
-            values.value as value where "$this.value.exists()" then
-            {
-                value ->    tgt.effectivePeriod = create('Period') as effectivePeriod,
-                            effectivePeriod.start = dateOp(value, 'dateTime');
-            };
-        };
-    };
-}
-
-/* ------------------------------ MedicationAdministration - Elements displayed when Erhaltungstherapie als Option is 'Ja' ---------------------------- */
-group MapErhaltungstherapieElementMedicationAdministrationSY(source operations: BackboneElement, target tgt: MedicationAdministration)
-{
-    // Für die Erhaltungstherapie verabreichtes Medikament: extension:Erhaltungstherapie.extension:medikament
-    operations.data as data, data.values as values where "blockindex = 4 and groupindex = 0 and itemid = 'id_2342'" then
-    {
-        values.value as value where "$this.value.exists()" then
-        {
-            values.value as value where "$this.value.exists()" then
-            {
-                value ->    tgt.extension as erhaltungstherapie,
-                            erhaltungstherapie.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/erhaltungstherapie',
-                            erhaltungstherapie.extension as medikament,
-                            medikament.url = 'medikament',
-                            medikament.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nNGM/SystemischeTherapieMedikation', value);
-            };
+            values.value as value -> tgt.extension = create('Extension') as aenderung,
+                                        aenderung.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/DatumAenderung', 
+                                        aenderung.valueDateTime = dateOp(value, 'date');
         };
     };
 }
@@ -517,52 +456,6 @@ group MapNebenwirkungenGradMedicationAdministrationSY(source operations: Backbon
                         valueBoolean.extension as dataAbsentReason,
                         dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
                         dataAbsentReason.valueCode = cast('not-applicable', 'FHIR.code');
-        };
-    };
-}
-
-/* ------------------------------ Check if Patient needs to be created ---------------------------- */
-group CreatePatientSY(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
-        {
-            operations then TransformPatientSY(operations, patient, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
-        };
-    };
-}
-
-/* ------------------------------ Patient ---------------------------- */
-group TransformPatientSY(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
-{
-    // Profile url
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
-
-    // Name
-    operations -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Gender
-    operations -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // BirthDate
-    operations -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'uuid_nngm_patient3'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as patient, patient.reference = evaluate(value, '\'Patient/\' + $this');
-        };
-
-        // Todesdatum: deceased.deceasedDateTime
-        data.values as values where "blockindex = 6 and groupindex = 0 and itemid = 'id_2344'" then
-        {
-            values.value as value -> tgt.deceasedDateTime = dateOp(value, 'dateTime');
         };
     };
 }
@@ -691,10 +584,7 @@ group TransformObservationEcogSY(source operations: BackboneElement, target tgt:
 
             values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
             {
-                value ->    tgt.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.extension as dataAbsentReason,
-                            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                            dataAbsentReason.valueCode = cast('not-applicable', 'FHIR.code');
+                value -> tgt.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable', 'Not Applicable');
             };
         };
     };
@@ -725,10 +615,7 @@ group TransformObservationBestResponseSY(source operations: BackboneElement, tar
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Observation/nNGM/best-response';
 
     // Status: item required on simplifier
-    operations ->  tgt.status as status,
-                status.extension as dataAbsentReason,
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations ->  tgt.status = cast('unknown', 'FHIR.code');
 
     // Category: item required on simplifier
     operations -> tgt.category = cc('http://terminology.hl7.org/CodeSystem/observation-category', 'therapy');
@@ -789,10 +676,7 @@ group TransformObservationBestResponseSY(source operations: BackboneElement, tar
 
             values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
             {
-                value ->    tgt.valueCodeableConcept as valueCodeableConcept,
-                            valueCodeableConcept.extension as dataAbsentReason,
-                            dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                            dataAbsentReason.valueCode = cast('not-applicable', 'FHIR.code');
+                value -> tgt.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'not-applicable');
             };
         };
 
