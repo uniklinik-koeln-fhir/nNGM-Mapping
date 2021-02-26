@@ -6,13 +6,11 @@ map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieFHIR" = n
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
-uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 
 group TransformBundleSonstigeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations then CreateProcedureSonstigeTherapien(operations, bundle, composition, section);
-    operations then CreatePatientSonstigeTherapie(operations, bundle, composition, section);
-}
+} 
 
 /* ------------------------------ Procedure ---------------------------- */
 group CreateProcedureSonstigeTherapien(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
@@ -33,10 +31,7 @@ group TransformProcedureSonstigeTherapie(source operations: BackboneElement, tar
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/SonstigeTherapie';
 
     // Status
-    operations -> tgt.status as status,
-                status.extension as dataAbsentReason,
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
+    operations -> tgt.status = cast('unknown', 'FHIR.code');
     
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
@@ -121,7 +116,7 @@ group TransformProcedureSonstigeTherapie(source operations: BackboneElement, tar
 
             values.value as value where "$this.value = 'other'" then 
             {
-                value -> tgt.bodySite = cc('http://ncit.nci.nih.gov', 'C17649', value);
+                value -> tgt.bodySite = cc('http://ncit.nci.nih.gov', 'C17649', 'Other');
             };
 
             // Freitext
@@ -139,6 +134,7 @@ group TransformProcedureSonstigeTherapie(source operations: BackboneElement, tar
             {
                 values.value as value ->    tgt.code as code,
                                             code.extension = create('BackboneElement') as methode,
+                                            methode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie',
                                             methode.extension = create('BackboneElement') as extensionMethode,
                                             extensionMethode.url = 'methode',
                                             extensionMethode.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/SonstigeTherapieMethode', value);
@@ -149,6 +145,7 @@ group TransformProcedureSonstigeTherapie(source operations: BackboneElement, tar
             {
                 values.value as value ->    tgt.code as code,
                                             code.extension = create('BackboneElement') as methode,
+                                            methode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/methode-sonstige-therapie',
                                             methode.extension = create('BackboneElement') as sonstigeMethode,
                                             sonstigeMethode.url = 'sonstigeMethode',
                                             sonstigeMethode.valueString = value;
@@ -178,56 +175,10 @@ group TransformProcedureSonstigeTherapie(source operations: BackboneElement, tar
         // Bezeichnung / Beschreibung der alternativen Methoden
         data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_1219'" then
         {
-            values.value as value ->    tgt.reasonCode as reasonCode,
+            values.value as value ->    tgt.reasonCode as reasonCode collate,
                                         reasonCode.extension = create('BackboneElement') as beschreibungAlternativeMethode,
                                         beschreibungAlternativeMethode.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/beschreiung-alternativer-methode',
                                         beschreibungAlternativeMethode.valueString = value;
-        };
-    };
-}
-
-/* ------------------------------ Check if Patient needs to be created ---------------------------- */
-group CreatePatientSonstigeTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
-{
-    operations.data as data, data.values as value where "blockindex = 3 and groupindex = 0 and itemid = 'id_2401'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
-        {
-            operations then TransformPatientSonstigeTherapie(operations, patient, composition, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
-        };
-    };
-}
-
-/* ------------------------------ Patient ---------------------------- */
-group TransformPatientSonstigeTherapie(source operations: BackboneElement, target tgt: Patient, target composition: Composition, target section: BackboneElement)
-{
-    // Mapped profile with profile URL
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM';
-
-    // Name
-    operations -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Gender
-    operations -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // BirthDate
-    operations -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'uuid_nngm_patient2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as patient, patient.reference = evaluate(value, '\'Patient/\' + $this');
-        };
-
-        // Todesdatum
-        data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_2401'" then
-        {
-            values.value as value -> tgt.deceasedDateTime = dateOp(value, 'date');
         };
     };
 }

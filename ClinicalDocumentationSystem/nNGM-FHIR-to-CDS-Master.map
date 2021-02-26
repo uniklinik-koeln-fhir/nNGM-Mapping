@@ -27,13 +27,13 @@ imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_FastTrackCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeUntersuchungenCDS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_LiquidBiopsyCDS"
 
-/*
-// Operation
+
+// Therapie
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_StrahlentherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SonstigeTherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieCTS"
 imports "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_SystemischeTherapieCTS"
-*/
+
 
 group MapCDS(source src: Bundle, target tgt: CTS_Transport)
 {
@@ -43,14 +43,8 @@ group MapCDS(source src: Bundle, target tgt: CTS_Transport)
     src then MapAntrag(src, tgt);
     src then MapBefund(src, tgt);
     src then MapTNM(src, tgt);
-
-    /*
-    // Operation
-    src -> tgt.operations as operations then TransformStrahlentherapieCTS(src, operations);
-    src -> tgt.operations as operations then TransformSonstigeTherapieCTS(src, operations);
-    src -> tgt.operations as operations then TransformOperationTherapieCTS(src, operations);
-    src -> tgt.operations as operations then TransformSystemischeTherapieCTS(src, operations);
-    */
+    src then MapTherapie(src, tgt);
+    
 }
 
 group MapStammdaten(source src: Bundle, target tgt: CTS_Transport)
@@ -444,6 +438,91 @@ group MapTNM(source src: Bundle, target tgt: CTS_Transport)
     };
 }
 
+group MapTherapie(source src: Bundle, target tgt: CTS_Transport)
+{
+    src.entry as entry, entry.resource as compositionTherapie where "resource is Composition and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Composition/nNGM/Therapie-pseudonymisiert'" then
+    {   
+        // Pat id
+        compositionTherapie.subject as subject, subject.identifier as identifier, identifier.value as value -> tgt.patid = value;
+        
+        // Operation
+        compositionTherapie.section as operationSection, operationSection where "code.coding.code = 'operation'" -> tgt.operations as operations then
+        {
+            let formNummer = evaluate(operationSection, '$this.entry.identifier.value');
+
+            operationSection -> tgt.version = '1.0';
+            operationSection -> operations.type = 'save'; 
+            operationSection -> operations.crfid = append('OP', formNummer);
+
+            operationSection.entry as operationSectionEntry, operationSectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    operationSectionEntry then TransformOperationTherapieCTS(entry, operations);
+                };
+            };
+        };
+
+        // Systemische Therapie
+        compositionTherapie.section as systemischeTherapieSection, systemischeTherapieSection where "code.coding.code = 'systemischeTherapie'" -> tgt.operations as operations then
+        {
+            let formNummer = evaluate(systemischeTherapieSection, '$this.entry.identifier.value');
+
+            systemischeTherapieSection -> tgt.version = '1.0';
+            systemischeTherapieSection -> operations.type = 'save'; 
+            systemischeTherapieSection -> operations.crfid = append('SY', formNummer);
+
+            systemischeTherapieSection.entry as systemischeTherapieSectionEntry, systemischeTherapieSectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    systemischeTherapieSectionEntry then TransformSystemischeTherapieCTS(entry, operations);
+                };
+            };
+            systemischeTherapieSection then TransformCheckboxesSystemischeTherapie(src, systemischeTherapieSection, operations);
+        };
+
+
+        // Strahlentherapie
+        compositionTherapie.section as strahlentherapieSection, strahlentherapieSection where "code.coding.code = 'strahlentherapie'" -> tgt.operations as operations then
+        {
+            let formNummer = evaluate(strahlentherapieSection, '$this.entry.identifier.value');
+
+            strahlentherapieSection -> tgt.version = '1.0';
+            strahlentherapieSection -> operations.type = 'save'; 
+            strahlentherapieSection -> operations.crfid = append('ST', formNummer);
+
+            strahlentherapieSection.entry as strahlentherapieSectionEntry, strahlentherapieSectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    strahlentherapieSectionEntry then TransformStrahlentherapieCTS(entry, operations);
+                };
+            };
+
+            strahlentherapieSection then TransformCheckboxesStrahlentherapie(src, strahlentherapieSection, operations);
+        };
+
+        // Sonstige Therapie
+        compositionTherapie.section as sonstigeTherapieSection, sonstigeTherapieSection where "code.coding.code = 'sonstigeTherapie'" -> tgt.operations as operations then
+        {
+            let formNummer = evaluate(sonstigeTherapieSection, '$this.entry.identifier.value');
+
+            sonstigeTherapieSection -> tgt.version = '1.0';
+            sonstigeTherapieSection -> operations.type = 'save'; 
+            sonstigeTherapieSection -> operations.crfid = append('SO', formNummer);
+
+            sonstigeTherapieSection.entry as sonstigeTherapieSectionEntry, sonstigeTherapieSectionEntry.reference as reference then
+            {
+                src.entry as entry, entry where "resource.id = %reference.split(\'/\').last()" then
+                {
+                    sonstigeTherapieSectionEntry then TransformSonstigeTherapieCTS(entry, operations);
+                };
+            };
+        };
+    };
+}
+
 // Helper functions
 group InitSectionIndex(source src: Bundle, target index: RepeatIndex)
 {
@@ -701,4 +780,56 @@ group TransformCheckboxesVorbefund(source src: Bundle, source nestedSection: Bac
             };
         };
     };
+}
+
+group TransformCheckboxesStrahlentherapie(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+{
+    // Strahlentherapie
+    nestedSection where "code.coding.code = 'strahlentherapie'" -> operations.data as data then
+    {
+       nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+       src.entry as entry, entry.resource as procedure where "resource.id = %reference.split(\'/\').last() and resource is Procedure 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/Strahlentherapie'" then
+        {
+            procedure where "%data.where(itemid = 'id_1211').exists().not()" then
+            {
+                procedure -> data.blockindex = 2;
+                procedure -> data.groupindex = 0;
+                procedure -> data.itemid = 'id_1211';
+            };
+
+            procedure.statusReason as statusReason, statusReason.coding as coding,
+                coding.code as code where "system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund'" -> data.values as values, values.value = code; 
+
+            // Catch not-applicable values
+            procedure.statusReason as statusReason, statusReason.coding as coding,
+            coding.code as code where "system = 'http://terminology.hl7.org/CodeSystem/data-absent-reason'" -> data.values as values, values.value = 'N/A';
+        };
+    }; 
+}
+
+group TransformCheckboxesSystemischeTherapie(source src: Bundle, source nestedSection: BackboneElement, target operations: BackboneElement)
+{
+    // SystemischeTherapie
+    nestedSection where "code.coding.code = 'systemischeTherapie'" -> operations.data as data then
+    {
+       nestedSection.entry as nestedSectionEntry, nestedSectionEntry.reference as reference,
+       src.entry as entry, entry.resource as medicationAdministration where "resource.id = %reference.split(\'/\').last() and resource is MedicationAdministration 
+                                                            and resource.meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/MedicationAdministration'" then
+        {
+            medicationAdministration where "%data.where(itemid = 'id_1356').exists().not()" then
+            {
+                medicationAdministration -> data.blockindex = 6;
+                medicationAdministration -> data.groupindex = 0;
+                medicationAdministration -> data.itemid = 'id_1356';
+            };
+
+            medicationAdministration.statusReason as statusReason, statusReason.coding as coding,
+                coding.code as code where "system = 'https://www.uk-koeln.de/nngm/CodeSystem/ST_Ende_Grund'" -> data.values as values, values.value = code; 
+
+            // Catch not-applicable values
+            medicationAdministration.statusReason as statusReason, statusReason.coding as coding,
+            coding.code as code where "system = 'http://terminology.hl7.org/CodeSystem/data-absent-reason'" -> data.values as values, values.value = 'N/A';
+        };
+    }; 
 }

@@ -1,21 +1,14 @@
 /// version = 0.1
 /// title = "nNGM_Mapping_Operation_Therapie"
 
-/*
-TODO
-    - Need to add reference to newly created patient?
-*/
-
 map "http://uk-koeln.de/fhir/StructureMap/nNGM_Mapping_OperationTherapieFHIR" = nNGM_Mapping_OperationTherapieFHIR
 
 uses "http://hl7.org/fhir/StructureDefinition/CTS_Transport" as source
 uses "http://hl7.org/fhir/StructureDefinition/Procedure" as target
-uses "http://hl7.org/fhir/StructureDefinition/Patient" as target
 
 group TransformBundleOperationTherapie(source operations: BackboneElement, target bundle: Bundle, target composition: Composition, target section: BackboneElement)
 {
     operations then CreateProcedureOperationTherapie(operations, bundle, composition, section);
-    operations then CreatePatientOperationTherapie(operations, bundle, section);
 }
 
 /* ------------------------------ Check whether Procedure needs to be created ---------------------------- */
@@ -52,22 +45,13 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
     operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Procedure/nNGM/OP';
 
     // Status
-    operations -> tgt.status as status,
-                    status.extension as dataAbsentReason,
-                    dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                    dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
+    operations -> tgt.status = cast('unknown', 'FHIR.code');
 
     // Subject
     operations -> tgt.subject = create('Reference') as subject, subject.reference = evaluate(composition, '\'Patient/\' + $this.subject.reference');
 
     // Code
     operations -> tgt.code as code, code.coding = c('http://ncit.nci.nih.gov', 'C15329');
-
-    // Category 
-    operations -> tgt.category as category,
-                category.extension as dataAbsentReason,
-                dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason',
-                dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code'); 
 
     // Access data
     operations.data as data then
@@ -94,34 +78,14 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
         // Operative Intention - reasonCode
         data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1167'" then
         {
-            values.value where "$this.value = 'Kurativ'" then 
+            values.value where "$this.value != 'N/A' or $this.value != N\/A" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'K');
-            };
-
-            values.value where "$this.value = 'Palliativ'" then 
-            {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'P');
-            };
-            
-            values.value where "$this.value = 'Diagnostisch'" then 
-            {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'D');
-            };
-
-            values.value where "$this.value = 'Revision\/Komplikation' or $this.value = 'Revision/Komplikation'" then 
-            {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'R');
-            };
-
-            values.value where "$this.value = 'Sonstiges'" then 
-            {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'S');
+                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', value);
             };
 
             values.value where "$this.value = 'N\/A' or $this.value = 'N/A'" then 
             {
-                values.value as value -> tgt.reasonCode = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/intention-therapie', 'X');
+                values.value as value -> tgt.reasonCode = cc('http://hl7.org/fhir/StructureDefinition/data-absent-reason', 'not-applicable');
             };
         };
 
@@ -131,7 +95,7 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value as value where "$this.value = 'N\/A' or $this.value = 'N/A'" then 
             {
                 value ->    tgt.code as code, 
-                            code.extension = create('BackboneElement') as artDesEingriffs,
+                            code.extension  as artDesEingriffs,
                             artDesEingriffs.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/art-des-eingriffs',
                             artDesEingriffs.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
             };
@@ -139,38 +103,19 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             values.value as value where "$this.value != 'N\/A' and $this.value != 'N/A'" then 
             {
                 value ->    tgt.code as code, 
-                            code.extension = create('BackboneElement') as artDesEingriffs,
+                            code.extension as artDesEingriffs,
                             artDesEingriffs.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/art-des-eingriffs',
                             artDesEingriffs.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/ngnm/OperationArtDesEingriffs', value);
             };
         };
 
         // Lokalisation (Auswahl) - bodySite.coding
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2335'" then
+        data where "$this.where(blockindex = 1 and groupindex = 0 and itemid ='id_2335').exists()"
+            -> tgt.bodySite = create('CodeableConcept') as cc then 
         {
-            values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then 
-            {
-                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
-            };
-
-            values.value as value where "$this.value != 'N/A' and $this.value != 'N\/A' and $this.value != 'other'" then 
-            {
-                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/OperationLokalisation', value);
-            };
-
-            values.value as value where "$this.isother = true" then 
-            {
-                value -> tgt.bodySite as bodySite, bodySite.coding = c('http://ncit.nci.nih.gov', 'C17649');
-            };
-        };
-
-        // Lokalisation (Freitext) - bodySite.text
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_2335'" then
-        {
-            values.value as value where "$this.isother.exists()" then 
-            {
-                value -> tgt.bodySite as bodySite, bodySite.text = value;
-            };
+            data.values as values, values.value as value where "value = 'Lunge' or value = 'Leber' or value = 'Gehirn' or value = 'Nebenniere' or value = 'other'" -> cc.coding = c('http://uk-koeln.de/fhir/CodeSystem/nNGM/OperationLokalisation', value);
+            data.values as values, values.value as value where "value = 'N/A'" -> cc.coding = c('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
+            data.values as values, values.value as value where "$this.isother = true" -> cc.coding = c('http://ncit.nci.nih.gov', 'C17649'), cc.text = value;
         };
 
         // Seitenlokalisation - extension:seitenlokalisation
@@ -193,37 +138,30 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
             };
         };
 
-        // Art der Resektion - code.extension:resektion.extension:resektionsart
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1176'" then
+        // Resektion - code.extension:resektion
+        data where "$this.where(blockindex = 1 and groupindex = 0 and itemid = 'id_1176').exists()" 
+            -> tgt.code as code, code.extension as resektion, resektion.url = 'http://uk-koeln.de/fhir/StructureDefinition/Extension/nNGM/resektion' then
         {
-            values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" then
+            // Art der Resektion - code.extension:resektion.extension:resektionsart
+            data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1176'" 
+                -> resektion.extension as resektionsArt, resektionsArt.url = 'resektionsart' then
             {
-                value ->    tgt.code as code,
-                            code.extension = create('BackboneElement') as resektion,
-                            resektion.extension = create('BackboneElement') as resektionsart,
-                            resektionsart.url = 'resektionsart',
-                            resektionsart.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/OperationArtResektion', 'unknown');
+                values.value as value where "$this.value = 'N/A' or $this.value = 'N\/A'" -> 
+                    resektionsArt.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
+
+                values.value as value where "$this.value != 'N/A' and $this.value != 'N\/A'" ->
+                    resektionsArt.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/OperationArtResektion', value);
             };
 
-            values.value as value where "$this.value != 'N/A' and $this.value != 'N\/A'" then
+            // Resektionsstatus - code.extension:resektion.extension:resektionsstatus
+            operations.data as data, data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1353'" 
+                -> resektion.extension as resektionsStatus, resektionsStatus.url = 'resektionsstatus' then
             {
-                value ->    tgt.code as code,
-                            code.extension = create('BackboneElement') as resektion,
-                            resektion.extension = create('BackboneElement') as resektionsart,
-                            resektionsart.url = 'resektionsart',
-                            resektionsart.valueCodeableConcept = cc('http://uk-koeln.de/fhir/CodeSystem/nngm/OperationArtResektion', value);
+                values.value as value where "$this.value = 'R0'" -> resektionsStatus.valueCodeableConcept = cc('http://loinc.org', 'LA26542-3');
+                values.value as value where "$this.value = 'R1'" -> resektionsStatus.valueCodeableConcept = cc('http://loinc.org', 'LA26543-1');
+                values.value as value where "$this.value = 'R2'" -> resektionsStatus.valueCodeableConcept = cc('http://loinc.org', 'LA26544-9');
+                values.value as value where "$this.value = 'RX'" -> resektionsStatus.valueCodeableConcept = cc('http://terminology.hl7.org/CodeSystem/data-absent-reason', 'unknown');
             };
-        };
-
-        // Resektionsstatus - code.extension:resektion.extension:resektionsstatus
-        data.values as values where "blockindex = 1 and groupindex = 0 and itemid = 'id_1353'" then
-        {
-            values.value as value ->    tgt.code as code,
-                                        code.extension = create('BackboneElement') as resektion,
-                                        resektion.extension = create('BackboneElement') as resektionsstatus,
-                                        resektionsstatus.url = 'resektionsstatus',
-                                        resektionsstatus.valueCodeableConcept = cc('http://loinc.org', value);
-
         };
 
         // Lymphadenektomie - extension:lymphadenektomie
@@ -257,52 +195,6 @@ group TransformProcedureOperationTherapie(source operations: BackboneElement, ta
         data.values as values where "blockindex = 3 and groupindex = 0 and itemid = 'id_1472'" then
         {
             values.value as value -> tgt.note as note, note.text = value;
-        };
-    };
-}
-
-/* ------------------------------ Check whether Patient needs to be created ---------------------------- */
-group CreatePatientOperationTherapie(source operations: BackboneElement, target bundle: Bundle, target section: BackboneElement)
-{
-    operations.data as data, data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2401'" then
-    {
-        operations -> bundle.entry as entry, entry.resource = create('Patient') as patient then 
-        {
-            operations then TransformPatientOperationTherapie(operations, patient, section);
-            operations -> entry.request as request, request.method = 'PUT', request.url = evaluate(patient, '\'Patient/\' + $this.id');
-        };
-    };         
-}
-
-/* ------------------------------ Patient ---------------------------- */
-group TransformPatientOperationTherapie(source operations: BackboneElement, target tgt: Patient, target section: BackboneElement)
-{
-    // Mapped profile with profile URL
-    operations -> tgt.meta as meta collate, meta.profile = 'http://uk-koeln.de/fhir/StructureDefinition/Patient/nNGM/patient';
-
-    // Name
-    operations -> tgt.name as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Gender
-    operations -> tgt.gender as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // BirthDate
-    operations -> tgt.birthDate as name, name.extension as dataAbsentReason, dataAbsentReason.url = 'http://hl7.org/fhir/StructureDefinition/data-absent-reason', dataAbsentReason.valueCode = cast('not-asked', 'FHIR.code');
-
-    // Access data
-    operations.data as data then
-    {
-        // ID + Composition insert
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'uuid_nngm_patient2'" then
-        {
-            values.value as value -> tgt.id = value;
-            values.value as value -> section.entry = create('Reference') as patient, patient.reference = evaluate(value, '\'Patient/\' + $this');
-        };
-
-        // Todesdatum
-        data.values as values where "blockindex = 2 and groupindex = 0 and itemid = 'id_2401'" then
-        {
-            values.value as value -> tgt.deceasedDateTime = dateOp(value, 'date');
         };
     };
 }

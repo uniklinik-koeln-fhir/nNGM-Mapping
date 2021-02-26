@@ -1,0 +1,238 @@
+/// version = 0.1
+/// title = "UKK Molpatho Filemaker FM_Untersuchungen mapping"
+/// status = draft
+
+//FileMaker uses the Content-Type header application/hl7-sda+xml
+
+map "http://uk-koeln.de/fhir/StructureMap/Filemaker/Fm_Untersuchungen" = "FM_Untersuchungen"
+
+uses "http://hl7.org/fhir/cda/StructureDefinition/FM_Untersuchungen" as source
+uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+
+/* ------------------------------ Bundle ---------------------------- */
+group TransformBundle(source src: FM_Untersuchungen, target tgt: Bundle)
+{
+    //map bundle data
+   src -> tgt.id = uuid(); 
+   src -> tgt.type = 'collection';
+
+   //map for each case
+   src.case as case then MapCase(case, tgt);
+}
+
+/* ------------------------------ Case ---------------------------- */
+group MapCase(source src: BackboneElement, target tgt: Bundle)
+{
+    //create new CTS_Transport and start mapping
+    src -> tgt.entry as entry, entry.resource = create('CTS_Transport') as cts then
+    {
+        //root CTS_Transport data
+        src -> cts.patid = 'unknown';
+        src -> cts.version = 'unknown';
+        src -> cts.sourcesystem = 'unknown';
+
+        //map the pathopro-ID into metaInformations
+        src.pathoPro_ID as patoId -> cts.metaInformation as meta, meta.key = 'PathoPro_ID', meta.value = patoId;
+
+        //map for each IDAT (according to .xsd its 0..1)
+        src.iDAT as idat then MapIDAT(idat, cts);
+
+        //map for each Untersuchung (according to .xsd its 0..*)
+        src.untersuchung as observation then 
+        {
+              //select the Untersuchungs_ID and the Startdatum for later
+            observation.untersuchungs_ID as observationId, observation.startdatum as startDate then
+            {
+                //map for each Ergebnis (according to .xsd its 0..1)
+                observation.ergebnis as result then
+                {
+                    //map ALK_FISH
+                    result.aLK_FISH as alkfish then
+                    {
+                        observation -> cts.operations as operations collate then
+                        {
+                            src then MapCheckboxes(src, operations);
+
+                            //map startdatum
+                            observation -> operations.data as data then
+                            {
+                                observation -> data.blockindex = 3;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2098';
+                                startDate -> data.values as values, values.value = dateOp(startDate, 'yyyy-MM-dd', 'ddMMyyyy', 'date');
+                            };
+                        
+                            //map untersuchungs_ID
+                            observation -> operations.data as data then
+                            {
+                                observation -> data.blockindex = 8;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'assessment_id';
+                                observationId -> data.values as values, values.value = observationId;
+                            };
+                        
+                        
+                            //map ergebnis flag
+                            observation -> operations.data as data then
+                            {
+                                //positiv mapping
+                                alkfish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = 1" then
+                                {
+                                    observation -> data.blockindex = 3;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2119';
+                                    ergebnisFlag -> data.values as values, values.value = 'positiv';
+                                };
+                                //negativ mapping
+                                alkfish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = 0" then
+                                {
+                                    observation -> data.blockindex = 3;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2119';
+                                    ergebnisFlag -> data.values as values, values.value = 'negativ';
+                                };
+                                //nicht auswertbar mapping
+                                alkfish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = -1" then
+                                {
+                                    observation -> data.blockindex = 3;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2119';
+                                    ergebnisFlag -> data.values as values, values.value = 'nicht auswertbar';
+                                };
+                            };
+                        
+                            //map positive tumorzellen
+                            observation -> operations.data as data then
+                            {
+                                alkfish.positive_Tumorzellen as positiveCells then
+                                {
+                                    observation -> data.blockindex = 3;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2120';
+                                    positiveCells -> data.values as values, values.unit = 'percent', values.value = positiveCells;
+                                };
+                            };
+                        
+                            //map polysomie
+                            observation -> operations.data as data then
+                            {
+                                alkfish.polysomie as polysomie then
+                                {
+                                    observation -> data.blockindex = 3;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2121';
+                                    polysomie -> data.values as values, values.unit = 'percent', values.value = polysomie;
+                                };
+                            };
+                        };
+                    };
+                
+                    //map ROS1_FISH
+                    result.rOS1_FISH as ros1fish then
+                    {
+                        observation -> cts.operations as operations collate then
+                        {
+                            //map startdatum
+                            observation -> operations.data as data then
+                            {
+                                observation -> data.blockindex = 6;
+                                observation -> data.groupindex = 0;
+                                observation -> data.itemid = 'id_2211';
+                                startDate -> data.values as values, values.value = dateOp(startDate, 'yyyy-MM-dd', 'ddMMyyyy', 'date');
+                            };
+                        
+                            //map ergebnis flag
+                            observation -> operations.data as data then
+                            {
+                                //positiv mapping
+                                ros1fish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = 1" then
+                                {
+                                    observation -> data.blockindex = 6;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2233';
+                                    ergebnisFlag -> data.values as values, values.value = 'positiv';
+                                };
+                                //negativ mapping
+                                ros1fish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = 0" then
+                                {
+                                    observation -> data.blockindex = 6;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2233';
+                                    ergebnisFlag -> data.values as values, values.value = 'negativ';
+                                };
+                                //nicht auswertbar mapping
+                                ros1fish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = -1" then
+                                {
+                                    observation -> data.blockindex = 6;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2233';
+                                    ergebnisFlag -> data.values as values, values.value = 'nicht auswertbar';
+                                };
+                            };
+                        
+                            //map positive tumorzellen
+                            observation -> operations.data as data then
+                            {
+                                ros1fish.positive_Tumorzellen as positiveCells then
+                                {
+                                    observation -> data.blockindex = 6;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2234';
+                                    positiveCells -> data.values as values, values.unit = 'percent', values.value = positiveCells;
+                                };
+                            };
+                        
+                            //map polysomie
+                            observation -> operations.data as data then
+                            {
+                                ros1fish.polysomie as polysomie then
+                                {
+                                    observation -> data.blockindex = 6;
+                                    observation -> data.groupindex = 0;
+                                    observation -> data.itemid = 'id_2235';
+                                    polysomie -> data.values as values, values.unit = 'percent', values.value = polysomie;
+                                };
+                            };
+                        };
+                    };  
+                };
+            };
+        };
+    };
+}
+
+/* ------------------------------ IDAT ---------------------------- */
+group MapIDAT(source src: BackboneElement, target tgt: CTS_Transport)
+{
+    //map complete IDAT to metaInformation
+    src.nachname as family -> tgt.metaInformation as meta, meta.key = 'Nachname', meta.value = family;
+    src.vorname as given -> tgt.metaInformation as meta, meta.key = 'Vorname', meta.value = given;
+    src.geburtsdatum as birthdate -> tgt.metaInformation as meta, meta.key = 'Geburtsdatum', meta.value = birthdate;
+    src.geschlecht as gender -> tgt.metaInformation as meta, meta.key = 'Geschlecht', meta.value = gender;
+}
+
+
+group MapCheckboxes(source src: BackboneElement, target tgt: BackboneElement)
+{
+    //mapCheckbox
+    src -> tgt.data as data then
+    {
+        src where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
+        {
+            src -> data.blockindex = 2;
+            src -> data.groupindex = 0;
+            src -> data.itemid = 'id_2510';
+
+            src where "%src.untersuchung.ergebnis.aLK_FISH.exists()" then
+            {
+                src -> data.values as values, values.value = 'ALK';
+            };
+            src where "%src.untersuchung.ergebnis.rOS1_FISH.exists()" then
+            {
+                src -> data.values as values, values.value = 'ROS1';
+            };
+            
+        };
+    };
+
+}
