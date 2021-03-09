@@ -2,33 +2,41 @@
 /// title = "UKK Molpatho Filemaker FM_Untersuchungen mapping"
 /// status = draft
 
+//FileMaker uses the Content-Type header application/hl7-sda+xml
 
 map "http://uk-koeln.de/fhir/StructureMap/Filemaker/Fm_Untersuchungen" = "FM_Untersuchungen"
+
 uses "http://hl7.org/fhir/cda/StructureDefinition/FM_Untersuchungen" as source
 uses "http://hl7.org/fhir/StructureDefinition/Bundle" as target
+
 /* ------------------------------ Bundle ---------------------------- */
 group TransformBundle(source src: FM_Untersuchungen, target tgt: Bundle)
 {
     //map bundle data
    src -> tgt.id = uuid(); 
-   src -> tgt.type = '\''collection'\'';
+   src -> tgt.type = 'collection';
+
    //map for each case
    src.case as case then MapCase(case, tgt);
 }
+
 /* ------------------------------ Case ---------------------------- */
 group MapCase(source src: BackboneElement, target tgt: Bundle)
 {
     //create new CTS_Transport and start mapping
-    src -> tgt.entry as entry, entry.resource = create('\''CTS_Transport'\'') as cts then
+    src -> tgt.entry as entry, entry.resource = create('CTS_Transport') as cts then
     {
         //root CTS_Transport data
-        src -> cts.patid = '\''unknown'\'';
-        src -> cts.version = '\''unknown'\'';
-        src -> cts.sourcesystem = '\''unknown'\'';
+        src -> cts.patid = 'unknown';
+        src -> cts.version = 'unknown';
+        src -> cts.sourcesystem = 'unknown';
+
         //map the pathopro-ID into metaInformations
-        src.pathoPro_ID as patoId -> cts.metaInformation as meta, meta.key = '\''PathoPro_ID'\'', meta.value = patoId;
+        src.pathoPro_ID as patoId -> cts.metaInformation as meta, meta.key = 'PathoPro_ID', meta.value = patoId;
+
         //map for each IDAT (according to .xsd its 0..1)
         src.iDAT as idat then MapIDAT(idat, cts);
+
         //map for each Untersuchung (according to .xsd its 0..*)
         src.untersuchung as observation then 
         {
@@ -44,13 +52,14 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                         observation -> cts.operations as operations collate then
                         {
                             src then MapCheckboxes(src, operations);
+
                             //map startdatum
                             observation -> operations.data as data then
                             {
                                 observation -> data.blockindex = 3;
                                 observation -> data.groupindex = 0;
-                                observation -> data.itemid = '\''id_2098'\'';
-                                startDate -> data.values as values, values.value = dateOp(startDate, '\''yyyy-MM-dd'\'', '\''ddMMyyyy'\'', '\''date'\'');
+                                observation -> data.itemid = 'id_2098';
+                                startDate -> data.values as values, values.value = dateOp(startDate, 'yyyy-MM-dd', 'ddMMyyyy', 'date');
                             };
                         
                             //map untersuchungs_ID
@@ -58,7 +67,7 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                             {
                                 observation -> data.blockindex = 8;
                                 observation -> data.groupindex = 0;
-                                observation -> data.itemid = '\''assessment_id'\'';
+                                observation -> data.itemid = 'assessment_id';
                                 observationId -> data.values as values, values.value = observationId;
                             };
                         
@@ -71,24 +80,24 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                                 {
                                     observation -> data.blockindex = 3;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2119'\'';
-                                    ergebnisFlag -> data.values as values, values.value = '\''positiv'\'';
+                                    observation -> data.itemid = 'id_2119';
+                                    ergebnisFlag -> data.values as values, values.value = 'positiv';
                                 };
                                 //negativ mapping
                                 alkfish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = 0" then
                                 {
                                     observation -> data.blockindex = 3;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2119'\'';
-                                    ergebnisFlag -> data.values as values, values.value = '\''negativ'\'';
+                                    observation -> data.itemid = 'id_2119';
+                                    ergebnisFlag -> data.values as values, values.value = 'negativ';
                                 };
                                 //nicht auswertbar mapping
                                 alkfish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = -1" then
                                 {
                                     observation -> data.blockindex = 3;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2119'\'';
-                                    ergebnisFlag -> data.values as values, values.value = '\''nicht auswertbar'\'';
+                                    observation -> data.itemid = 'id_2119';
+                                    ergebnisFlag -> data.values as values, values.value = 'nicht auswertbar';
                                 };
                             };
                         
@@ -99,8 +108,8 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                                 {
                                     observation -> data.blockindex = 3;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2120'\'';
-                                    positiveCells -> data.values as values, values.unit = '\''percent'\'', values.value = positiveCells;
+                                    observation -> data.itemid = 'id_2120';
+                                    positiveCells -> data.values as values, values.unit = 'percent', values.value = positiveCells;
                                 };
                             };
                         
@@ -111,8 +120,8 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                                 {
                                     observation -> data.blockindex = 3;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2121'\'';
-                                    polysomie -> data.values as values, values.unit = '\''percent'\'', values.value = polysomie;
+                                    observation -> data.itemid = 'id_2121';
+                                    polysomie -> data.values as values, values.unit = 'percent', values.value = polysomie;
                                 };
                             };
                         };
@@ -123,14 +132,16 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                     {
                         observation -> cts.operations as operations collate then
                         {
+                            
                             src then MapCheckboxes(src, operations);
+                            
                             //map startdatum
                             observation -> operations.data as data then
                             {
                                 observation -> data.blockindex = 6;
                                 observation -> data.groupindex = 0;
-                                observation -> data.itemid = '\''id_2211'\'';
-                                startDate -> data.values as values, values.value = dateOp(startDate, '\''yyyy-MM-dd'\'', '\''ddMMyyyy'\'', '\''date'\'');
+                                observation -> data.itemid = 'id_2211';
+                                startDate -> data.values as values, values.value = dateOp(startDate, 'yyyy-MM-dd', 'ddMMyyyy', 'date');
                             };
                         
                             //map ergebnis flag
@@ -141,24 +152,24 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                                 {
                                     observation -> data.blockindex = 6;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2233'\'';
-                                    ergebnisFlag -> data.values as values, values.value = '\''positiv'\'';
+                                    observation -> data.itemid = 'id_2233';
+                                    ergebnisFlag -> data.values as values, values.value = 'positiv';
                                 };
                                 //negativ mapping
                                 ros1fish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = 0" then
                                 {
                                     observation -> data.blockindex = 6;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2233'\'';
-                                    ergebnisFlag -> data.values as values, values.value = '\''negativ'\'';
+                                    observation -> data.itemid = 'id_2233';
+                                    ergebnisFlag -> data.values as values, values.value = 'negativ';
                                 };
                                 //nicht auswertbar mapping
                                 ros1fish.ergebnis_Flag as ergebnisFlag where "ergebnis_Flag = -1" then
                                 {
                                     observation -> data.blockindex = 6;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2233'\'';
-                                    ergebnisFlag -> data.values as values, values.value = '\''nicht auswertbar'\'';
+                                    observation -> data.itemid = 'id_2233';
+                                    ergebnisFlag -> data.values as values, values.value = 'nicht auswertbar';
                                 };
                             };
                         
@@ -169,8 +180,8 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                                 {
                                     observation -> data.blockindex = 6;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2234'\'';
-                                    positiveCells -> data.values as values, values.unit = '\''percent'\'', values.value = positiveCells;
+                                    observation -> data.itemid = 'id_2234';
+                                    positiveCells -> data.values as values, values.unit = 'percent', values.value = positiveCells;
                                 };
                             };
                         
@@ -181,8 +192,8 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
                                 {
                                     observation -> data.blockindex = 6;
                                     observation -> data.groupindex = 0;
-                                    observation -> data.itemid = '\''id_2235'\'';
-                                    polysomie -> data.values as values, values.unit = '\''percent'\'', values.value = polysomie;
+                                    observation -> data.itemid = 'id_2235';
+                                    polysomie -> data.values as values, values.unit = 'percent', values.value = polysomie;
                                 };
                             };
                         };
@@ -192,34 +203,39 @@ group MapCase(source src: BackboneElement, target tgt: Bundle)
         };
     };
 }
+
 /* ------------------------------ IDAT ---------------------------- */
 group MapIDAT(source src: BackboneElement, target tgt: CTS_Transport)
 {
     //map complete IDAT to metaInformation
-    src.nachname as family -> tgt.metaInformation as meta, meta.key = '\''Nachname'\'', meta.value = family;
-    src.vorname as given -> tgt.metaInformation as meta, meta.key = '\''Vorname'\'', meta.value = given;
-    src.geburtsdatum as birthdate -> tgt.metaInformation as meta, meta.key = '\''Geburtsdatum'\'', meta.value = birthdate;
-    src.geschlecht as gender -> tgt.metaInformation as meta, meta.key = '\''Geschlecht'\'', meta.value = gender;
+    src.nachname as family -> tgt.metaInformation as meta, meta.key = 'Nachname', meta.value = family;
+    src.vorname as given -> tgt.metaInformation as meta, meta.key = 'Vorname', meta.value = given;
+    src.geburtsdatum as birthdate -> tgt.metaInformation as meta, meta.key = 'Geburtsdatum', meta.value = birthdate;
+    src.geschlecht as gender -> tgt.metaInformation as meta, meta.key = 'Geschlecht', meta.value = gender;
 }
+
+
 group MapCheckboxes(source src: BackboneElement, target tgt: BackboneElement)
 {
     //mapCheckbox
     src -> tgt.data as data then
     {
-        src where "%tgt.data.where(itemid = '\''id_2510'\'').exists().not()" then
+        src where "%tgt.data.where(itemid = 'id_2510').exists().not()" then
         {
             src -> data.blockindex = 2;
             src -> data.groupindex = 0;
-            src -> data.itemid = '\''id_2510'\'';
+            src -> data.itemid = 'id_2510';
+
             src where "%src.untersuchung.ergebnis.aLK_FISH.exists()" then
             {
-                src -> data.values as values, values.value = '\''ALK'\'';
+                src -> data.values as values, values.value = 'ALK';
             };
             src where "%src.untersuchung.ergebnis.rOS1_FISH.exists()" then
             {
-                src -> data.values as values, values.value = '\''ROS1'\'';
+                src -> data.values as values, values.value = 'ROS1';
             };
             
         };
     };
+
 }
